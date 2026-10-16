@@ -12,6 +12,8 @@
   const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let state;
   let world;
+  let profiles;
+  let activeMode = 'campaign';
   let selectedBlock = 'plank';
   let target = null;
   let lastTime = performance.now();
@@ -19,6 +21,9 @@
   let completionOpen = false;
   let running = true;
   let moveTimer = 0;
+  let saveTimer = 0;
+  let lastSavedAt = performance.now();
+  let lastDayPhase = -1;
   let prefs = readPrefs();
   let pickMap = [];
   let renderOrder = [];
@@ -32,47 +37,116 @@
     } catch (_) { return { sound: true, motion: true }; }
   }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (_) {} }
-  function packed() { return { format: 'block-islands-save', version: R.SAVE_VERSION, payload: state }; }
-  function validPacked(value) { return value && value.format === 'block-islands-save' && value.version === R.SAVE_VERSION ? R.sanitizeState(value.payload) : null; }
-  function loadGame() {
-    let backupNotice = '';
-    for (const storageKey of [KEY, KEY + ':backup']) {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(storageKey) || 'null');
-        const loaded = validPacked(parsed);
-        if (loaded) { if (storageKey !== KEY) backupNotice = 'Recovered the last valid backup.'; return { state: loaded, recovered: backupNotice }; }
-      } catch (_) {}
-    }
-    return { state: R.createGame(), recovered: '' };
+  function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function makeCreative() {
+    const creative = R.createGame(R.DEFAULT_SEED ^ 0x51f15e);
+    creative.creative = true;
+    creative.unlocked = R.STAGES.length - 1;
+    for (const item of R.INVENTORY_KEYS) creative.inventory[item] = 99;
+    R.startStage(creative, 9, false);
+    creative.message = 'Creative sandbox: unlimited building blocks and tools.';
+    return creative;
   }
-  function durableSave() {
-    const text = JSON.stringify(packed());
+  function syncProfile() { if (state && profiles) profiles[activeMode] = clone(state); }
+  function packed() {
+    syncProfile();
+    return { format: 'block-islands-save', version: R.SAVE_VERSION, payload: { activeMode, campaign: profiles.campaign, creative: profiles.creative } };
+  }
+  function validPacked(value) {
+    if (!value || value.format !== 'block-islands-save' || value.version !== R.SAVE_VERSION) return null;
+    const payload = value.payload;
+    if (payload && payload.campaign) {
+      const campaign = R.sanitizeState(payload.campaign);
+      const creative = payload.creative ? R.sanitizeState(payload.creative) : null;
+      if (!campaign || payload.creative && !creative || creative && !creative.creative) return null;
+      campaign.creative = false;
+      return { activeMode: payload.activeMode === 'creative' && creative ? 'creative' : 'campaign', campaign, creative, legacy: false };
+    }
+    const legacy = R.sanitizeState(payload);
+    if (!legacy) return null;
+    const mode = legacy.creative ? 'creative' : 'campaign';
+    return { activeMode: mode, campaign: mode === 'campaign' ? legacy : null, creative: mode === 'creative' ? legacy : null, legacy: true };
+  }
+  function readStored(storageKey) {
+    try { return validPacked(JSON.parse(localStorage.getItem(storageKey) || 'null')); } catch (_) { return null; }
+  }
+  function loadGame() {
+    const primary = readStored(KEY), backup = readStored(KEY + ':backup');
+    const loaded = primary || backup;
+    if (loaded) {
+      if (loaded.legacy) {
+        const other = backup && backup.legacy && backup.activeMode !== loaded.activeMode ? backup : null;
+        loaded.campaign = loaded.campaign || other?.campaign || R.createGame();
+        loaded.creative = loaded.creative || other?.creative || null;
+      }
+      return { session: loaded, recovered: primary ? (loaded.legacy ? 'Migrated the earlier single-mode save without replacing the other mode.' : '') : 'Recovered the last valid backup.' };
+    }
+    return { session: { activeMode: 'campaign', campaign: R.createGame(), creative: null }, recovered: '' };
+  }
+  function durableWrite(storageKey, text) {
+    let old;
+    try { old = localStorage.getItem(storageKey); } catch (_) { return false; }
     try {
-      localStorage.setItem(KEY, text);
-      localStorage.setItem(KEY + ':backup', text);
+      localStorage.setItem(storageKey, text);
+      if (localStorage.getItem(storageKey) !== text) throw new Error('verification failed');
       return true;
     } catch (_) {
+      try { if (old === null) localStorage.removeItem(storageKey); else localStorage.setItem(storageKey, old); } catch (_) {}
+      return false;
+    }
+  }
+  function durableSave() {
+    clearTimeout(saveTimer); saveTimer = 0;
+    const text = JSON.stringify(packed());
+    try {
+      const currentText = localStorage.getItem(KEY);
+      const current = currentText ? validPacked(JSON.parse(currentText)) : null;
+      const backup = readStored(KEY + ':backup');
+      if (current) {
+        if (!durableWrite(KEY + ':backup', currentText)) throw new Error('backup failed');
+      } else if (!backup && !durableWrite(KEY + ':backup', text)) throw new Error('backup seed failed');
+      if (!durableWrite(KEY, text)) throw new Error('primary failed');
+      lastSavedAt = performance.now();
+      return true;
+    } catch (_) {
+      lastSavedAt = performance.now();
       say('Autosave needs browser storage. Export a backup before leaving.');
       return false;
     }
   }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(durableSave, 700); }
   function importSave(value) {
     const next = validPacked(value);
     if (!next) { say('That save is not a valid Block Islands backup. Your current journey is unchanged.'); return false; }
-    state = next; world = R.makeWorld(state.stage, state.edits); target = null; previousStageComplete = state.stageComplete; completionOpen = false;
-    if (!durableSave()) { say('Imported, but browser storage is unavailable. Export a copy before leaving.'); }
+    const oldProfiles = clone(profiles), oldMode = activeMode, oldState = clone(state);
+    if (next.legacy) {
+      syncProfile();
+      if (next.activeMode === 'creative') profiles.creative = next.creative;
+      else profiles.campaign = next.campaign;
+    } else profiles = { campaign: next.campaign, creative: next.creative };
+    activeMode = next.activeMode;
+    state = clone(profiles[activeMode]); world = R.makeWorld(state.stage, state.edits, state.seed); target = null; previousStageComplete = state.stageComplete; completionOpen = false;
+    if (!durableSave()) {
+      profiles = oldProfiles; activeMode = oldMode; state = oldState;
+      world = R.makeWorld(state.stage, state.edits, state.seed); target = null; previousStageComplete = state.stageComplete; completionOpen = false;
+      updateUI(); say('Import stopped because browser storage is unavailable. Your current journey is unchanged.');
+      return false;
+    }
     updateUI();
+    if (activeMode === 'campaign' && state.stageComplete) setTimeout(completion, 0);
     return true;
   }
-  function getSummary() { return R.summary(state); }
-
-  window.GameApp = { save: durableSave, exportSave: () => JSON.parse(JSON.stringify(packed())), importSave, getSummary };
-  window.dispatchEvent(new Event('game-ready'));
+  function getSummary() { return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative }, R.summary(state)); }
 
   const loaded = loadGame();
-  state = loaded.state;
-  world = R.makeWorld(state.stage, state.edits);
+  profiles = { campaign: loaded.session.campaign || R.createGame(), creative: loaded.session.creative || null };
+  activeMode = loaded.session.activeMode === 'creative' && profiles.creative ? 'creative' : 'campaign';
+  state = clone(profiles[activeMode]);
+  world = R.makeWorld(state.stage, state.edits, state.seed);
   previousStageComplete = state.stageComplete;
+
+  window.GameApp = { save: durableSave, exportSave: () => clone(packed()), importSave, getSummary };
+  window.dispatchEvent(new Event('game-ready'));
 
   function say(message) {
     const line = $('statusLine');
@@ -98,15 +172,25 @@
   function bind(id, fn) { const node = $(id); if (node) node.addEventListener('click', fn); }
 
   function welcome(recovered) {
-    const continued = state.completed.length || state.time > 1;
-    open('<p class="eyebrow">ORIGINAL VOXEL ADVENTURE</p><h1>Block Islands</h1><p class="lead">Explore hand-built island challenges: move, aim, mine, build and craft your way to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Use the arrows or WASD.</div><div><strong>2 · Aim + mine</strong>Tap a nearby block, then Mine.</div><div><strong>3 · Build</strong>Choose a hotbar block and Place.</div><div><strong>4 · Craft</strong>Turn gathered materials into tools.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', 'Creative sandbox', 'secondary') + '<p class="tiny">Campaign progress saves on this device. The menu can export a backup for another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
-    bind('startButton', close);
-    bind('creativeButton', () => { state = R.createGame(); state.creative = true; state.unlocked = 11; for (const item of R.INVENTORY_KEYS) state.inventory[item] = 99; R.startStage(state, 9, false); previousStageComplete = false; state.message = 'Creative sandbox: unlimited building blocks and tools.'; world = R.makeWorld(state.stage, state.edits); durableSave(); updateUI(); close(); });
+    const campaignContinued = profiles.campaign.completed.length || profiles.campaign.time > 1;
+    open('<p class="eyebrow">ORIGINAL VOXEL ADVENTURE</p><h1>Block Islands</h1><p class="lead">Explore hand-built island challenges: move, aim, mine, build and craft your way to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Use the arrows or WASD.</div><div><strong>2 · Aim + mine</strong>Tap a nearby block, then Mine.</div><div><strong>3 · Build</strong>Choose a hotbar block and Place.</div><div><strong>4 · Craft</strong>Turn gathered materials into tools.</div></div>' + button('startButton', campaignContinued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + '<p class="tiny">Campaign and creative progress are saved separately on this device. The menu can export both in one backup for another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
+    bind('startButton', () => activateMode('campaign'));
+    bind('creativeButton', () => activateMode('creative'));
+  }
+  function activateMode(mode) {
+    syncProfile();
+    if (mode === 'creative' && !profiles.creative) profiles.creative = makeCreative();
+    activeMode = mode;
+    state = clone(profiles[mode]);
+    world = R.makeWorld(state.stage, state.edits, state.seed);
+    target = null; previousStageComplete = !!state.stageComplete; completionOpen = false;
+    durableSave(); updateUI(); close();
+    if (mode === 'campaign' && state.stageComplete) setTimeout(completion, 0);
   }
   function menu() {
     const status = document.querySelector('[data-game-offline-status]')?.textContent || 'Offline status will appear after the game is cached.';
-    open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>Autosaves after each action. Export before switching browser profiles or Home Screen apps.</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('soundButton', 'Sound: ' + (prefs.sound ? 'On' : 'Off'), 'secondary') + button('exportButton', 'Export save', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(status) + '</p>');
-    bind('resumeButton', close); bind('stagesButton', stages); bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); menu(); }); bind('exportButton', downloadSave); bind('importButton', () => $('importInput').click());
+    open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>Autosaves after each action. Campaign and creative builds stay separate.</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('modeButton', state.creative ? 'Return to campaign' : (profiles.creative ? 'Open creative sandbox' : 'Start creative sandbox'), 'secondary') + button('soundButton', 'Sound: ' + (prefs.sound ? 'On' : 'Off'), 'secondary') + button('exportButton', 'Export both saves', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(status) + '</p>');
+    bind('resumeButton', close); bind('stagesButton', stages); bind('modeButton', () => activateMode(state.creative ? 'campaign' : 'creative')); bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); menu(); }); bind('exportButton', downloadSave); bind('importButton', () => $('importInput').click());
     if (typeof window.GamesPWARefreshControls === 'function') window.GamesPWARefreshControls();
     else bind('installButton', () => { say('Safari: Share → Add to Home Screen → Add. Offline is ready only after the status confirms caching.'); close(); });
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
@@ -115,7 +199,7 @@
     let cards = '';
     for (let i = 0; i <= state.unlocked; i++) cards += '<button class="recipe-card" data-stage="' + i + '"><strong>' + (i + 1) + '. ' + escape(R.STAGES[i].name) + '</strong><span>' + escape(R.STAGES[i].goalText) + (state.completed.includes(i) ? ' · Complete' : '') + '</span></button>';
     open('<p class="eyebrow">CAMPAIGN MAP</p><h2>Choose an unlocked island</h2><div class="recipe-grid">' + cards + '</div>' + button('backMenu', 'Back', 'secondary'));
-    panel.querySelectorAll('[data-stage]').forEach(node => node.addEventListener('click', () => { const number = Number(node.dataset.stage); if (number <= state.unlocked) { R.startStage(state, number, false); previousStageComplete = false; world = R.makeWorld(state.stage, state.edits); target = null; durableSave(); updateUI(); close(); } }));
+    panel.querySelectorAll('[data-stage]').forEach(node => node.addEventListener('click', () => { const number = Number(node.dataset.stage); if (number <= state.unlocked) { R.startStage(state, number, false); previousStageComplete = false; world = R.makeWorld(state.stage, state.edits, state.seed); target = null; durableSave(); updateUI(); close(); } }));
     bind('backMenu', menu);
   }
   function craftMenu() {
@@ -134,7 +218,7 @@
     const final = state.stage === R.STAGES.length - 1;
     open('<div class="complete-mark">' + (final ? '✦' : '✓') + '</div><p class="eyebrow">' + (final ? 'AURORA RESTORED' : 'ISLAND COMPLETE') + '</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">' + escape(state.message) + '</p>' + (final ? button('finishButton', 'Explore the islands') : button('nextIsland', 'Travel to ' + escape(R.STAGES[state.stage + 1].name))) + button('mapButton', 'Campaign map', 'secondary'));
     if (final) bind('finishButton', close);
-    else bind('nextIsland', () => { R.startStage(state, state.stage + 1, false); previousStageComplete = false; world = R.makeWorld(state.stage, state.edits); target = null; durableSave(); updateUI(); close(); });
+    else bind('nextIsland', () => { R.startStage(state, state.stage + 1, false); previousStageComplete = false; world = R.makeWorld(state.stage, state.edits, state.seed); target = null; durableSave(); updateUI(); close(); });
     bind('mapButton', stages);
   }
   function downloadSave() {
@@ -155,7 +239,8 @@
     }
     bar.innerHTML = html;
     bar.querySelectorAll('[data-block]').forEach(node => node.addEventListener('click', () => { selectedBlock = node.dataset.block; updateUI(); say('Selected ' + selectedBlock + '.'); }));
-    if (target) { const cell = R.getCell(world, target.x, target.y); if (cell) { $('targetTag').hidden = false; $('targetTag').textContent = (cell.resource || cell.surface || 'block') + ' · ' + (R.topHeight(cell) || 1); } } else $('targetTag').hidden = true;
+    if (target) { const cell = R.getCell(world, target.x, target.y); if (cell) { $('targetTag').hidden = false; $('targetTag').textContent = R.cellMaterial(cell) + ' · height ' + (R.topHeight(cell) || 0); } } else $('targetTag').hidden = true;
+    requestAnimationFrame(positionHud);
   }
   function action(name) {
     let result;
@@ -168,18 +253,28 @@
   function moveBy(dx, dy) {
     if (!running) return;
     const result = R.move(state, world, dx, dy); if (!result.ok) say(result.reason); else if (result.water) say('Wading is slow. Build planks for a safe crossing.');
+    if (result.ok) scheduleSave();
     updateUI(); handleCompletion();
   }
-  function handleCompletion() { if (state.stageComplete && !previousStageComplete) { durableSave(); setTimeout(completion, 160); } previousStageComplete = state.stageComplete; }
-  function retry() { R.retryStage(state); world = R.makeWorld(state.stage, state.edits); target = null; previousStageComplete = false; durableSave(); updateUI(); close(); say('Back at camp with most of your pack.'); }
+  function handleCompletion() { if (!state.creative && state.stageComplete && !previousStageComplete) { durableSave(); setTimeout(completion, 160); } previousStageComplete = state.stageComplete; }
+  function retry() { R.retryStage(state); world = R.makeWorld(state.stage, state.edits, state.seed); target = null; previousStageComplete = false; durableSave(); updateUI(); close(); say('Back at camp with most of your pack.'); }
 
+  function positionHud() {
+    const portrait = window.matchMedia && window.matchMedia('(max-width:540px) and (orientation:portrait)').matches;
+    if (!portrait) { $('statusLine').style.top = ''; return; }
+    const appTop = $('app').getBoundingClientRect().top;
+    $('statusLine').style.top = Math.ceil($('questCard').getBoundingClientRect().bottom - appTop + 8) + 'px';
+  }
   function resize() {
-    const rect = canvas.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    const pixelBudget = 12000000;
+    const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(pixelBudget / Math.max(1, rect.width * rect.height)));
     view.width = rect.width; view.height = rect.height; view.dpr = dpr; view.scale = Math.max(17, Math.min(39, Math.min(rect.width / 15.5, rect.height / 9.2)));
     if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) { canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); }
     pickMap = new Array(R.SIZE * R.SIZE); renderOrder = new Array(R.SIZE * R.SIZE);
     let index = 0; for (let total = 0; total <= (R.SIZE - 1) * 2; total++) for (let y = 0; y < R.SIZE; y++) { const x = total - y; if (x >= 0 && x < R.SIZE) renderOrder[index++] = { x, y }; }
     for (let i = 0; i < pickMap.length; i++) pickMap[i] = { x: 0, y: 0, sx: 0, sy: 0 };
+    positionHud();
   }
   function raw(x, y, z) { return { x: (x - y) * view.scale * .78, y: (x + y) * view.scale * .4 - z * view.scale * .68 }; }
   function point(x, y, z) { const p = raw(x, y, z); return { x: view.centerX + p.x - view.cameraX, y: view.centerY + p.y - view.cameraY }; }
@@ -203,6 +298,8 @@
   }
   function render() {
     if (!ctx) return;
+    const expectedDpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(12000000 / Math.max(1, view.width * view.height)));
+    if (Math.abs(expectedDpr - view.dpr) > .01) resize();
     const stage = R.STAGES[state.stage]; const night = (Math.sin(state.time / 18 * Math.PI) + 1) * .5;
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0); ctx.clearRect(0, 0, view.width, view.height);
     ctx.fillStyle = night < .18 ? '#152940' : '#7bcde0'; ctx.fillRect(0, 0, view.width, view.height);
@@ -218,15 +315,24 @@
       for (let z = 0; z < cell.extra.length; z++) cube(cell.x, cell.y, cell.h + (cell.bridge ? 1 : 0) + z, cell.extra[z]);
       drawResource(cell, R.topHeight(cell));
     }
-    for (const enemy of state.enemies) if (enemy.alive) { const p = point(enemy.x - .24, enemy.y - .24, 1.1); ctx.fillStyle = '#2d324c'; ctx.beginPath(); ctx.ellipse(p.x, p.y, view.scale * .24, view.scale * .16, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffcc72'; ctx.fillRect(p.x - 2, p.y - 1, 3, 2); }
-    const pp = point(state.player.x - .18, state.player.y - .18, 1.05); ctx.fillStyle = '#f6d7b4'; ctx.beginPath(); ctx.arc(pp.x, pp.y - view.scale * .24, view.scale * .15, 0, Math.PI * 2); ctx.fill(); cube(state.player.x - .28, state.player.y - .28, .45, state.creative ? 'crystal' : 'plank', .56);
+    const goal = R.GOAL_SITES[state.stage];
+    if (goal) {
+      const marked = goal.cells ? goal.cells.slice() : [goal.cell];
+      if (goal.relic) marked.push(goal.relic);
+      ctx.save(); ctx.lineWidth = 3;
+      for (const site of marked) { const cell = R.getCell(world, site[0], site[1]); if (cell) diamond(cell.x, cell.y, R.topHeight(cell) + .06, 'rgba(255,223,102,.12)', '#ffe06d'); }
+      ctx.restore();
+    }
+    for (const enemy of state.enemies) if (enemy.alive) { const enemyCell = R.getCell(world, Math.floor(enemy.x), Math.floor(enemy.y)); const enemyZ = enemyCell ? R.topHeight(enemyCell) : 1; const p = point(enemy.x - .24, enemy.y - .24, enemyZ + .15); ctx.fillStyle = '#2d324c'; ctx.beginPath(); ctx.ellipse(p.x, p.y, view.scale * .24, view.scale * .16, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffcc72'; ctx.fillRect(p.x - 2, p.y - 1, 3, 2); }
+    const playerZ = current ? R.topHeight(current) : 1;
+    const pp = point(state.player.x - .18, state.player.y - .18, playerZ + .6); ctx.fillStyle = '#f6d7b4'; ctx.beginPath(); ctx.arc(pp.x, pp.y - view.scale * .24, view.scale * .15, 0, Math.PI * 2); ctx.fill(); cube(state.player.x - .28, state.player.y - .28, playerZ, state.creative ? 'crystal' : 'plank', .56);
     if (target) { const cell = R.getCell(world, target.x, target.y); if (cell) diamond(cell.x, cell.y, R.topHeight(cell) + .03, 'rgba(255,241,143,.23)', '#fff1a0'); }
     if (night < .3) { ctx.fillStyle = 'rgba(13,23,48,' + (.42 - night).toFixed(2) + ')'; ctx.fillRect(0, 0, view.width, view.height); }
   }
   function aim(clientX, clientY) {
     const rect = canvas.getBoundingClientRect(); const x = clientX - rect.left, y = clientY - rect.top; let best = null; let closest = Infinity;
     for (const pick of pickMap) { const d = Math.hypot(x - pick.sx, y - pick.sy); if (d < closest) { closest = d; best = pick; } }
-    if (best && closest < Math.max(54, view.scale * 1.7)) { target = { x: best.x, y: best.y }; const inRange = Math.hypot(state.player.x - best.x - .5, state.player.y - best.y - .5) <= 3.9; say(inRange ? 'Aimed at ' + (R.getCell(world, best.x, best.y).resource || 'block') + '.' : 'Aim set — move closer to interact.'); updateUI(); }
+    if (best && closest < Math.max(54, view.scale * 1.7)) { target = { x: best.x, y: best.y }; const aimed = R.getCell(world, best.x, best.y); const inRange = Math.hypot(state.player.x - best.x - .5, state.player.y - best.y - .5) <= 3.9; say(inRange ? 'Aimed at ' + R.cellMaterial(aimed) + ' — Mine removes its top layer; Place builds above it.' : 'Aim set — move closer to interact.'); updateUI(); }
   }
   function loop(now) {
     const dt = Math.min(.08, Math.max(0, (now - lastTime) / 1000)); lastTime = now;
@@ -234,6 +340,9 @@
       const ticked = R.tick(state, world, dt);
       if (ticked.defeated) { durableSave(); open('<p class="eyebrow">RECOVERY</p><h2>Back at camp</h2><p class="lead">The island wildlife overwhelmed you. Retrying keeps tools and most materials, but resets this island’s terrain and foes.</p>' + button('retryButton', 'Retry island') + button('mapAfterLoss', 'Campaign map', 'secondary')); bind('retryButton', retry); bind('mapAfterLoss', stages); }
       else if (ticked.damaged) updateUI();
+      const phase = Math.floor(state.time / 18) % 2;
+      if (phase !== lastDayPhase) { lastDayPhase = phase; $('dayClock').textContent = phase ? 'NIGHT' : 'DAY'; }
+      if (!saveTimer && performance.now() - lastSavedAt >= 5000) durableSave();
     }
     render(); requestAnimationFrame(loop);
   }

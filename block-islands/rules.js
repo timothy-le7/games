@@ -8,6 +8,7 @@
 
   const SIZE = 18;
   const SAVE_VERSION = 1;
+  const DEFAULT_SEED = 861733;
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const key = (x, y) => x + ',' + y;
   const hash = (seed, x, y) => {
@@ -46,7 +47,8 @@
   const MATERIALS = {
     wood: { tool: 0, item: 'wood' }, berry: { tool: 0, item: 'berry' }, dirt: { tool: 0, item: 'dirt' }, sand: { tool: 0, item: 'sand' },
     stone: { tool: 0, item: 'stone' }, ore: { tool: 1, item: 'ore' }, ice: { tool: 1, item: 'ice' },
-    crystal: { tool: 2, item: 'crystal' }, basalt: { tool: 2, item: 'basalt' }, relic: { tool: 0, item: 'relic' }
+    crystal: { tool: 2, item: 'crystal' }, basalt: { tool: 2, item: 'basalt' }, relic: { tool: 0, item: 'relic' },
+    plank: { tool: 0, item: 'plank' }, beacon: { tool: 0, item: 'beacon' }
   };
   const INVENTORY_KEYS = ['wood', 'stone', 'dirt', 'sand', 'ore', 'ice', 'crystal', 'berry', 'plank', 'basalt', 'beacon', 'tonic', 'campfire', 'stonePick', 'ironPick', 'forge', 'relic'];
 
@@ -64,10 +66,16 @@
     10: { '7,7': 'wood', '9,8': 'wood', '12,10': 'wood' },
     11: { '5,3': 'crystal', '6,4': 'crystal', '7,4': 'crystal', '8,5': 'ore', '9,5': 'ore', '14,14': 'crystal' }
   };
+  const GOAL_SITES = {
+    6: { type: 'seals', cells: [[5, 3], [6, 3], [7, 3]], relic: [14, 13] },
+    9: { type: 'marker', cell: [10, 10], blocks: 7 },
+    11: { type: 'summit', cell: [14, 14] }
+  };
 
-  function terrainFor(stageIndex, x, y) {
+  function terrainFor(stageIndex, x, y, chosenSeed) {
     const stage = STAGES[stageIndex];
-    const n = hash(stage.seed, x, y);
+    const seedOffset = Number.isInteger(chosenSeed) ? (chosenSeed ^ DEFAULT_SEED) : 0;
+    const n = hash(stage.seed ^ seedOffset, x, y);
     let h = 1 + (n % 2);
     let surface = stage.biome === 'desert' ? 'sand' : stage.biome === 'frost' ? 'ice' : stage.biome === 'ember' ? 'basalt' : 'dirt';
     let water = false;
@@ -89,10 +97,10 @@
     return { x, y, h, surface, resource, water, lava, bridge: false, extra: [] };
   }
 
-  function makeWorld(stageIndex, edits) {
+  function makeWorld(stageIndex, edits, chosenSeed) {
     const cells = new Array(SIZE * SIZE);
     for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-      const cell = terrainFor(stageIndex, x, y);
+      const cell = terrainFor(stageIndex, x, y, chosenSeed);
       const edit = edits && edits[key(x, y)];
       if (edit) {
         if (Number.isInteger(edit.h)) cell.h = clamp(edit.h, 0, 12);
@@ -106,16 +114,21 @@
   }
   function getCell(world, x, y) { return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < SIZE && y < SIZE ? world.cells[y * SIZE + x] : null; }
   function topHeight(cell) { return cell.h + cell.extra.length + (cell.bridge ? 1 : 0); }
-  function cellMaterial(cell) { return cell.resource || (cell.surface === 'sand' ? 'sand' : cell.surface === 'ice' ? 'ice' : cell.surface === 'basalt' ? 'basalt' : cell.h > 1 ? 'stone' : 'dirt'); }
+  function cellMaterial(cell) {
+    if (cell.resource) return cell.resource;
+    if (cell.extra.length) return cell.extra[cell.extra.length - 1];
+    if (cell.bridge) return 'plank';
+    return cell.surface === 'sand' ? 'sand' : cell.surface === 'ice' ? 'ice' : cell.surface === 'basalt' ? 'basalt' : cell.h > 1 ? 'stone' : 'dirt';
+  }
   function persistCell(state, cell) {
     state.edits[key(cell.x, cell.y)] = { h: cell.h, resource: cell.resource, bridge: cell.bridge, extra: cell.extra.slice() };
   }
   function emptyInventory() { const inventory = {}; for (const name of INVENTORY_KEYS) inventory[name] = 0; return inventory; }
   function createGame(seed) {
     const state = {
-      version: SAVE_VERSION, seed: Number.isInteger(seed) ? seed : 861733, stage: 0, unlocked: 0, completed: [], stageComplete: false,
+      version: SAVE_VERSION, seed: Number.isInteger(seed) ? seed : DEFAULT_SEED, stage: 0, unlocked: 0, completed: [], stageComplete: false,
       inventory: emptyInventory(), crafted: {}, placed: {}, mined: {}, bridgeBuilt: 0, tallest: 0, enemiesDefeated: 0,
-      player: { x: 2.5, y: 3.5, health: 8, maxHealth: 8 }, edits: {}, time: 0, enemies: [], creative: false, message: 'Welcome to Mosslight Camp.'
+      minedSites: {}, siteStacks: {}, placedSites: {}, player: { x: 2.5, y: 3.5, health: 8, maxHealth: 8 }, edits: {}, time: 0, enemies: [], creative: false, message: 'Welcome to Mosslight Camp.'
     };
     startStage(state, 0, false);
     return state;
@@ -130,6 +143,9 @@
     state.bridgeBuilt = 0;
     state.tallest = 0;
     state.enemiesDefeated = 0;
+    state.minedSites = {};
+    state.siteStacks = {};
+    state.placedSites = {};
     state.player = { x: 2.5, y: 3.5, health: 8, maxHealth: 8 };
     state.enemies = [];
     const count = STAGES[stageIndex].enemies;
@@ -143,6 +159,10 @@
   function inReach(state, x, y, reach) { return distance(state.player.x, state.player.y, x + .5, y + .5) <= (reach || 3.9); }
 
   function mine(state, world, x, y) {
+    state.minedSites = state.minedSites && typeof state.minedSites === 'object' ? state.minedSites : {};
+    state.siteStacks = state.siteStacks && typeof state.siteStacks === 'object' ? state.siteStacks : {};
+    state.placedSites = state.placedSites && typeof state.placedSites === 'object' ? state.placedSites : {};
+    state.placed = state.placed && typeof state.placed === 'object' ? state.placed : {};
     const cell = getCell(world, x, y);
     if (!cell) return { ok: false, reason: 'That is beyond the island.' };
     if (!inReach(state, x, y)) return { ok: false, reason: 'Move closer to mine that block.' };
@@ -150,10 +170,22 @@
     const definition = MATERIALS[material];
     if (!definition) return { ok: false, reason: 'Nothing useful to mine there.' };
     if (toolLevel(state) < definition.tool) return { ok: false, reason: definition.tool === 1 ? 'A stone pick is needed here.' : 'An iron pick is needed here.' };
-    if (cell.resource) cell.resource = null;
-    else if (cell.extra.length) cell.extra.pop();
-    else if (cell.h > 0) cell.h--;
+    const siteKey = key(x, y);
+    if (cell.resource) {
+      cell.resource = null;
+      state.minedSites[siteKey] = material;
+    } else if (cell.extra.length) {
+      cell.extra.pop();
+      state.placed[material] = Math.max(0, (state.placed[material] || 0) - 1);
+      if (material === 'beacon' && state.placedSites.beacon === siteKey) delete state.placedSites.beacon;
+    } else if (cell.bridge) {
+      cell.bridge = false;
+      state.bridgeBuilt = Math.max(0, state.bridgeBuilt - 1);
+      state.placed.plank = Math.max(0, (state.placed.plank || 0) - 1);
+    } else if (cell.h > 0) cell.h--;
     else return { ok: false, reason: 'Water and lava cannot be mined.' };
+    state.siteStacks[siteKey] = cell.extra.length;
+    state.tallest = world.cells.reduce((highest, candidate) => Math.max(highest, topHeight(candidate)), 0);
     change(state, definition.item, 1);
     state.mined[definition.item] = (state.mined[definition.item] || 0) + 1;
     persistCell(state, cell);
@@ -169,6 +201,9 @@
     return false;
   }
   function place(state, world, x, y, item) {
+    state.siteStacks = state.siteStacks && typeof state.siteStacks === 'object' ? state.siteStacks : {};
+    state.placedSites = state.placedSites && typeof state.placedSites === 'object' ? state.placedSites : {};
+    state.placed = state.placed && typeof state.placed === 'object' ? state.placed : {};
     const cell = getCell(world, x, y);
     const allowed = ['dirt', 'plank', 'stone', 'basalt', 'beacon'];
     if (!allowed.includes(item)) return { ok: false, reason: 'Select a building block first.' };
@@ -186,6 +221,9 @@
     }
     if (!state.creative) change(state, item, -1);
     state.placed[item] = (state.placed[item] || 0) + 1;
+    const siteKey = key(x, y);
+    state.siteStacks[siteKey] = cell.extra.length;
+    if (item === 'beacon') state.placedSites.beacon = siteKey;
     persistCell(state, cell);
     state.message = item === 'beacon' ? 'The beacon hums with aurora light.' : 'Placed ' + item + '.';
     checkGoal(state);
@@ -253,12 +291,12 @@
       case 'shelter': return (state.placed.plank || 0) >= 6;
       case 'crossing': return state.bridgeBuilt >= 4 && state.player.x >= 14 && state.player.y >= 12;
       case 'tonic': return (state.crafted.tonic || 0) >= 1;
-      case 'relic': return (state.inventory.relic || 0) >= 1 && (state.mined.sand || 0) >= 3;
+      case 'relic': return (state.inventory.relic || 0) >= 1 && GOAL_SITES[6].cells.every(pair => (state.minedSites || {})[key(pair[0], pair[1])] === 'sand');
       case 'iron-pick': return (state.crafted.forge || 0) >= 1 && (state.crafted.ironPick || 0) >= 1;
       case 'outpost': return (state.placed.basalt || 0) >= 5;
-      case 'sky-tower': return state.tallest >= 7;
+      case 'sky-tower': return ((state.siteStacks || {})[key(GOAL_SITES[9].cell[0], GOAL_SITES[9].cell[1])] || 0) >= GOAL_SITES[9].blocks;
       case 'defense': return state.enemiesDefeated >= 4;
-      case 'beacon': return (state.placed.beacon || 0) >= 1;
+      case 'beacon': return (state.mined.crystal || 0) >= 3 && (state.crafted.beacon || 0) >= 1 && (state.placed.beacon || 0) >= 1 && (state.placedSites || {}).beacon === key(GOAL_SITES[11].cell[0], GOAL_SITES[11].cell[1]);
       default: return false;
     }
   }
@@ -282,10 +320,17 @@
     const state = JSON.parse(JSON.stringify(value));
     state.stage = clamp(state.stage, 0, STAGES.length - 1);
     state.unlocked = clamp(Number.isInteger(state.unlocked) ? state.unlocked : 0, 0, STAGES.length - 1);
-    state.completed = Array.isArray(state.completed) ? state.completed.filter(n => Number.isInteger(n) && n >= 0 && n < STAGES.length) : [];
+    state.completed = Array.isArray(state.completed) ? [...new Set(state.completed.filter(n => Number.isInteger(n) && n >= 0 && n < STAGES.length))] : [];
     state.enemies = Array.isArray(state.enemies) ? state.enemies.slice(0, 10).filter(e => e && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.health)).map(e => ({ id: String(e.id || 'enemy').slice(0, 30), x: clamp(e.x, 0, SIZE), y: clamp(e.y, 0, SIZE), health: clamp(e.health, 0, 20), cooldown: clamp(Number(e.cooldown) || 0, 0, 10), alive: e.alive !== false })) : [];
     state.player.x = clamp(state.player.x, .15, SIZE - .15); state.player.y = clamp(state.player.y, .15, SIZE - .15); state.player.health = clamp(state.player.health, 0, 20); state.player.maxHealth = clamp(Number(state.player.maxHealth) || 8, 1, 20);
     state.time = clamp(Number(state.time) || 0, 0, 10000000);
+    state.seed = Number.isInteger(state.seed) ? state.seed : DEFAULT_SEED;
+    state.creative = state.creative === true;
+    state.stageComplete = state.stageComplete === true;
+    state.bridgeBuilt = clamp(Math.floor(Number(state.bridgeBuilt) || 0), 0, SIZE * SIZE);
+    state.tallest = clamp(Math.floor(Number(state.tallest) || 0), 0, 24);
+    state.enemiesDefeated = clamp(Math.floor(Number(state.enemiesDefeated) || 0), 0, 99);
+    state.message = typeof state.message === 'string' ? state.message.slice(0, 240) : STAGES[state.stage].hint;
     for (const item of INVENTORY_KEYS) state.inventory[item] = clamp(Math.floor(Number(state.inventory[item]) || 0), 0, 9999);
     const cleanedEdits = {};
     for (const k of Object.keys(state.edits).slice(0, SIZE * SIZE)) if (/^\d+,\d+$/.test(k)) {
@@ -293,12 +338,26 @@
       if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && edit && typeof edit === 'object') cleanedEdits[k] = { h: clamp(Math.floor(Number(edit.h) || 0), 0, 12), resource: typeof edit.resource === 'string' && MATERIALS[edit.resource] ? edit.resource : null, bridge: !!edit.bridge, extra: Array.isArray(edit.extra) ? edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12) : [] };
     }
     state.edits = cleanedEdits;
-    state.crafted = state.crafted && typeof state.crafted === 'object' ? state.crafted : {};
-    state.placed = state.placed && typeof state.placed === 'object' ? state.placed : {};
-    state.mined = state.mined && typeof state.mined === 'object' ? state.mined : {};
+    const cleanCounts = (source, allowed) => {
+      const result = {};
+      if (!source || typeof source !== 'object') return result;
+      for (const name of allowed) if (Number.isFinite(source[name]) && source[name] >= 0) result[name] = clamp(Math.floor(source[name]), 0, 9999);
+      return result;
+    };
+    state.crafted = cleanCounts(state.crafted, Object.keys(RECIPES));
+    state.placed = cleanCounts(state.placed, ['dirt', 'plank', 'stone', 'basalt', 'beacon']);
+    state.mined = cleanCounts(state.mined, INVENTORY_KEYS);
+    const validSite = site => /^\d+,\d+$/.test(site) && site.split(',').map(Number).every(n => n >= 0 && n < SIZE);
+    const minedSites = {};
+    if (state.minedSites && typeof state.minedSites === 'object') for (const site of Object.keys(state.minedSites).slice(0, SIZE * SIZE)) if (validSite(site) && MATERIALS[state.minedSites[site]]) minedSites[site] = state.minedSites[site];
+    state.minedSites = minedSites;
+    const siteStacks = {};
+    if (state.siteStacks && typeof state.siteStacks === 'object') for (const site of Object.keys(state.siteStacks).slice(0, SIZE * SIZE)) if (validSite(site) && Number.isFinite(state.siteStacks[site])) siteStacks[site] = clamp(Math.floor(state.siteStacks[site]), 0, 12);
+    state.siteStacks = siteStacks;
+    state.placedSites = state.placedSites && validSite(state.placedSites.beacon) ? { beacon: state.placedSites.beacon } : {};
     return state;
   }
   function summary(state) { return { stage: state.stage, stageName: STAGES[state.stage].name, unlocked: state.unlocked, complete: !!state.stageComplete, health: Math.ceil(state.player.health), inventory: Object.assign({}, state.inventory), enemies: state.enemies.filter(e => e.alive).length }; }
 
-  return { SIZE, SAVE_VERSION, STAGES, RECIPES, INVENTORY_KEYS, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, summary, hash };
+  return { SIZE, SAVE_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, summary, hash };
 });

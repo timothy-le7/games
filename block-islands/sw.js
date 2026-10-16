@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:block-islands:";
-const RELEASE = "3d625c6bc6f09fe9a1ab";
+const RELEASE = "ae1b7ad60699d1c47025";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./game-pwa.js","./game.css","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./rules.js"];
 

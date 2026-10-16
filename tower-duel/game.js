@@ -12,17 +12,21 @@
 
   const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','pause-button','game-canvas','canvas-shell','tutorial-tip','toast','energy-fill','energy-number','hand','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
   const ctx = els['game-canvas'].getContext('2d', { alpha: false });
+  let storageLoadKnown = true;
+  let storageConflict = false;
   let profile = loadProfile();
   let prefs = loadPrefs();
   let match = profile.activeMatch ? safeRestore(profile.activeMatch) : null;
   let selectedCard = null;
   let paused = true;
   let lastFrame = performance.now();
-  let lastSaveAt = 0;
+  let saveDueAt = 0;
+  let lastPersistedAt = performance.now();
   let toastTimer = 0;
   let draftState = null;
   let pointerDrag = null;
   let suppressCanvasPointerUntil = 0;
+  let suppressHandClickUntil = 0;
   let audioContext = null;
   let impactSeen = 0;
 
@@ -56,20 +60,30 @@
   }
   function validatePrefs(value) { return value && typeof value.audio === 'boolean' && typeof value.reducedEffects === 'boolean'; }
   function safeParse(raw) { try { return JSON.parse(raw); } catch (_) { return null; } }
+  function storageRead(key) {
+    try { return { ok: true, value: localStorage.getItem(key) }; }
+    catch (_) { return { ok: false, value: null }; }
+  }
   function loadProfile() {
-    const primary = safeParse(localStorage.getItem(SAVE_KEY));
+    const primaryRead = storageRead(SAVE_KEY);
+    const backupRead = storageRead(BACKUP_KEY);
+    const primary = safeParse(primaryRead.value);
     if (validateProfile(primary)) return primary;
-    const backup = safeParse(localStorage.getItem(BACKUP_KEY));
+    const backup = safeParse(backupRead.value);
     if (validateProfile(backup)) return backup;
+    if (!primaryRead.ok || !backupRead.ok) storageLoadKnown = false;
     return defaultProfile();
   }
   function loadPrefs() {
-    const loaded = safeParse(localStorage.getItem(PREFS_KEY));
+    const read = storageRead(PREFS_KEY);
+    const loaded = safeParse(read.value);
     return validatePrefs(loaded) ? loaded : defaultPrefs();
   }
   function safeRestore(value) { try { return E.restore(value); } catch (_) { return null; } }
   function durableWrite(key, value) {
-    const old = localStorage.getItem(key);
+    const previous = storageRead(key);
+    if (!previous.ok) return false;
+    const old = previous.value;
     try {
       const text = JSON.stringify(value);
       localStorage.setItem(key, text);
@@ -83,8 +97,19 @@
   function saveNow() {
     const next = JSON.parse(JSON.stringify(profile));
     next.activeMatch = match && match.phase === 'playing' ? E.snapshot(match) : null;
-    const current = safeParse(localStorage.getItem(SAVE_KEY));
-    const backup = safeParse(localStorage.getItem(BACKUP_KEY));
+    if (storageConflict) return false;
+    const currentRead = storageRead(SAVE_KEY), backupRead = storageRead(BACKUP_KEY);
+    if (!currentRead.ok || !backupRead.ok) return false;
+    const current = safeParse(currentRead.value);
+    const backup = safeParse(backupRead.value);
+    if (!storageLoadKnown) {
+      storageLoadKnown = true;
+      if (validateProfile(current) || validateProfile(backup)) {
+        storageConflict = true;
+        toast('Stored progress became available. Reload to use it; this unsaved session was not written.');
+        return false;
+      }
+    }
     // Keep the last known-good primary as recovery data before replacing it.
     // The very first save seeds that backup with the new valid profile.
     if (validateProfile(current)) {
@@ -92,10 +117,11 @@
     } else if (!validateProfile(backup) && !durableWrite(BACKUP_KEY, next)) return false;
     if (!durableWrite(SAVE_KEY, next)) return false;
     profile = next;
+    lastPersistedAt = performance.now(); saveDueAt = 0;
     return true;
   }
   function savePrefs() { return durableWrite(PREFS_KEY, prefs); }
-  function scheduleSave() { lastSaveAt = performance.now() + 900; }
+  function scheduleSave() { saveDueAt = performance.now() + 900; }
 
   function exportSave() { return { format: SAVE_FORMAT, version: SAVE_VERSION, payload: JSON.parse(JSON.stringify(Object.assign({}, profile, { activeMatch: match && match.phase === 'playing' ? E.snapshot(match) : null }))) }; }
   function importSave(value) {
@@ -103,9 +129,10 @@
     const candidate = JSON.parse(JSON.stringify(value.payload));
     const candidateMatch = candidate.activeMatch ? safeRestore(candidate.activeMatch) : null;
     if (candidate.activeMatch && !candidateMatch) return false;
-    const oldProfile = profile, oldMatch = match;
+    const oldProfile = profile, oldMatch = match, oldConflict = storageConflict;
+    storageConflict = false;
     profile = candidate; match = candidateMatch;
-    if (!saveNow()) { profile = oldProfile; match = oldMatch; return false; }
+    if (!saveNow()) { profile = oldProfile; match = oldMatch; storageConflict = oldConflict; return false; }
     selectedCard = null; paused = true; showHome();
     return true;
   }
@@ -194,10 +221,18 @@
 
   function renderHand(force) {
     if (!match) return;
-    const signature = match.hands.player.join('|') + '|' + selectedCard + '|' + Math.floor(match.energy.player*4);
-    if (!force && els.hand.dataset.signature === signature) return;
-    els.hand.dataset.signature = signature;
-    els.hand.innerHTML = match.hands.player.map((id,index) => { const card=E.cardMap[id], affordable=match.energy.player+1e-6>=card.cost; return '<button type="button" class="hand-card '+(selectedCard===id?'selected ':'')+(!affordable?'unaffordable':'')+'" data-hand-card="'+id+'" aria-label="'+(index+1)+': '+card.name+', cost '+card.cost+', '+card.desc+'">'+cardGlyph(card)+'<span class="card-cost">'+card.cost+'</span><b>'+card.name+'</b></button>'; }).join('');
+    const signature = match.hands.player.join('|');
+    if (els.hand.dataset.signature !== signature) {
+      els.hand.dataset.signature = signature;
+      els.hand.innerHTML = match.hands.player.map((id,index) => { const card=E.cardMap[id]; return '<button type="button" class="hand-card" data-hand-card="'+id+'" aria-label="'+(index+1)+': '+card.name+', cost '+card.cost+', '+card.desc+'">'+cardGlyph(card)+'<span class="card-cost">'+card.cost+'</span><b>'+card.name+'</b></button>'; }).join('');
+    }
+    els.hand.querySelectorAll('[data-hand-card]').forEach((node) => {
+      const id=node.dataset.handCard, affordable=match.energy.player+1e-6>=E.cardMap[id].cost;
+      node.classList.toggle('selected',selectedCard===id);
+      node.classList.toggle('unaffordable',!affordable);
+      node.setAttribute('aria-pressed',String(selectedCard===id));
+      node.setAttribute('aria-disabled',String(!affordable));
+    });
   }
   function selectCard(id) { if (!match || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id; renderHand(true); if (selectedCard && !profile.tutorialDone) showTutorial(E.cardMap[id].kind === 'spell' ? 'Spells can land anywhere. Tap a useful target area.' : 'Now tap your blue half. Units enter through the nearest lane.'); }
   function canvasPoint(clientX, clientY) { const rect=els['game-canvas'].getBoundingClientRect(); return { x:(clientX-rect.left)/rect.width*E.WIDTH, y:(clientY-rect.top)/rect.height*E.HEIGHT }; }
@@ -215,7 +250,8 @@
       if (!paused && !document.hidden && match.phase==='playing') E.tick(match,elapsed);
       updateBattleUI(); draw();
       if (match.phase==='ended' && !paused) finishMatch();
-      if (!paused && now-lastSaveAt>5000 && now>lastSaveAt) { lastSaveAt=now; saveNow(); }
+      if (saveDueAt && now >= saveDueAt) { saveDueAt=0; lastPersistedAt=now; saveNow(); }
+      else if (!saveDueAt && now-lastPersistedAt >= 5000) { lastPersistedAt=now; saveNow(); }
     }
     requestAnimationFrame(frame);
   }
@@ -253,12 +289,14 @@
     const canvas=els['game-canvas']; const shell=els['canvas-shell'].getBoundingClientRect(); const scale=Math.min(shell.width/E.WIDTH,shell.height/E.HEIGHT);
     const cssWidth=Math.max(1,Math.floor(E.WIDTH*scale)),cssHeight=Math.max(1,Math.floor(E.HEIGHT*scale));
     if(canvas.style.width!==cssWidth+'px'||canvas.style.height!==cssHeight+'px'){canvas.style.width=cssWidth+'px';canvas.style.height=cssHeight+'px';}
-    const dpr=Math.min(devicePixelRatio||1,2);
+    const pixelBudget=12000000;
+    const dpr=Math.min(devicePixelRatio||1,Math.sqrt(pixelBudget/Math.max(1,displayArea(shell.width,shell.height))));
     const display=canvas.getBoundingClientRect(); const width=Math.max(1,Math.round(display.width*dpr)); const height=Math.max(1,Math.round(display.height*dpr));
     if (canvas.width!==width||canvas.height!==height) { canvas.width=width;canvas.height=height; }
     ctx.setTransform(width/E.WIDTH,0,0,height/E.HEIGHT,0,0);
     drawArena(); drawPlacement(); match.towers.forEach(drawTower); match.units.forEach(drawUnit); match.projectiles.forEach(drawProjectile); if (!prefs.reducedEffects) match.effects.forEach(drawEffect);
   }
+  function displayArea(width,height){return Math.max(1,width*height);}
   function drawArena() {
     const g=ctx.createLinearGradient(0,0,0,E.HEIGHT); g.addColorStop(0,'#5b597e');g.addColorStop(.47,'#3f786f');g.addColorStop(.53,'#3a817b');g.addColorStop(1,'#32697d');ctx.fillStyle=g;ctx.fillRect(0,0,E.WIDTH,E.HEIGHT);
     ctx.fillStyle='#ffffff0c'; for(let y=170;y<E.HEIGHT;y+=160) for(let x=(y/160%2)*70;x<E.WIDTH;x+=140){ctx.beginPath();ctx.arc(x,y,36,0,Math.PI*2);ctx.fill();}
@@ -305,11 +343,13 @@
   els['arena-list'].addEventListener('click',(event)=>{const button=event.target.closest('[data-arena]');if(!button)return;profile.selectedArena=Number(button.dataset.arena);saveNow();renderCollection();});
   els['card-library'].addEventListener('click',(event)=>{const button=event.target.closest('[data-card-library]');if(!button)return;const id=button.dataset.cardLibrary,index=profile.deck.indexOf(id);if(index>=0){if(profile.deck.length<=8){toast('Choose a replacement: deck must stay at eight');return;}profile.deck.splice(index,1);}else if(profile.deck.length<8)profile.deck.push(id);else{profile.deck.shift();profile.deck.push(id);toast('Replaced the oldest deck card');}saveNow();renderCollection();});
   els['draft-choices'].addEventListener('click',(event)=>{const card=event.target.closest('[data-draft-card]');if(card)draftPick(card.dataset.draftCard);});
-  els.hand.addEventListener('click',(event)=>{const card=event.target.closest('[data-hand-card]');if(card&&!pointerDrag)selectCard(card.dataset.handCard);});
-  els.hand.addEventListener('pointerdown',(event)=>{const card=event.target.closest('[data-hand-card]');if(!card)return;pointerDrag={id:card.dataset.handCard,x:event.clientX,y:event.clientY,moved:false};card.setPointerCapture?.(event.pointerId);});
-  document.addEventListener('pointermove',(event)=>{if(pointerDrag&&Math.hypot(event.clientX-pointerDrag.x,event.clientY-pointerDrag.y)>8)pointerDrag.moved=true;});
-  document.addEventListener('pointerup',(event)=>{if(!pointerDrag)return;const drag=pointerDrag;pointerDrag=null;if(drag.moved){selectedCard=drag.id;renderHand(true);const rect=els['game-canvas'].getBoundingClientRect();if(event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom){suppressCanvasPointerUntil=performance.now()+100;deployAt(canvasPoint(event.clientX,event.clientY));}}});
-  els['game-canvas'].addEventListener('pointerdown',(event)=>{if(performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
+  els.hand.addEventListener('click',(event)=>{const card=event.target.closest('[data-hand-card]');if(card&&!pointerDrag&&performance.now()>=suppressHandClickUntil)selectCard(card.dataset.handCard);});
+  els.hand.addEventListener('pointerdown',(event)=>{const card=event.target.closest('[data-hand-card]');if(!card||event.button!==0)return;pointerDrag={id:card.dataset.handCard,x:event.clientX,y:event.clientY,moved:false,pointerId:event.pointerId};try{card.setPointerCapture?.(event.pointerId);}catch(_){/* Synthetic and interrupted pointers may have no active capture. */}});
+  document.addEventListener('pointermove',(event)=>{if(pointerDrag&&event.pointerId===pointerDrag.pointerId&&Math.hypot(event.clientX-pointerDrag.x,event.clientY-pointerDrag.y)>8)pointerDrag.moved=true;});
+  document.addEventListener('pointerup',(event)=>{if(!pointerDrag||event.pointerId!==pointerDrag.pointerId)return;const drag=pointerDrag;pointerDrag=null;if(drag.moved){suppressHandClickUntil=performance.now()+120;selectedCard=drag.id;renderHand(false);const rect=els['game-canvas'].getBoundingClientRect();if(event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom){suppressCanvasPointerUntil=performance.now()+100;deployAt(canvasPoint(event.clientX,event.clientY));}}});
+  document.addEventListener('pointercancel',(event)=>{if(pointerDrag&&event.pointerId===pointerDrag.pointerId)pointerDrag=null;});
+  els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)pointerDrag=null;});
+  els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
   els['pause-button'].addEventListener('click',pauseBattle);
   els['import-file'].addEventListener('change',async()=>{const file=els['import-file'].files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(!importSave(value))throw new Error('invalid');showModal('IMPORTED','Save restored','<p>Your validated Tower Duel progress is ready.</p>',[{label:'Continue',primary:true,action:closeModal}]);}catch(_){showModal('IMPORT STOPPED','That save is not valid','<p>Nothing was changed. Choose an unedited Tower Duel export file.</p>',[{label:'Okay',primary:true,action:closeModal}]);}finally{els['import-file'].value='';}});
   document.addEventListener('keydown',(event)=>{if(currentScreen()!=='battle'||els.modal.classList.contains('hidden')===false)return;if(['1','2','3','4'].includes(event.key)){selectCard(match.hands.player[Number(event.key)-1]);event.preventDefault();}else if(event.key===' '||event.key==='Escape'){pauseBattle();event.preventDefault();}});
