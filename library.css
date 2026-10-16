@@ -1,0 +1,42 @@
+:root{color-scheme:light;--ink:#193c4c;--muted:#5c716f;--green:#d7ed94;--paper:#f4f5ee;--line:#d9dfd4;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.shell{max-width:1120px;margin:auto;padding:0 max(32px,env(safe-area-inset-left)) 0 max(32px,env(safe-area-inset-right))}
+.skip-link{position:fixed;z-index:5;top:8px;left:8px;background:var(--ink);color:white;padding:12px 18px;border-radius:8px;transform:translateY(-150%)}
+.skip-link:focus{transform:translateY(0)}
+a:focus-visible{outline:3px solid #25805c;outline-offset:5px}
+.site-header{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:112px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;min-height:44px;text-decoration:none;font-weight:800;font-size:28px;letter-spacing:-1.4px}
+.brand-dot{color:#6c8a45;margin-left:-11px}
+.brand-mark{display:grid;grid-template-columns:repeat(2,10px);gap:3px;transform:rotate(-8deg);margin-right:2px}
+.brand-mark i{width:10px;height:10px;border-radius:2px;background:var(--ink)}
+.brand-mark i:last-child{background:#8fac5a}
+.header-note{font-size:13px;color:var(--muted)}
+.intro{padding:66px 0 36px}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:2.6px;margin:0 0 18px;color:#6b7f53}
+h1{font-size:clamp(46px,6.1vw,74px);line-height:1.04;font-weight:750;letter-spacing:-3.5px;margin:0}
+h1 span{color:#6c8753}
+.intro-copy{font-size:18px;line-height:1.5;color:var(--muted);margin:20px 0 0}
+.game-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px;scroll-margin-top:24px}
+.game-card{display:flex;flex-direction:column;overflow:hidden;border-radius:24px;border:1px solid #d6ded0;background:#fffef9;box-shadow:0 12px 40px #25453208}
+.game-card:only-child{display:grid;grid-template-columns:1.3fr 1fr;min-height:360px}
+.game-art{position:relative;overflow:hidden;background:#7db4c4;min-width:0;aspect-ratio:1.5}
+.game-card:only-child .game-art{aspect-ratio:auto;min-height:100%}
+.game-art img{display:block;width:100%;height:100%;object-fit:cover}
+.game-copy{padding:32px;display:flex;flex-direction:column;align-items:flex-start}
+.genre{font-size:11px;text-transform:uppercase;letter-spacing:1.6px;font-weight:800;color:#718263;margin:0 0 12px}
+h2{font-size:36px;letter-spacing:-1.4px;line-height:1.05;margin:0 0 14px}
+.description{font-size:16px;line-height:1.65;margin:0;color:var(--muted);max-width:27em}
+.details{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 28px;padding:0;list-style:none}
+.details li{border-radius:6px;padding:6px 8px;background:#eef1e8;font-size:11px;font-weight:600;color:#50675d}
+.play-link{display:flex;justify-content:space-between;align-items:center;gap:32px;width:100%;min-height:52px;margin-top:auto;border-radius:12px;background:var(--green);color:#263f32;text-decoration:none;padding:15px 18px;font-size:15px;font-weight:750;transition:background .15s,transform .15s}
+.play-link:hover{background:#c7e47a}
+.play-link:active{transform:scale(.985)}
+.play-link svg{width:20px;height:20px;flex:none}
+.install-note{display:flex;align-items:center;justify-content:center;gap:9px;font-size:12px;line-height:1.65;color:var(--muted);margin:26px 0 0}
+.install-note svg{flex:none}
+footer{display:flex;justify-content:center;gap:10px;margin-top:58px;border-top:1px solid var(--line);padding:25px 0 max(28px,env(safe-area-inset-bottom));font-size:12px;color:#7b897d}
+@media(max-width:700px){.shell{padding:0 max(22px,env(safe-area-inset-left)) 0 max(22px,env(safe-area-inset-right))}.site-header{min-height:86px}.header-note{display:none}.intro{padding:38px 0 28px}.eyebrow{font-size:10px;margin-bottom:15px}h1{font-size:48px;letter-spacing:-2.3px}.intro-copy{font-size:16px;margin-top:17px}.game-card,.game-card:only-child{display:flex;min-height:0;border-radius:20px}.game-art,.game-card:only-child .game-art{aspect-ratio:1.4;min-height:0}.game-copy{padding:25px}.genre{font-size:10px}h2{font-size:32px}.description{font-size:15px}.details{margin:18px 0 22px;gap:6px}.details li{font-size:10px;padding:6px 7px}.install-note{font-size:11px;align-items:flex-start;justify-content:flex-start;margin-top:22px}footer{margin-top:34px;font-size:11px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.play-link{transition:none}}
