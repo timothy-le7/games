@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14263a">
+  <title>Block Islands</title>
+  <link rel="stylesheet" href="./game.css">
+<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+</head>
+<body>
+  <main id="app" aria-label="Block Islands">
+    <canvas id="world" aria-label="A voxel island adventure. Use the movement controls, then aim at a block to mine or place it."></canvas>
+    <div class="skyline" aria-hidden="true"></div>
+    <header class="hud top-hud">
+      <button id="menuButton" class="round-button" aria-label="Open game menu">☰</button>
+      <div class="stage-readout"><span id="stageNumber">ISLAND 1 / 12</span><strong id="stageName">Mosslight Camp</strong><small id="goalText">Gather resources and craft a campfire.</small></div>
+      <div class="vitals" aria-label="Player health"><span>♥</span><b id="healthText">8</b><i id="dayClock">DAY</i></div>
+    </header>
+    <div class="hud status-line" id="statusLine" role="status">Aim at a nearby block, then mine it.</div>
+    <aside class="hud quest-card" id="questCard"><b>FIELD GOAL</b><span id="questProgress">Gather wood and stone, then craft a campfire.</span></aside>
+    <div class="target-tag hud" id="targetTag" hidden></div>
+    <section class="action-dock hud" aria-label="Building and action controls">
+      <div id="hotbar" class="hotbar" role="group" aria-label="Select a building block"></div>
+      <div class="actions">
+        <button id="mineButton" class="action primary">Mine</button>
+        <button id="placeButton" class="action">Place</button>
+        <button id="strikeButton" class="action danger">Strike</button>
+        <button id="craftButton" class="action craft">Craft</button>
+      </div>
+    </section>
+    <nav class="touch-controls hud" aria-label="Move around the island">
+      <button data-move="up" aria-label="Move forward">▲</button>
+      <button data-move="left" aria-label="Move left">◀</button>
+      <button data-move="down" aria-label="Move back">▼</button>
+      <button data-move="right" aria-label="Move right">▶</button>
+    </nav>
+    <div id="overlay" class="overlay open" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+      <section id="panel" class="panel"></section>
+    </div>
+    <input id="importInput" type="file" accept="application/json,.json" hidden>
+  </main>
+  <script src="./rules.js"></script>
+  <script src="./game.js"></script>
+<script data-games-pwa-runtime src="./game-pwa.js"></script>
+</body>
+</html>

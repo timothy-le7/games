@@ -1,0 +1,304 @@
+/* Block Islands deterministic campaign rules. Browser and Node compatible. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.BlockIslandsRules = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const SIZE = 18;
+  const SAVE_VERSION = 1;
+  const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
+  const key = (x, y) => x + ',' + y;
+  const hash = (seed, x, y) => {
+    let n = (seed ^ Math.imul(x + 71, 374761393) ^ Math.imul(y + 29, 668265263)) >>> 0;
+    n = Math.imul(n ^ (n >>> 13), 1274126177) >>> 0;
+    return (n ^ (n >>> 16)) >>> 0;
+  };
+  const distance = (a, b, x, y) => Math.hypot(a - x, b - y);
+
+  const STAGES = [
+    { name: 'Mosslight Camp', biome: 'forest', seed: 1147, goal: 'craft-campfire', goalText: 'Gather wood and stone, then craft a campfire.', hint: 'Mine the marked trees and pale rocks. Open Craft when you have 3 wood and 2 stone.', enemies: 0 },
+    { name: 'Quarry Span', biome: 'quarry', seed: 2281, goal: 'bridge', goalText: 'Build four plank bridge tiles across the quarry stream.', hint: 'Mine trees, craft Planks, aim at water beside solid ground, then Place.', enemies: 0 },
+    { name: 'Echo Hollow', biome: 'cave', seed: 3413, goal: 'ore-and-pick', goalText: 'Craft a stone pick, then mine four copper ore veins.', hint: 'A stone pick breaks copper. Use the Craft shelf before entering the hollow.', enemies: 1 },
+    { name: 'Hearthfield', biome: 'meadow', seed: 4579, goal: 'shelter', goalText: 'Raise six plank blocks for a storm shelter.', hint: 'Place planks one block at a time on solid ground. Keep an eye on the dusk meter.', enemies: 1 },
+    { name: 'Floodglass Crossing', biome: 'flood', seed: 5699, goal: 'crossing', goalText: 'Cross the flooded channel and reach the beacon shore.', hint: 'Build a connected plank route; deep water slows you, but the bridge stays in place.', enemies: 2 },
+    { name: 'Frostfern Ridge', biome: 'frost', seed: 6827, goal: 'tonic', goalText: 'Make a warming tonic from berries and frost ice.', hint: 'Frost ice needs a stone pick. Drink a tonic from Craft to restore your heart.', enemies: 2 },
+    { name: 'Sunken Amber', biome: 'desert', seed: 7949, goal: 'relic', goalText: 'Unearth the amber relic beyond the three sandstone seals.', hint: 'Mine the gold sandstone at the ruin. The relic is an exploration find, not a menu reward.', enemies: 2 },
+    { name: 'Deepforge', biome: 'forge', seed: 8089, goal: 'iron-pick', goalText: 'Assemble a forge and an iron pick.', hint: 'Copper and stone make a forge; its heat lets an iron pick cut crystal.', enemies: 3 },
+    { name: 'Cinder Watch', biome: 'ember', seed: 9199, goal: 'outpost', goalText: 'Build five basalt blocks beside the lava watch.', hint: 'Craft Basalt from stone and copper. Lava hurts, so build from the safe rim.', enemies: 3 },
+    { name: 'Cloudstep Works', biome: 'sky', seed: 10301, goal: 'sky-tower', goalText: 'Build a seven-block sky marker.', hint: 'Stack blocks on the marked stone plinth. You can climb one height at a time.', enemies: 3 },
+    { name: 'Willow Ward', biome: 'settlement', seed: 11519, goal: 'defense', goalText: 'Defeat four dusk skitters before they reach the settlement.', hint: 'Aim at a nearby skitter and use Strike. Retreat to high ground between swings.', enemies: 5 },
+    { name: 'Aurora Expedition', biome: 'aurora', seed: 12781, goal: 'beacon', goalText: 'Mine three aurora crystals, craft a beacon, and place it on the summit.', hint: 'Only an iron pick frees aurora crystal. A completed beacon ends the expedition.', enemies: 5 }
+  ];
+
+  const RECIPES = {
+    planks: { label: 'Planks ×3', cost: { wood: 1 }, gives: { plank: 3 } },
+    campfire: { label: 'Campfire', cost: { wood: 3, stone: 2 }, gives: { campfire: 1 } },
+    stonePick: { label: 'Stone pick', cost: { wood: 2, stone: 4 }, gives: { stonePick: 1 } },
+    tonic: { label: 'Warming tonic', cost: { berry: 2, ice: 1 }, gives: { tonic: 1 } },
+    forge: { label: 'Deepforge', cost: { ore: 3, stone: 6 }, gives: { forge: 1 } },
+    ironPick: { label: 'Iron pick', cost: { ore: 4, wood: 2 }, requires: 'forge', gives: { ironPick: 1 } },
+    basalt: { label: 'Basalt ×3', cost: { stone: 2, ore: 1 }, gives: { basalt: 3 } },
+    beacon: { label: 'Aurora beacon', cost: { crystal: 3, ore: 2 }, requires: 'ironPick', gives: { beacon: 1 } }
+  };
+
+  const MATERIALS = {
+    wood: { tool: 0, item: 'wood' }, berry: { tool: 0, item: 'berry' }, dirt: { tool: 0, item: 'dirt' }, sand: { tool: 0, item: 'sand' },
+    stone: { tool: 0, item: 'stone' }, ore: { tool: 1, item: 'ore' }, ice: { tool: 1, item: 'ice' },
+    crystal: { tool: 2, item: 'crystal' }, basalt: { tool: 2, item: 'basalt' }, relic: { tool: 0, item: 'relic' }
+  };
+  const INVENTORY_KEYS = ['wood', 'stone', 'dirt', 'sand', 'ore', 'ice', 'crystal', 'berry', 'plank', 'basalt', 'beacon', 'tonic', 'campfire', 'stonePick', 'ironPick', 'forge', 'relic'];
+
+  const SPECIAL = {
+    0: { '3,4': 'wood', '4,3': 'wood', '5,3': 'wood', '4,5': 'stone', '5,5': 'stone' },
+    1: { '4,3': 'wood', '5,3': 'wood', '6,4': 'wood', '7,4': 'wood', '8,5': 'wood' },
+    2: { '4,3': 'wood', '5,4': 'wood', '4,5': 'stone', '5,5': 'stone', '6,5': 'stone', '7,5': 'stone', '10,7': 'ore', '11,7': 'ore', '12,8': 'ore', '12,9': 'ore' },
+    3: { '4,3': 'wood', '5,3': 'wood', '6,4': 'wood', '7,4': 'wood' },
+    4: { '4,3': 'wood', '5,4': 'wood', '6,4': 'wood', '7,5': 'wood', '15,14': 'crystal' },
+    5: { '4,3': 'berry', '5,3': 'berry', '7,5': 'ice', '8,5': 'ice' },
+    6: { '5,3': 'sand', '6,3': 'sand', '7,3': 'sand', '14,13': 'relic' },
+    7: { '4,3': 'wood', '5,4': 'wood', '6,5': 'stone', '7,5': 'stone', '8,5': 'stone', '7,6': 'stone', '8,6': 'stone', '9,6': 'stone', '9,7': 'ore', '10,8': 'ore', '11,8': 'ore', '12,9': 'ore', '13,9': 'ore', '12,10': 'ore', '13,10': 'ore' },
+    8: { '4,3': 'stone', '5,3': 'stone', '6,4': 'stone', '7,4': 'stone', '8,5': 'ore', '9,5': 'ore' },
+    9: { '4,3': 'wood', '5,3': 'wood', '6,3': 'wood', '7,4': 'wood', '8,4': 'wood', '10,10': 'stone' },
+    10: { '7,7': 'wood', '9,8': 'wood', '12,10': 'wood' },
+    11: { '5,3': 'crystal', '6,4': 'crystal', '7,4': 'crystal', '8,5': 'ore', '9,5': 'ore', '14,14': 'crystal' }
+  };
+
+  function terrainFor(stageIndex, x, y) {
+    const stage = STAGES[stageIndex];
+    const n = hash(stage.seed, x, y);
+    let h = 1 + (n % 2);
+    let surface = stage.biome === 'desert' ? 'sand' : stage.biome === 'frost' ? 'ice' : stage.biome === 'ember' ? 'basalt' : 'dirt';
+    let water = false;
+    let lava = false;
+    if (stage.biome === 'quarry' && x === 9 && y > 1 && y < 16) { h = 0; water = true; }
+    if (stage.biome === 'flood' && x >= 8 && x <= 11 && y > 0 && y < 17) { h = 0; water = true; }
+    if (stage.biome === 'ember' && x >= 9 && x <= 11 && y >= 6 && y <= 14) { h = 0; lava = true; }
+    if (stage.biome === 'sky' && (x < 4 || y > 14) && n % 3 === 0) { h = 0; water = true; }
+    const fixed = SPECIAL[stageIndex] && SPECIAL[stageIndex][key(x, y)];
+    let resource = fixed || null;
+    if (!resource && !water && !lava) {
+      const roll = n % 31;
+      if (roll === 0) resource = 'wood';
+      else if (roll === 1) resource = 'stone';
+      else if (roll === 2 && stageIndex >= 2) resource = 'ore';
+      else if (roll === 3 && stageIndex >= 5) resource = stageIndex >= 11 ? 'crystal' : 'berry';
+    }
+    if (stage.biome === 'settlement' && x > 11 && y > 11) resource = null;
+    return { x, y, h, surface, resource, water, lava, bridge: false, extra: [] };
+  }
+
+  function makeWorld(stageIndex, edits) {
+    const cells = new Array(SIZE * SIZE);
+    for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+      const cell = terrainFor(stageIndex, x, y);
+      const edit = edits && edits[key(x, y)];
+      if (edit) {
+        if (Number.isInteger(edit.h)) cell.h = clamp(edit.h, 0, 12);
+        if (typeof edit.resource === 'string' || edit.resource === null) cell.resource = edit.resource;
+        if (Array.isArray(edit.extra)) cell.extra = edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12);
+        cell.bridge = !!edit.bridge;
+      }
+      cells[y * SIZE + x] = cell;
+    }
+    return { stageIndex, cells };
+  }
+  function getCell(world, x, y) { return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < SIZE && y < SIZE ? world.cells[y * SIZE + x] : null; }
+  function topHeight(cell) { return cell.h + cell.extra.length + (cell.bridge ? 1 : 0); }
+  function cellMaterial(cell) { return cell.resource || (cell.surface === 'sand' ? 'sand' : cell.surface === 'ice' ? 'ice' : cell.surface === 'basalt' ? 'basalt' : cell.h > 1 ? 'stone' : 'dirt'); }
+  function persistCell(state, cell) {
+    state.edits[key(cell.x, cell.y)] = { h: cell.h, resource: cell.resource, bridge: cell.bridge, extra: cell.extra.slice() };
+  }
+  function emptyInventory() { const inventory = {}; for (const name of INVENTORY_KEYS) inventory[name] = 0; return inventory; }
+  function createGame(seed) {
+    const state = {
+      version: SAVE_VERSION, seed: Number.isInteger(seed) ? seed : 861733, stage: 0, unlocked: 0, completed: [], stageComplete: false,
+      inventory: emptyInventory(), crafted: {}, placed: {}, mined: {}, bridgeBuilt: 0, tallest: 0, enemiesDefeated: 0,
+      player: { x: 2.5, y: 3.5, health: 8, maxHealth: 8 }, edits: {}, time: 0, enemies: [], creative: false, message: 'Welcome to Mosslight Camp.'
+    };
+    startStage(state, 0, false);
+    return state;
+  }
+  function startStage(state, stageIndex, preserveEdits) {
+    if (!Number.isInteger(stageIndex) || stageIndex < 0 || stageIndex >= STAGES.length) return false;
+    state.stage = stageIndex;
+    state.stageComplete = false;
+    state.edits = preserveEdits ? state.edits || {} : {};
+    state.placed = {};
+    state.mined = {};
+    state.bridgeBuilt = 0;
+    state.tallest = 0;
+    state.enemiesDefeated = 0;
+    state.player = { x: 2.5, y: 3.5, health: 8, maxHealth: 8 };
+    state.enemies = [];
+    const count = STAGES[stageIndex].enemies;
+    for (let i = 0; i < count; i++) state.enemies.push({ id: stageIndex + '-' + i, x: 13 + (i % 3), y: 12 + Math.floor(i / 3), health: 3 + Math.floor(stageIndex / 4), cooldown: 0, alive: true });
+    state.message = STAGES[stageIndex].hint;
+    return true;
+  }
+  function toolLevel(state) { return state.creative || state.inventory.ironPick > 0 ? 2 : state.inventory.stonePick > 0 ? 1 : 0; }
+  function has(state, item, count) { return state.creative || (state.inventory[item] || 0) >= count; }
+  function change(state, item, amount) { state.inventory[item] = Math.max(0, (state.inventory[item] || 0) + amount); }
+  function inReach(state, x, y, reach) { return distance(state.player.x, state.player.y, x + .5, y + .5) <= (reach || 3.9); }
+
+  function mine(state, world, x, y) {
+    const cell = getCell(world, x, y);
+    if (!cell) return { ok: false, reason: 'That is beyond the island.' };
+    if (!inReach(state, x, y)) return { ok: false, reason: 'Move closer to mine that block.' };
+    const material = cellMaterial(cell);
+    const definition = MATERIALS[material];
+    if (!definition) return { ok: false, reason: 'Nothing useful to mine there.' };
+    if (toolLevel(state) < definition.tool) return { ok: false, reason: definition.tool === 1 ? 'A stone pick is needed here.' : 'An iron pick is needed here.' };
+    if (cell.resource) cell.resource = null;
+    else if (cell.extra.length) cell.extra.pop();
+    else if (cell.h > 0) cell.h--;
+    else return { ok: false, reason: 'Water and lava cannot be mined.' };
+    change(state, definition.item, 1);
+    state.mined[definition.item] = (state.mined[definition.item] || 0) + 1;
+    persistCell(state, cell);
+    state.message = '+1 ' + definition.item + '.';
+    checkGoal(state);
+    return { ok: true, item: definition.item };
+  }
+  function hasBridgeSupport(world, cell) {
+    for (const pair of [[cell.x - 1, cell.y], [cell.x + 1, cell.y], [cell.x, cell.y - 1], [cell.x, cell.y + 1]]) {
+      const nearby = getCell(world, pair[0], pair[1]);
+      if (nearby && (nearby.h > 0 || nearby.bridge)) return true;
+    }
+    return false;
+  }
+  function place(state, world, x, y, item) {
+    const cell = getCell(world, x, y);
+    const allowed = ['dirt', 'plank', 'stone', 'basalt', 'beacon'];
+    if (!allowed.includes(item)) return { ok: false, reason: 'Select a building block first.' };
+    if (!cell || !inReach(state, x, y)) return { ok: false, reason: 'Move closer to place there.' };
+    if (!has(state, item, 1)) return { ok: false, reason: 'You do not have that block.' };
+    if (item === 'plank' && cell.water && !cell.bridge) {
+      if (!hasBridgeSupport(world, cell)) return { ok: false, reason: 'A bridge needs a solid bank or another bridge.' };
+      cell.bridge = true;
+      state.bridgeBuilt++;
+    } else {
+      if ((cell.water || cell.lava) && !cell.bridge) return { ok: false, reason: cell.lava ? 'Lava needs a safe bridge first.' : 'Use planks to bridge water.' };
+      if (cell.extra.length >= 12) return { ok: false, reason: 'That stack is already as high as it can be.' };
+      cell.extra.push(item);
+      state.tallest = Math.max(state.tallest, topHeight(cell));
+    }
+    if (!state.creative) change(state, item, -1);
+    state.placed[item] = (state.placed[item] || 0) + 1;
+    persistCell(state, cell);
+    state.message = item === 'beacon' ? 'The beacon hums with aurora light.' : 'Placed ' + item + '.';
+    checkGoal(state);
+    return { ok: true };
+  }
+  function craft(state, recipeName) {
+    const recipe = RECIPES[recipeName];
+    if (!recipe) return { ok: false, reason: 'Unknown recipe.' };
+    if (recipe.requires && !has(state, recipe.requires, 1)) return { ok: false, reason: 'Craft a ' + recipe.requires + ' first.' };
+    for (const item in recipe.cost) if (!has(state, item, recipe.cost[item])) return { ok: false, reason: 'Need more ' + item + '.' };
+    if (!state.creative) for (const item in recipe.cost) change(state, item, -recipe.cost[item]);
+    for (const item in recipe.gives) change(state, item, recipe.gives[item]);
+    state.crafted[recipeName] = (state.crafted[recipeName] || 0) + 1;
+    if (recipeName === 'tonic') { change(state, 'tonic', -1); state.player.health = Math.min(state.player.maxHealth, state.player.health + 4); }
+    state.message = 'Crafted ' + recipe.label + '.';
+    checkGoal(state);
+    return { ok: true, recipe: recipeName };
+  }
+  function move(state, world, dx, dy) {
+    const nextX = clamp(state.player.x + dx, .15, SIZE - .15);
+    const nextY = clamp(state.player.y + dy, .15, SIZE - .15);
+    const here = getCell(world, Math.floor(state.player.x), Math.floor(state.player.y));
+    const next = getCell(world, Math.floor(nextX), Math.floor(nextY));
+    if (!next) return { ok: false, reason: 'Island edge.' };
+    if (Math.abs(topHeight(next) - topHeight(here)) > 1) return { ok: false, reason: 'That ledge is too high. Build a step.' };
+    state.player.x = nextX; state.player.y = nextY;
+    if (next.lava && !next.bridge) state.player.health = Math.max(0, state.player.health - .65);
+    if (next.water && !next.bridge) state.player.health = Math.max(0, state.player.health - .05);
+    checkGoal(state);
+    return { ok: true, water: next.water && !next.bridge };
+  }
+  function attack(state, x, y) {
+    let victim = null;
+    for (const enemy of state.enemies) if (enemy.alive && distance(state.player.x, state.player.y, enemy.x, enemy.y) < 3.1 && (!victim || distance(enemy.x, enemy.y, x, y) < distance(victim.x, victim.y, x, y))) victim = enemy;
+    if (!victim) return { ok: false, reason: 'No skitter is within striking reach.' };
+    victim.health -= toolLevel(state) === 2 ? 3 : toolLevel(state) === 1 ? 2 : 1;
+    if (victim.health <= 0) { victim.alive = false; state.enemiesDefeated++; state.message = 'Skitter dispersed.'; checkGoal(state); return { ok: true, defeated: true }; }
+    state.message = 'Skitter staggered.';
+    return { ok: true };
+  }
+  function tick(state, world, seconds) {
+    const dt = clamp(seconds || 0, 0, .2);
+    state.time += dt;
+    let damaged = false;
+    for (const enemy of state.enemies) {
+      if (!enemy.alive) continue;
+      const dx = state.player.x - enemy.x, dy = state.player.y - enemy.y, d = Math.hypot(dx, dy) || 1;
+      if (d > 1.1) { enemy.x += dx / d * dt * .38; enemy.y += dy / d * dt * .38; }
+      else { enemy.cooldown -= dt; if (enemy.cooldown <= 0) { state.player.health = Math.max(0, state.player.health - .55); enemy.cooldown = 1.1; damaged = true; } }
+    }
+    if (state.player.health <= 0) { state.message = 'You were carried back to camp. Try the stage again.'; return { defeated: true, damaged }; }
+    return { defeated: false, damaged };
+  }
+  function retryStage(state) {
+    const retained = emptyInventory();
+    for (const name of INVENTORY_KEYS) retained[name] = name === 'stonePick' || name === 'ironPick' || name === 'forge' ? state.inventory[name] : Math.floor(state.inventory[name] * .7);
+    state.inventory = retained;
+    startStage(state, state.stage, false);
+  }
+  function goalComplete(state) {
+    switch (STAGES[state.stage].goal) {
+      case 'craft-campfire': return (state.crafted.campfire || 0) >= 1;
+      case 'bridge': return state.bridgeBuilt >= 4;
+      case 'ore-and-pick': return (state.crafted.stonePick || 0) >= 1 && (state.mined.ore || 0) >= 4;
+      case 'shelter': return (state.placed.plank || 0) >= 6;
+      case 'crossing': return state.bridgeBuilt >= 4 && state.player.x >= 14 && state.player.y >= 12;
+      case 'tonic': return (state.crafted.tonic || 0) >= 1;
+      case 'relic': return (state.inventory.relic || 0) >= 1 && (state.mined.sand || 0) >= 3;
+      case 'iron-pick': return (state.crafted.forge || 0) >= 1 && (state.crafted.ironPick || 0) >= 1;
+      case 'outpost': return (state.placed.basalt || 0) >= 5;
+      case 'sky-tower': return state.tallest >= 7;
+      case 'defense': return state.enemiesDefeated >= 4;
+      case 'beacon': return (state.placed.beacon || 0) >= 1;
+      default: return false;
+    }
+  }
+  function checkGoal(state) {
+    if (state.stageComplete || !goalComplete(state)) return false;
+    state.stageComplete = true;
+    if (!state.completed.includes(state.stage)) state.completed.push(state.stage);
+    state.unlocked = Math.max(state.unlocked, Math.min(STAGES.length - 1, state.stage + 1));
+    state.message = state.stage === STAGES.length - 1 ? 'Aurora Expedition complete!' : 'Stage complete! The next island is unlocked.';
+    return true;
+  }
+  function isValidState(value) {
+    if (!value || typeof value !== 'object' || value.version !== SAVE_VERSION || !Number.isInteger(value.stage) || value.stage < 0 || value.stage >= STAGES.length) return false;
+    if (!value.player || !Number.isFinite(value.player.x) || !Number.isFinite(value.player.y) || !Number.isFinite(value.player.health)) return false;
+    if (!value.inventory || typeof value.inventory !== 'object' || !value.edits || typeof value.edits !== 'object') return false;
+    for (const item of INVENTORY_KEYS) if (!Number.isFinite(value.inventory[item] || 0) || (value.inventory[item] || 0) < 0 || (value.inventory[item] || 0) > 9999) return false;
+    return true;
+  }
+  function sanitizeState(value) {
+    if (!isValidState(value)) return null;
+    const state = JSON.parse(JSON.stringify(value));
+    state.stage = clamp(state.stage, 0, STAGES.length - 1);
+    state.unlocked = clamp(Number.isInteger(state.unlocked) ? state.unlocked : 0, 0, STAGES.length - 1);
+    state.completed = Array.isArray(state.completed) ? state.completed.filter(n => Number.isInteger(n) && n >= 0 && n < STAGES.length) : [];
+    state.enemies = Array.isArray(state.enemies) ? state.enemies.slice(0, 10).filter(e => e && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.health)).map(e => ({ id: String(e.id || 'enemy').slice(0, 30), x: clamp(e.x, 0, SIZE), y: clamp(e.y, 0, SIZE), health: clamp(e.health, 0, 20), cooldown: clamp(Number(e.cooldown) || 0, 0, 10), alive: e.alive !== false })) : [];
+    state.player.x = clamp(state.player.x, .15, SIZE - .15); state.player.y = clamp(state.player.y, .15, SIZE - .15); state.player.health = clamp(state.player.health, 0, 20); state.player.maxHealth = clamp(Number(state.player.maxHealth) || 8, 1, 20);
+    state.time = clamp(Number(state.time) || 0, 0, 10000000);
+    for (const item of INVENTORY_KEYS) state.inventory[item] = clamp(Math.floor(Number(state.inventory[item]) || 0), 0, 9999);
+    const cleanedEdits = {};
+    for (const k of Object.keys(state.edits).slice(0, SIZE * SIZE)) if (/^\d+,\d+$/.test(k)) {
+      const [x, y] = k.split(',').map(Number); const edit = state.edits[k];
+      if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && edit && typeof edit === 'object') cleanedEdits[k] = { h: clamp(Math.floor(Number(edit.h) || 0), 0, 12), resource: typeof edit.resource === 'string' && MATERIALS[edit.resource] ? edit.resource : null, bridge: !!edit.bridge, extra: Array.isArray(edit.extra) ? edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12) : [] };
+    }
+    state.edits = cleanedEdits;
+    state.crafted = state.crafted && typeof state.crafted === 'object' ? state.crafted : {};
+    state.placed = state.placed && typeof state.placed === 'object' ? state.placed : {};
+    state.mined = state.mined && typeof state.mined === 'object' ? state.mined : {};
+    return state;
+  }
+  function summary(state) { return { stage: state.stage, stageName: STAGES[state.stage].name, unlocked: state.unlocked, complete: !!state.stageComplete, health: Math.ceil(state.player.health), inventory: Object.assign({}, state.inventory), enemies: state.enemies.filter(e => e.alive).length }; }
+
+  return { SIZE, SAVE_VERSION, STAGES, RECIPES, INVENTORY_KEYS, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, summary, hash };
+});
