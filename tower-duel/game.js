@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const E = window.TowerDuelEngine;
-  if (!E) throw new Error('Tower Duel engine did not load');
+  if (!E) throw new Error('Pennant Duel engine did not load');
 
   const SAVE_KEY = 'games:tower-duel:v1';
   const BACKUP_KEY = SAVE_KEY + ':backup';
@@ -9,7 +9,7 @@
   const SAVE_FORMAT = 'tower-duel-save';
   const SAVE_VERSION = 1;
   const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','pause-button','game-canvas','canvas-shell','tutorial-tip','toast','energy-track','energy-number','next-card','next-card-art','hand','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
-  if (!window.TowerDuelRenderer3D) throw new Error('Tower Duel 3D renderer did not load');
+  if (!window.TowerDuelRenderer3D) throw new Error('Pennant Duel 3D renderer did not load');
   const renderer3d = new window.TowerDuelRenderer3D(els['game-canvas'], E);
   const ctx = null;
   let storageLoadKnown = true;
@@ -366,7 +366,7 @@
     document.getElementById('export-setting').onclick=downloadSave;
     document.getElementById('import-setting').onclick=()=>els['import-file'].click();
   }
-  function downloadSave(){const blob=new Blob([JSON.stringify(exportSave(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tower-duel-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+  function downloadSave(){const blob=new Blob([JSON.stringify(exportSave(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pennant-duel-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
   function showConfirm(title,body,confirm,action){showModal('CONFIRM',title,'<p>'+body+'</p>',[{label:confirm,primary:true,action},{label:'Keep current battle',action:closeModal}]);}
   function showModal(kicker,title,body,actions){els['modal-kicker'].textContent=kicker;els['modal-title'].textContent=title;els['modal-body'].innerHTML=body;els['modal-actions'].innerHTML='';actions.forEach((item)=>{const button=document.createElement('button');button.type='button';button.textContent=item.label;if(item.primary)button.className='primary';button.onclick=item.action;els['modal-actions'].append(button);});els.modal.classList.remove('hidden');setTimeout(()=>els['modal-actions'].querySelector('button')?.focus(),0);}
   function closeModal(){els.modal.classList.add('hidden');}
@@ -392,7 +392,7 @@
   els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)cancelDrag(event.pointerId);});
   els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
   els['pause-button'].addEventListener('click',pauseBattle);
-  els['import-file'].addEventListener('change',async()=>{const file=els['import-file'].files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(!importSave(value))throw new Error('invalid');showModal('IMPORTED','Save restored','<p>Your validated Tower Duel progress is ready.</p>',[{label:'Continue',primary:true,action:closeModal}]);}catch(_){showModal('IMPORT STOPPED','That save is not valid','<p>Nothing was changed. Choose an unedited Tower Duel export file.</p>',[{label:'Okay',primary:true,action:closeModal}]);}finally{els['import-file'].value='';}});
+  els['import-file'].addEventListener('change',async()=>{const file=els['import-file'].files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(!importSave(value))throw new Error('invalid');showModal('IMPORTED','Save restored','<p>Your validated Pennant Duel progress is ready.</p>',[{label:'Continue',primary:true,action:closeModal}]);}catch(_){showModal('IMPORT STOPPED','That save is not valid','<p>Nothing was changed. Choose an unedited Pennant Duel export file.</p>',[{label:'Okay',primary:true,action:closeModal}]);}finally{els['import-file'].value='';}});
   document.addEventListener('keydown',(event)=>{if(currentScreen()!=='battle'||els.modal.classList.contains('hidden')===false)return;if(['1','2','3','4'].includes(event.key)){selectCard(match.hands.player[Number(event.key)-1]);event.preventDefault();}else if(event.key===' '||event.key==='Escape'){pauseBattle();event.preventDefault();}});
   document.addEventListener('visibilitychange',()=>{cancelDrag();if(document.hidden&&match&&match.phase==='playing'){paused=true;saveNow();}else{lastFrame=performance.now();if(match&&match.phase==='playing'&&currentScreen()==='battle'&&els.modal.classList.contains('hidden'))pauseBattle();}});
   window.addEventListener('blur',()=>cancelDrag());

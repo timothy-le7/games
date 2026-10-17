@@ -435,7 +435,7 @@
 
   function snapshot(state) { const value = copy(state); value.accumulator = 0; return value; }
   function restore(value) {
-    if (!validateSnapshot(value)) throw new Error('Invalid Tower Duel match snapshot');
+    if (!validateSnapshot(value)) throw new Error('Invalid Pennant Duel match snapshot');
     const state = copy(value);
     for (const tower of state.towers) {
       tower.recoil = Number.isFinite(tower.recoil) ? tower.recoil : 0;

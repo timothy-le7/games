@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Pennant Duel crossed pennants</title>
+  <defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#172d5b"/><stop offset="1" stop-color="#0a122a"/></linearGradient><linearGradient id="sun" x2="1" y2="1"><stop stop-color="#ffe680"/><stop offset="1" stop-color="#ff8d5c"/></linearGradient></defs>
+  <rect width="512" height="512" rx="108" fill="url(#sky)"/>
+  <circle cx="256" cy="234" r="166" fill="none" stroke="#62e6d4" stroke-width="18" opacity=".7"/>
+  <path d="M156 120v283M356 120v283" stroke="#f4f7ff" stroke-width="24" stroke-linecap="round"/>
+  <path d="M168 136c82 3 103 46 144 70-59 22-79 60-144 55z" fill="url(#sun)"/>
+  <path d="M344 136c-82 3-103 46-144 70 59 22 79 60 144 55z" fill="#56d4ea"/>
+  <path d="M112 404h288l-34-92-70 34-40-86-40 86-70-34z" fill="#f6c85f" stroke="#fff2bd" stroke-width="12" stroke-linejoin="round"/>
+</svg>

@@ -56,6 +56,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.s
 .tech-detail h3{min-width:min-content}.tech-node .tech-cost{background:#142b3b;box-shadow:0 0 0 2px #142b3b;border-radius:4px}
 @media(min-width:521px) and (max-height:620px){.tech-modal{display:grid;max-width:none;grid-template-columns:minmax(0,1fr) 260px;grid-template-rows:auto auto auto minmax(0,1fr)}.tech-header{grid-column:1/-1;padding:calc(6px + env(safe-area-inset-top)) 12px 6px}.tech-controls{grid-column:1;grid-row:2;padding-top:0;padding-bottom:0}.tech-branches{grid-column:1;grid-row:3;padding-bottom:4px}.tech-map{grid-column:1;grid-row:4;min-height:0}.tech-detail{grid-column:2;grid-row:2/5;max-height:none;min-height:0;border-top:0;border-left:1px solid #ffffff18;padding:15px calc(15px + env(safe-area-inset-right)) calc(15px + env(safe-area-inset-bottom)) 15px}.tech-detail p{font-size:11px;margin:10px 0 14px}.tech-detail .detail-top{flex-wrap:wrap}.tech-detail .learned{font-size:11px}}
 .tech-layer{z-index:21}
+/* A focused branch shows both three-step paths; the full atlas remains available. */
+#tech-tree{--tech-disc-size:max(44px,calc(56px * var(--tech-zoom)))}
+.tech-node,.tech-node:active:not(:disabled){transform:translate(-50%,calc(var(--tech-disc-size) / -2));min-height:0;padding:0}
+.tech-disc{width:var(--tech-disc-size);height:var(--tech-disc-size)}
+.tech-node[hidden]{display:none}.tech-tier{position:absolute;top:-5px;left:-6px;display:grid;place-items:center;min-width:19px;height:19px;padding:0 3px;border-radius:7px;background:#173342;border:1px solid #8da9b2;color:#e6efed;font-size:10px;line-height:1;font-weight:750}
+.tech-tier-heading{position:absolute;top:9px;transform:translateX(-50%);color:#a7bec7;font-size:10px;font-weight:650;white-space:nowrap}
+.tech-links .focused{stroke-width:4}.tech-branches .tech-all{background:#294253}
+/* Team numbers are shared by map pieces, city labels and the tribe list. */
+.army-name i{width:17px;height:17px;line-height:15px;text-align:center;font-style:normal;font-weight:800;font-size:10px;color:var(--army-ink);border:1px solid #fff;border-radius:4px;vertical-align:middle}
+.tribe-title:after{content:none}.team-identity{font-size:9px!important;letter-spacing:.4px!important;white-space:nowrap}
+.stats-team{display:inline-grid;place-items:center;width:21px;height:21px;border:1px solid #fff;border-radius:5px;font-size:11px;font-weight:800;margin-right:5px;vertical-align:middle}
 </style>
 <!-- data-poly-top-package -->
 <meta name="apple-mobile-web-app-title" content="Hexgame">
@@ -68,13 +79,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.s
 <div class="desktop-help">Drag to explore · Scroll to zoom<br><kbd>T</kbd> technology <kbd>E</kbd> end turn <kbd>C</kbd> capital</div>
 <main class="phone" id="phone">
  <div class="status-bar" aria-hidden="true"><span>9:41</span><div class="island"></div><div class="status-icons"><svg viewBox="0 0 20 12"><path fill="currentColor" d="M1 8h3v4H1zM6 6h3v6H6zM11 3h3v9h-3zM16 0h3v12h-3z"/></svg><svg viewBox="0 0 16 12"><path fill="none" stroke="currentColor" stroke-width="2" d="M1 4Q8-2 15 4M4 7q4-4 8 0"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/></svg><svg viewBox="0 0 26 12"><rect x="1" y="1" width="21" height="10" rx="2" fill="none" stroke="currentColor"/><rect x="3" y="3" width="17" height="6" rx="1" fill="currentColor"/><path stroke="currentColor" stroke-width="2" d="M24 4v4"/></svg></div></div>
- <header class="topbar"><div id="tribe-mark" class="tribe-mark"></div><div class="tribe-title"><strong id="tribe-name">Crownlanders</strong></div><div class="stat"><span class="stat-label">Score</span><div class="stat-value" id="score">0</div></div><div class="stat"><span class="stat-label" id="stars-label">Stars (+2)</span><div class="stat-value"><span data-icon="star"></span><span id="stars">5</span></div><small id="income">+2 per turn</small></div><div class="stat turn-stat"><span class="stat-label">Turn</span><div class="stat-value" id="turn">0</div><small id="turn-label">Turn</small></div></header>
+ <header class="topbar"><div id="tribe-mark" class="tribe-mark"></div><div class="tribe-title"><strong id="tribe-name">Crownlanders</strong><small class="team-identity" id="team-identity">1 · YOU</small></div><div class="stat"><span class="stat-label">Score</span><div class="stat-value" id="score">0</div></div><div class="stat"><span class="stat-label" id="stars-label">Stars (+2)</span><div class="stat-value"><span data-icon="star"></span><span id="stars">5</span></div><small id="income">+2 per turn</small></div><div class="stat turn-stat"><span class="stat-label">Turn</span><div class="stat-value" id="turn">0</div><small id="turn-label">Turn</small></div></header>
  <div class="stage" id="stage"><canvas id="map" aria-label="Interactive isometric world. Tap a unit, then a highlighted tile to move. Drag to explore." tabindex="0"></canvas><div class="map-heading"><b id="mode-label">DOMINATION</b><span id="opponents-label">2 rival tribes</span></div><button class="ready-pill" id="next-unit" aria-label="Select the next available unit"><span class="dot"></span><span id="ready-count">1 unit ready</span><span data-icon="chevron"></span></button><div class="map-tools"><button id="center-map" title="Center on capital (C)" aria-label="Center on your capital"><span data-icon="target"></span></button><button class="zoom" id="zoom-in" aria-label="Zoom in">+</button><button class="zoom" id="zoom-out" aria-label="Zoom out">−</button></div><div class="tutorial" id="tutorial"><div class="hint-copy"><strong id="hint-title">Your next move</strong><span id="hint-copy">Explore, build, and grow your tribe.</span></div><button id="hint-go" aria-label="Show suggested action">Show</button><button id="dismiss-tutorial" aria-label="Dismiss hints">×</button></div><section class="selection hidden" id="selection" aria-label="Selected tile"></section><div class="turn-progress" id="turn-progress"><i class="spinner"></i><span id="thinking">The other tribes are playing…</span></div></div>
  <section class="battle-preview" id="battle-preview" role="status" aria-live="polite" hidden></section>
  <nav class="nav"><button class="nav-button" id="menu-button"><span class="nav-disc" data-icon="menu"></span><span>Menu</span></button><button class="nav-button" id="stats-button" aria-label="Game statistics"><span class="nav-disc"><span id="stats-mark"></span></span><span>Game Stats</span></button><button class="nav-button" id="tech-button"><span class="nav-disc" data-icon="tech"></span><span>Tech Tree</span></button><button class="nav-button end-button" id="end-turn"><span class="nav-disc" data-icon="check"></span><span id="end-label">Next Turn</span></button></nav><div class="home-bar" aria-hidden="true"></div>
  <div class="toast" id="toast" role="status" aria-live="polite"></div><div class="turn-banner" id="turn-banner"><div><strong id="banner-title">Your turn</strong><span id="banner-subtitle"></span></div></div>
  <div class="modal-layer" id="modal-layer"><section class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Game menu"></section></div>
-<div class="modal-layer tech-layer" id="tech-layer"><section class="modal tech-modal" role="dialog" aria-modal="true" aria-label="Technology"><div class="tech-header"><button class="close-mini" id="close-tech" aria-label="Back to game"><span data-icon="back"></span></button><h2>Technology</h2><span class="price" id="tech-stars" aria-label="Available stars"></span></div><div class="tech-controls"><div class="tech-overview"><b id="tech-progress"></b><span>Drag to explore · tap a branch</span></div><div class="tech-tools"><button id="tech-zoom-out" aria-label="Zoom out technology map">−</button><button id="tech-center" aria-label="Center selected technology branch"><span data-icon="target"></span></button><button id="tech-zoom-in" aria-label="Zoom in technology map">+</button></div></div><div class="tech-branches" id="tech-branches" role="group" aria-label="Jump to technology branch"></div><div class="tech-map" id="tech-map" aria-label="Scrollable technology map"><div id="tech-tree" role="group" aria-label="Connected research paths"></div></div><div class="tech-detail" id="tech-detail" aria-live="polite"></div></section></div>
+<div class="modal-layer tech-layer" id="tech-layer"><section class="modal tech-modal" role="dialog" aria-modal="true" aria-label="Technology"><div class="tech-header"><button class="close-mini" id="close-tech" aria-label="Back to game"><span data-icon="back"></span></button><h2>Technology</h2><span class="price" id="tech-stars" aria-label="Available stars"></span></div><div class="tech-controls"><div class="tech-overview"><b id="tech-progress"></b><span id="tech-path-summary">Each path: 1 → 2 → 3</span></div><div class="tech-tools"><button id="tech-zoom-out" aria-label="Zoom out technology map">−</button><button id="tech-center" aria-label="Center selected technology branch"><span data-icon="target"></span></button><button id="tech-zoom-in" aria-label="Zoom in technology map">+</button></div></div><div class="tech-branches" id="tech-branches" role="group" aria-label="Jump to technology branch"></div><div class="tech-map" id="tech-map" aria-label="Scrollable technology map"><div id="tech-tree" role="group" aria-label="Connected research paths"></div></div><div class="tech-detail" id="tech-detail" aria-live="polite"></div></section></div>
 </main>
 <script>
 'use strict';
@@ -116,9 +127,14 @@ const TRIBES={
 };
 const LAND_COLORS={crown:['#86ad63','#6f9554'],pine:['#dce8e2','#bdcec6'],ridge:['#91aa62','#748d51'],dune:['#d4bd7c','#b29a62'],coast:['#78ad71','#5b9161'],oak:['#94aa66','#748c52'],marble:['#8fa96b','#708d57'],iron:['#777b78','#5c625f'],sunfield:['#c0ae72','#9e8d59'],highland:['#9bad8c','#7d9175'],river:['#72a17b','#568563'],caravan:['#b4a17d','#938064'],reef:['#78b4af','#579591'],wildwood:['#92b870','#729956'],frost:['#dbe9e9','#b9d1d4'],hive:['#99a66d','#79865a']};
 for(const [key,[land,shade]]of Object.entries(LAND_COLORS))Object.assign(TRIBES[key],{land,shade});
-const TRIBE_COLORS={"crown": "#367ecb", "pine": "#536a80", "ridge": "#cb6b4e", "dune": "#d2aa53", "coast": "#3fba95", "oak": "#8f9f4f", "marble": "#9a7dbd", "iron": "#7e7d8a", "sunfield": "#d4974e", "highland": "#64a4b2", "river": "#3b9b7b", "caravan": "#b66364", "reef": "#56a8c4", "wildwood": "#a86f9b", "frost": "#83bccd", "hive": "#8aa64f"};
+// Team colors are separate from terrain. Numbers and shapes supplement hue.
+const TRIBE_COLORS={crown:'#1677e8',pine:'#26384a',ridge:'#e74335',dune:'#f2c327',coast:'#008776',oak:'#9b541d',marble:'#753ccc',iron:'#e1e6ed',sunfield:'#f47a16',highland:'#ae8de5',river:'#1fa345',caravan:'#a51e52',reef:'#20bed0',wildwood:'#e957bb',frost:'#8fc5ff',hive:'#9abf18'};
+const LEGACY_TEAM_COLORS=['#367ecb','#536a80','#cb6b4e','#d2aa53','#3fba95','#8f9f4f','#9a7dbd','#7e7d8a','#d4974e','#64a4b2','#3b9b7b','#b66364','#56a8c4','#a86f9b','#83bccd','#8aa64f'];
+const ACTION_COLORS={selected:'#ffffff',move:'#32b9ff',attack:'#ff674f'};
+
 for(const [key,color]of Object.entries(TRIBE_COLORS))Object.assign(TRIBES[key],{color,dark:mixColor(color,'#16191b',.48),light:mixColor(color,'#ffffff',.42),roof:color});
 Object.assign(TRIBES.coast,{land:'#78ad71',shade:'#5b9161'});Object.assign(TRIBES.river,{land:'#72a17b',shade:'#568563'});Object.assign(TRIBES.wildwood,{land:'#92b870',shade:'#729956'});
+Object.assign(TRIBES.reef,{land:'#afcdae',shade:'#88aa87'});Object.assign(TRIBES.pine,{land:'#d6e1e9',shade:'#b2c7d5'});Object.assign(TRIBES.frost,{land:'#c3d6e3',shade:'#9db9ce'});
 
 // Project-authored monochrome geometry gives every faction a stable identity
 // independent of hue. The same geometry is used in badges, banners and units.
@@ -442,13 +458,27 @@ const cityAt=(x,y)=>game.cities.find(c=>c.x===x&&c.y===y);
 const faction=id=>game.factions[id];
 const ownsTech=(id,key)=>faction(id).tech.includes(key);
 const factionVisuals=new Map();
+let displayColorGame=null,displayColors=[];
 function mixColor(color,other,amount){const a=parseInt(color.slice(1),16),b=parseInt(other.slice(1),16);return '#'+[16,8,0].map(shift=>Math.round(((a>>shift)&255)*(1-amount)+((b>>shift)&255)*amount).toString(16).padStart(2,'0')).join('')}
-function assignFactionColors(g){
- const reserved=new Set(g.factions.map(f=>TRIBES[f.tribe].color)),used=new Set(),alternates=Object.values(TRIBES).map(t=>t.color).filter(c=>!reserved.has(c));
- for(const f of g.factions){let color=/^#[0-9a-f]{6}$/i.test(f.color||'')?f.color.toLowerCase():TRIBES[f.tribe].color;if(used.has(color))color=alternates.find(c=>!used.has(c))||Object.values(TRIBES).map(t=>t.color).find(c=>!used.has(c));f.color=color;used.add(color)}
+function colorLuminance(color){const rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722}
+function contrastInk(color){const luminance=colorLuminance(color);return(luminance+.05)/.05>=1.05/(luminance+.05)?'#000000':'#ffffff'}
+function paletteDistance(a,b){const rgb=color=>[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));const x=rgb(a),y=rgb(b);return x.reduce((sum,v,i)=>sum+(v-y[i])**2*[.3,.59,.11][i],0)}
+function distinctTeamColor(choices,used){return choices.filter(color=>!used.has(color)).sort((a,b)=>Math.min(...[...used].map(color=>paletteDistance(b,color)))-Math.min(...[...used].map(color=>paletteDistance(a,color))))[0]}
+function displayFactionColor(id){
+ if(displayColorGame!==game){
+  const palette=Object.values(TRIBE_COLORS),used=new Set();displayColors=[];
+  for(const f of game.factions){const raw=(f.color||TRIBES[f.tribe].color).toLowerCase(),legacy=LEGACY_TEAM_COLORS.indexOf(raw);let color=legacy<0?raw:palette[legacy];if(used.has(color))color=distinctTeamColor(palette,used);displayColors[f.id]=color;used.add(color)}
+  displayColorGame=game;
+ }
+ return displayColors[id];
 }
-function factionName(id){const f=faction(id),same=game.factions.filter(other=>other.tribe===f.tribe);return TRIBES[f.tribe].name+(same.length>1&&id!==0?' · '+(same.findIndex(other=>other.id===id)+1):'')}
-function tribeFor(id){const f=faction(id),base=TRIBES[f.tribe],color=f.color||base.color,key=f.tribe+':'+color;let visual=factionVisuals.get(key);if(!visual){visual={...base,color,dark:mixColor(color,'#16191b',.48),light:mixColor(color,'#ffffff',.42),roof:color};factionVisuals.set(key,visual)}return visual}
+function assignFactionColors(g){
+ displayColorGame=null;
+ const reserved=new Set(g.factions.map(f=>TRIBES[f.tribe].color)),used=new Set(),alternates=Object.values(TRIBES).map(t=>t.color).filter(c=>!reserved.has(c));
+ for(const f of g.factions){let color=/^#[0-9a-f]{6}$/i.test(f.color||'')?f.color.toLowerCase():TRIBES[f.tribe].color;if(used.has(color))color=distinctTeamColor(alternates,used)||distinctTeamColor(Object.values(TRIBE_COLORS),used);f.color=color;used.add(color)}
+}
+function factionName(id){const f=faction(id),same=game.factions.filter(other=>other.tribe===f.tribe);return TRIBES[f.tribe].name+(same.length>1&&id!==0?' · '+(id+1):'')}
+function tribeFor(id){const f=faction(id),base=TRIBES[f.tribe],color=displayFactionColor(id),key=f.tribe+':'+color;let visual=factionVisuals.get(key);if(!visual){visual={...base,color,dark:mixColor(color,'#16191b',.48),light:mixColor(color,'#ffffff',.42),roof:color};factionVisuals.set(key,visual)}return visual}
 function cropsVisible(id=0){return ownsTech(id,'organization')||ownsTech(id,'farming')}
 
 const distance=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
@@ -714,7 +744,7 @@ function migrateSavedGame(g){
  const priorPresentation=g.presentationVersion??0;
  const names={"imperius": "crown", "bardur": "pine", "xinxi": "ridge", "oumaji": "dune", "kickoo": "coast", "hoodrick": "oak", "luxidoor": "marble", "vengir": "iron", "zebasi": "sunfield", "aimo": "highland", "quetzali": "river", "yadakk": "caravan", "aquarion": "reef", "elyrion": "wildwood", "polaris": "frost", "cymanti": "hive", "polytaur": "wildguard", "mooni": "frostcub", "gaami": "icebeast", "hexapod": "runnerbug", "phychi": "venomfly", "kiton": "shellbug", "exida": "spitter", "tridention": "tidehunter", "lantern": "crown", "rime": "pine", "cinder": "ridge", "zephyr": "dune", "dew": "coast", "briar": "oak", "velvet": "marble", "slate": "iron", "saffron": "sunfield", "echo": "highland", "grove": "river", "wayfarer": "caravan", "tide": "reef", "bloom": "wildwood", "winter": "frost", "spore": "hive", "bloomguard": "wildguard", "frostling": "frostcub", "rimewarden": "icebeast", "skitter": "runnerbug", "mothling": "venomfly", "shellward": "shellbug", "sporecaster": "spitter", "tidecaller": "tidehunter", "conclave": "domination", "chronicle": "perfection"};
  const renameLegacy=priorPresentation<3||(g.factions||[]).some(f=>Object.hasOwn(names,f.tribe));
- for(const f of g.factions||[]){f.tribe=names[f.tribe]||f.tribe;delete f.color}
+ for(const f of g.factions||[]){f.tribe=names[f.tribe]||f.tribe;if(renameLegacy)delete f.color}
  for(const t of g.tiles||[])t.biome=names[t.biome]||t.biome;
  for(const u of g.units||[])u.type=names[u.type]||u.type;
  g.mode=names[g.mode]||g.mode;g.rivalSelection=names[g.rivalSelection]||g.rivalSelection;
@@ -1294,7 +1324,7 @@ function drawWater(t,p=iso(t.x,t.y)){
  polygon([[p.x-16,p.y-6],[p.x-11,p.y-9],[p.x-6,p.y-6],[p.x-11,p.y-3]],'#e9fcff');if(t.variant%2)polygon([[p.x+16,p.y+5],[p.x+19,p.y+3],[p.x+22,p.y+5],[p.x+19,p.y+7]],'#d3f6ff');ctx.restore();
 }
 function drawTile(t,staticWater=false){
- const p=iso(t.x,t.y),x=p.x,y=p.y,known=seen(t),tribe=TRIBES[t.biome],water=['water','ocean'].includes(t.terrain),color=!known?'#d8e2e7':t.frozen?'#d8edf0':water?(t.terrain==='ocean'?'#397d9d':'#4f9fbb'):tribe.land;
+ const p=iso(t.x,t.y),x=p.x,y=p.y,known=seen(t),tribe=TRIBES[t.biome],water=['water','ocean'].includes(t.terrain),color=!known?'#d8e2e7':t.frozen?'#bfe8fa':water?(t.terrain==='ocean'?'#2865ad':'#59b5e4'):tribe.land;
  const depth=13;if(t.x===game.size-1)polygon([[x,y+TH/2],[x+TW/2,y],[x+TW/2,y+depth],[x,y+TH/2+depth]],known?(water?'#258cbe':'#a07340'):'#99b0ef');
  if(t.y===game.size-1)polygon([[x-TW/2,y],[x,y+TH/2],[x,y+TH/2+depth],[x-TW/2,y+depth]],known?(water?'#1c9bb4':'#79522e'):'#a8baf0');
  const corners=[[x,y-TH/2],[x+TW/2,y],[x,y+TH/2],[x-TW/2,y]];polygon(corners,color,known?(water?'#163f5368':'#33483d73'):null,1.25);if(!known)return;
@@ -1308,7 +1338,11 @@ function drawTile(t,staticWater=false){
 function drawBorders(t){
  if(!seen(t)||t.owner<0)return;
  const p=iso(t.x,t.y),b=tribeFor(t.owner),checks=[{dx:0,dy:-1,a:[p.x,p.y-TH/2],b:[p.x+TW/2,p.y]},{dx:1,dy:0,a:[p.x+TW/2,p.y],b:[p.x,p.y+TH/2]},{dx:0,dy:1,a:[p.x,p.y+TH/2],b:[p.x-TW/2,p.y]},{dx:-1,dy:0,a:[p.x-TW/2,p.y],b:[p.x,p.y-TH/2]}];
- const pattern=Object.keys(TRIBES).indexOf(faction(t.owner).tribe);for(const edge of checks){if(tileAt(t.x+edge.dx,t.y+edge.dy)?.owner===t.owner)continue;line([edge.a,edge.b],'#213d3bb8',5);ctx.save();ctx.setLineDash(pattern%3===0?[7,3]:pattern%3===1?[3,3]:[9,2,2,2]);line([edge.a,edge.b],b.color,2.7);ctx.restore()}
+ for(const edge of checks){const neighbor=tileAt(t.x+edge.dx,t.y+edge.dy);if(neighbor&&seen(neighbor)&&neighbor.owner===t.owner)continue;
+  // Each army draws inside its own tile, so neighboring colors cannot erase one another.
+  const points=[edge.a,edge.b].map(([x,y])=>[p.x+(x-p.x)*.9,p.y+(y-p.y)*.9]);
+  line(points,contrastInk(b.color),4.5);line(points,b.color,2.5);
+ }
 }
 function pine(x,y,size,snow=false,red=false){
  ellipse(x+1,y+1,size*.43,size*.17,'#274b4928');polygon([[x-2,y],[x-2,y-size*.3],[x+2,y-size*.3],[x+2,y]],'#795a49');
@@ -1346,7 +1380,7 @@ function drawCity(c){
  polygon([[-15,-h-7],[0,-h-20],[16,-h-7],[0,-h+1]],b.color,'#4c5c58',1.1);polygon([[-15,-h-7],[0,-h-20],[0,-h+1]],b.dark);
  polygon([[-4,9],[-4,-5],[2,-9],[7,-5],[7,10]],'#526e70');ctx.fillStyle='#f5e5b4';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
  if(c.level>=4)for(const dx of [-24,24]){box(dx,-3,5,7,h-4,b.light,b.dark,b.color);polygon([[dx-7,-h+3],[dx,-h-7],[dx+7,-h+3]],b.color)}
- const mastX=c.capital?0:23,mastTop=-h-(c.capital?40:24);line([[mastX,-h-4],[mastX,mastTop]],'#556c6b',1.8);polygon([[mastX,mastTop],[mastX+15,mastTop+4],[mastX,mastTop+12]],b.color,b.dark,1);paintFactionEmblem(key,mastX+5,mastTop+5,c.capital?8:6,'#fff4c8');ctx.restore();
+ const mastX=c.capital?0:23,mastTop=-h-(c.capital?40:24);line([[mastX,-h-4],[mastX,mastTop]],'#556c6b',1.8);polygon([[mastX,mastTop],[mastX+15,mastTop+4],[mastX,mastTop+12]],b.color,b.dark,1);paintFactionEmblem(key,mastX+5,mastTop+5,c.capital?8:6,contrastInk(b.color));ctx.restore();
 }
 
 function drawBuilding(t){const p=iso(t.x,t.y);ctx.save();ctx.translate(p.x,p.y);if(t.effect&&!reducedMotion.matches){const progress=Math.max(0,Math.min(1,(drawTime-t.effect.start)/t.effect.duration)),scale=.82+.18*(1-Math.pow(1-progress,3));ctx.scale(scale,scale)}if(t.building==='farm'||t.building==='fungi'){
@@ -1379,7 +1413,7 @@ function drawUnit(u){
  if(['rider','knight','amphibian','wildguard'].includes(u.type)){polygon([[-15,3],[-11,-7],[8,-6],[13,1],[9,11],[-11,10]],'#c4ad85');polygon([[7,-5],[8,-17],[14,-18],[18,-11],[13,-7],[13,3]],'#e1cba4');line([[-10,7],[-10,15]],'#9b876d',3);line([[8,7],[8,15]],'#9b876d',3);ctx.translate(-2,-9)}
  if(u.type==='catapult'){polygon([[-18,5],[0,-4],[18,5],[0,13]],'#ae8f5c');line([[-11,7],[0,-18],[12,7]],'#d5b77d',4);line([[-4,-14],[15,-29]],'#8c724b',4);ellipse(-11,10,5,5,'#526b71');ellipse(12,10,5,5,'#526b71');polygon([[12,-32],[20,-31],[22,-25],[16,-23]],'#aeb9b6');ctx.restore();return}
  if(u.type==='battlesled'){polygon([[-20,7],[0,-3],[21,7],[0,15]],'#d1e7ec');line([[-18,12],[14,17]],b.dark,3);ctx.translate(0,-5)}
- const step=u.anim?.kind==='move'&&!reducedMotion.matches?Math.sin((drawTime-u.anim.start)*.035)*2:0;line([[-5,1],[-6+step,11]],b.dark,6);line([[5,1],[6-step,11]],b.dark,6);line([[-8,-10],[-13,-1]],b.dark,5);line([[8,-10],[13,-1]],b.dark,5);box(0,-13,10,9,16,b.color,b.dark,b.light);paintFactionEmblem(faction(u.owner).tribe,0,-13,8,'#fff4c8');
+ const step=u.anim?.kind==='move'&&!reducedMotion.matches?Math.sin((drawTime-u.anim.start)*.035)*2:0;line([[-5,1],[-6+step,11]],b.dark,6);line([[5,1],[6-step,11]],b.dark,6);line([[-8,-10],[-13,-1]],b.dark,5);line([[8,-10],[13,-1]],b.dark,5);box(0,-13,10,9,16,b.color,b.dark,b.light);paintFactionEmblem(faction(u.owner).tribe,0,-13,8,contrastInk(b.color));
  ellipse(0,-25,8.5,9.5,'#e8c6a1');ctx.beginPath();ctx.arc(0,-27,9.5,Math.PI,Math.PI*2);ctx.fillStyle=def.defense>=3?'#748990':b.dark;ctx.fill();if(def.icon==='bow'){polygon([[-9,-27],[0,-38],[9,-27],[4,-29],[0,-25],[-4,-29]],b.dark);line([[-6,-29],[0,-34],[6,-29]],b.light,1.5)}else if(def.icon==='rider'){polygon([[-4,-36],[0,-43],[5,-35],[2,-29]],b.light)}else if(def.defense>=3){line([[-9,-26],[9,-26]],b.light,2);line([[0,-36],[0,-26]],b.light,1.5)}else line([[-8,-27],[8,-27]],b.light,1.6);
  ellipse(-3,-24,1.2,1.4,'#314b58');ellipse(3,-24,1.2,1.4,'#314b58');line([[-2,-20],[2,-20]],'#9d6d58',1);
  if(def.convert||def.swarm){line([[13,3],[13,-25]],'#ac9569',2);polygon([[8,-26],[18,-26],[16,-20],[10,-20]],b.color)}
@@ -1390,12 +1424,20 @@ function drawUnit(u){
 }
 
 function roundedRect(x,y,w,h,r,fill){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill()}
+function drawFactionMarker(owner,x,y,size=14){
+ const color=tribeFor(owner).color;ctx.save();
+ roundedRect(x-size/2-1,y-size/2-1,size+2,size+2,owner===0?size/2+1:3,'#102331');
+ roundedRect(x-size/2,y-size/2,size,size,owner===0?size/2:2,'#fffdf4');
+ roundedRect(x-size/2+1,y-size/2+1,size-2,size-2,owner===0?size/2:1,color);
+ ctx.font='800 '+(size<14?8:9)+'px -apple-system, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=contrastInk(color);ctx.fillText(String(owner+1),x,y+.5);ctx.restore();
+}
 function drawCityLabel(c){
  const anchor=screenPoint(c.x,c.y),labelScale=Math.max(.7,Math.min(1.4,view.zoom));ctx.save();ctx.translate(anchor.x,anchor.y);ctx.scale(labelScale,labelScale);
  const owned=c.owner===0,b=c.owner>=0?tribeFor(c.owner):null,name=c.owner<0?'Village':c.name;
- ctx.font='650 11px -apple-system, sans-serif';const nameW=ctx.measureText(name).width,info=owned?'★'+cityIncome(c):b?'L'+c.level:'',infoW=info?ctx.measureText(info).width:0,w=Math.min(112,Math.max(58,nameW+infoW+(b?26:14))),x=-w/2,y=18*view.zoom/labelScale;
- roundedRect(x,y,w,18,5,b?b.dark+'e8':'#393f42df');ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText(name,x+(b?14:7),y+12.5);
- if(b){ellipse(x+7,y+8.5,3.3,3.3,b.color);ctx.strokeStyle='#fff9';ctx.lineWidth=.7;ctx.stroke();ctx.font='650 9px sans-serif';ctx.fillStyle=owned?'#ffe087':'#eef6ff';ctx.textAlign='right';ctx.fillText(info,x+w-5,y+12.2);
+ ctx.font='650 11px -apple-system, sans-serif';const nameW=ctx.measureText(name).width,info=owned?'★'+cityIncome(c):b?'L'+c.level:'',infoW=info?ctx.measureText(info).width:0,w=Math.min(116,Math.max(62,nameW+infoW+(b?34:14))),x=-w/2,y=18*view.zoom/labelScale;
+ let fitted=name;const available=w-(b?25:14)-infoW-6;while(fitted.length>1&&ctx.measureText(fitted+(fitted===name?'':'…')).width>available)fitted=fitted.slice(0,-1);
+ roundedRect(x,y,w,18,5,b?'#132532f2':'#393f42ef');ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText(fitted+(fitted===name?'':'…'),x+(b?21:7),y+12.5);
+ if(b){drawFactionMarker(c.owner,x+9,y+9,12);ctx.font='650 9px sans-serif';ctx.fillStyle=owned?'#ffe087':'#eef6ff';ctx.textAlign='right';ctx.fillText(info,x+w-5,y+12.2);
   if(owned){const p=cityProgress(c),count=p.capacity,barW=Math.max(48,Math.min(80,w-8)),slot=barW/count,gap=Math.min(1.3,slot*.16),height=5;
    roundedRect(-barW/2-1,y+20,barW+2,height+2,3,'#19313ddd');
    for(let i=0;i<count;i++){const filled=i<p.population,negative=p.population<0&&i<-p.population,fill=negative?'#df6f61':filled?'#45bdd5':'#d8ded4',left=-barW/2+i*slot;
@@ -1410,6 +1452,8 @@ function drawUnitLabel(u,preview=null){
  const anchor=unitScreenPoint(u),labelScale=Math.max(.8,Math.min(1.35,view.zoom));ctx.save();ctx.translate(anchor.x,anchor.y);ctx.scale(labelScale,labelScale);
  const scale=unitArtScale(u)*view.zoom/labelScale,y=-48*scale-8,damage=preview?(u.id===preview.target.id?preview.damage:u.id===preview.attacker.id?preview.counter:0):0,hp=damage?Math.max(0,u.hp-damage):visibleHP(u);
  const width=String(hp).length>1?23:17;
+ // The team badge is at the feet, separate from the health number above the head.
+ drawFactionMarker(u.owner,15*scale,5*scale,14);
  roundedRect(-width/2,y-12,width,17,5,damage?'#7e302bee':'#173344eb');ctx.font='700 12px -apple-system, sans-serif';ctx.textAlign='center';ctx.fillStyle=damage?'#ffd7cb':u.poisoned?'#ddfa9e':'#fff';ctx.fillText(String(hp),0,y+1);
  if(damage){ctx.font='bold 10px sans-serif';ctx.strokeStyle='#173344';ctx.lineWidth=3;const hint=hp===0?'✕':'−'+damage;ctx.strokeText(hint,0,y-17);ctx.fillStyle='#ffd7cb';ctx.fillText(hint,0,y-17)}
  if(u.owner===0&&!u.moved&&!u.attacked){ellipse(width/2+3,y-4,3,3,'#173344');ellipse(width/2+3,y-4,2,2,u.boosted?'#d5f567':'#9df4ff')}
@@ -1463,8 +1507,10 @@ function drawScenery(t,c){
 }
 function drawTileCue(t,color,selectedTile=false){
  if(!seen(t))return;const p=iso(t.x,t.y),inset=selectedTile ? .96 : .82,points=[[p.x,p.y-TH/2*inset],[p.x+TW/2*inset,p.y],[p.x,p.y+TH/2*inset],[p.x-TW/2*inset,p.y]];
- polygon(points,null,'#153d54c9',3/view.zoom);polygon(points,null,color,2/view.zoom);
- if(!selectedTile){ellipse(p.x,p.y,4/view.zoom,2.5/view.zoom,'#173b53');ellipse(p.x,p.y,2.5/view.zoom,1.5/view.zoom,color)}
+ const attack=color===ACTION_COLORS.attack;ctx.save();
+ polygon(points,null,'#0d2434',4.5/view.zoom);if(!selectedTile&&!attack)ctx.setLineDash([5/view.zoom,3/view.zoom]);polygon(points,null,color,2.5/view.zoom);ctx.setLineDash([]);
+ if(attack){const x=p.x+TW*.29,y=p.y+TH*.2;line([[x-3/view.zoom,y-3/view.zoom],[x+3/view.zoom,y+3/view.zoom]],'#102331',4/view.zoom);line([[x-3/view.zoom,y+3/view.zoom],[x+3/view.zoom,y-3/view.zoom]],'#102331',4/view.zoom);line([[x-3/view.zoom,y-3/view.zoom],[x+3/view.zoom,y+3/view.zoom]],color,2/view.zoom);line([[x-3/view.zoom,y+3/view.zoom],[x+3/view.zoom,y-3/view.zoom]],color,2/view.zoom)}
+ else if(!selectedTile){ellipse(p.x,p.y,4/view.zoom,2.5/view.zoom,'#173b53');ellipse(p.x,p.y,2.5/view.zoom,1.5/view.zoom,color)}ctx.restore();
 }
 
 function drawAttackEffect(e,time){
@@ -1495,15 +1541,15 @@ function render(time=performance.now()){
  effects=effects.filter(e=>time<e.start+e.duration);for(const e of effects)if(e.kind==='death'&&time>=e.appear&&seen(tileAt(e.unit.x,e.unit.y)))objects.push({kind:'death',e,depth:iso(e.unit.x,e.unit.y).y+3});
  objects.sort((a,b)=>a.depth-b.depth);
  for(const item of objects){
-  if(item.kind==='unit'){if(attacks.includes(item.u))drawTileCue(tileAt(item.u.x,item.u.y),'#ff8c78');if(ownUnit===item.u)drawTileCue(tileAt(item.u.x,item.u.y),'#fff3b0',true);drawUnit(item.u);continue}
+  if(item.kind==='unit'){if(attacks.includes(item.u))drawTileCue(tileAt(item.u.x,item.u.y),ACTION_COLORS.attack);if(ownUnit===item.u)drawTileCue(tileAt(item.u.x,item.u.y),ACTION_COLORS.selected,true);drawUnit(item.u);continue}
   if(item.kind==='death'){const e=item.e;ctx.save();ctx.globalAlpha=time<e.start?1:1-Math.max(0,(time-e.start)/e.duration);drawUnit(e.unit);ctx.restore();continue}
   const t=item.t;drawScenery(t,cityLookup.get(tileIndex(t.x,t.y)));
  }
  for(const t of sorted){const a=fogReveals.get(tileIndex(t.x,t.y));if(a)drawFog(t,1-Math.max(0,Math.min(1,(time-a.start)/a.duration)))}
  // Action outlines stay above scenery so a forest or cloud cannot hide a
  // legal destination. Their centers remain open to show the terrain.
- for(const m of moves.values())drawTileCue(tileAt(m.x,m.y),'#8aeaff');
- if(selected&&!ownUnit)drawTileCue(tileAt(selected.x,selected.y),'#fff3b0',true);
+ for(const m of moves.values())drawTileCue(tileAt(m.x,m.y),ACTION_COLORS.move);
+ if(selected&&!ownUnit)drawTileCue(tileAt(selected.x,selected.y),ACTION_COLORS.selected,true);
  for(const e of effects)if(e.kind!=='death'&&seen(tileAt(e.from.x,e.from.y))&&seen(tileAt(e.to.x,e.to.y)))drawAttackEffect(e,time);ctx.restore();
  const battle=battlePreviewModel();for(const c of game.cities)if(visualSeen(tileAt(c.x,c.y),time)&&inViewport(iso(c.x,c.y)))drawCityLabel(c);for(const u of game.units)if(visualSeen(tileAt(u.x,u.y),time)&&inViewport(iso(unitPose(u).x,unitPose(u).y)))drawUnitLabel(u,battle);for(const e of effects)if(e.kind==='death'&&time<e.start&&seen(tileAt(e.unit.x,e.unit.y)))drawUnitLabel({...e.unit,hp:e.oldHP});
  particles=particles.filter(p=>time-p.start<p.duration);for(const p of particles){const age=Math.max(0,(time-p.start)/p.duration);if(time<p.start||!seen(tileAt(p.x,p.y)))continue;const s=screenPoint(p.x,p.y),lift=reducedMotion.matches?0:age*27,y=s.y-56-lift-p.offset;ctx.globalAlpha=Math.min(1,(1-age)*3);ctx.font='600 13px "Avenir Next", sans-serif';ctx.textAlign='center';ctx.strokeStyle='#000b';ctx.lineWidth=3;ctx.strokeText(p.text,s.x,y);ctx.fillStyle=p.color;ctx.fillText(p.text,s.x,y)}ctx.globalAlpha=1;
@@ -1529,7 +1575,8 @@ function frame(t){
  if(motion)requestRender();else if(ambientWater&&!reducedMotion.matches&&!$('modal-layer').classList.contains('open')&&!$('tech-layer').classList.contains('open'))idleFrameTimer=setTimeout(requestRender,40);
 }
 function factionBadge(key,b=TRIBES[key]){
- return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 5h48v38L32 61 8 43Z" fill="${b.dark}" stroke="#f4efd9" stroke-width="2.5"/><path d="M13 10h38v30L32 54 13 40Z" fill="${b.color}"/><path d="${TRIBE_PATTERNS[key]||TRIBE_PATTERNS.crown}" fill="none" stroke="${b.light}" stroke-width="3" opacity=".42"/><path d="M19 17h26v24L32 49 19 41Z" fill="${b.dark}" opacity=".72"/>${emblemSVG(key,'#fff7d2','translate(20 18) scale(1)')}</svg>`;
+ const ink=contrastInk(b.color);
+ return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 5h48v38L32 61 8 43Z" fill="${b.dark}" stroke="#f4efd9" stroke-width="2.5"/><path d="M13 10h38v30L32 54 13 40Z" fill="${b.color}"/><path d="${TRIBE_PATTERNS[key]||TRIBE_PATTERNS.crown}" fill="none" stroke="${ink}" stroke-width="3" opacity=".12"/>${emblemSVG(key,ink,'translate(20 18) scale(1)')}</svg>`;
 }
 function portrait(key,type='warrior',owner=null){
  const b=owner==null?TRIBES[key]:tribeFor(owner),d=TYPES[type]||TYPES.warrior,creature=creatureParts(type,key,b);if(creature)return `<svg viewBox="0 0 64 64" aria-hidden="true">${partsSVG(creature)}</svg>`;
@@ -1621,7 +1668,7 @@ function updateSelection(){
   const mine=['temple','monument','lighthouse'].includes(t.building)?null:miningStatus(t);if(mine){title=t.building==='mine'?'Mine':oreVisible()&&t.ore?'Mountain · Ore':'Mountain';image=icon(t.building==='mine'?'mine':'mountain');detail='<div class="tile-status '+(mine.state==='ready'?'ready':mine.tech?'locked':'blocked')+'" role="status"><strong>'+mine.title+'</strong>'+mine.message+'</div>';if(mine.tech)actions+=actionButton('mountain-research','Research '+techInfo(mine.tech).name,TECHS[mine.tech].icon,true);else if(!options.some(a=>a.kind==='mine')&&mine.state!=='built')actions+=actionButton('mine-unavailable',mine.state==='empty'?'No ore':'Build mine','mine',false,true,mine.state==='empty'?null:5)}
  }
  if(!c&&(!u||selectCity))detail+=growthPreview(t);
- const owner=u&&!selectCity?u.owner:c?c.owner:t.owner;panel.style.setProperty('--army-color',owner>=0?tribeFor(owner).color:'#a9b1b8');if(owner>=0)subtitle='<span class="army-name"><i></i>'+factionName(owner)+(owner===0?' · You':'')+'</span>'+subtitle;
+ const owner=u&&!selectCity?u.owner:c?c.owner:t.owner;panel.style.setProperty('--army-color',owner>=0?tribeFor(owner).color:'#a9b1b8');panel.style.setProperty('--army-ink',owner>=0?contrastInk(tribeFor(owner).color):'#000000');if(owner>=0)subtitle='<span class="army-name"><i aria-label="Tribe '+(owner+1)+'">'+(owner+1)+'</i>'+factionName(owner)+(owner===0?' · You':'')+'</span>'+subtitle;
  panel.innerHTML=`<div class="selection-header"><div class="selection-icon">${image}</div><div class="selection-copy"><strong>${title}</strong><p>${subtitle}</p></div>${status}<button class="close-mini" id="close-selection" aria-label="Clear selection">${icon('close')}</button></div>${detail}${actions?'<div class="selection-actions">'+actions+'</div>':''}`;panel.classList.remove('hidden');
  if(isAnimating())panel.querySelectorAll('.selection-actions button').forEach(b=>b.disabled=true);if($('mountain-research'))$('mountain-research').onclick=()=>openTech(miningStatus(t).tech);if($('terrain-research'))$('terrain-research').onclick=()=>openTech(tileActions(t).find(a=>['harvest','enchant','farm','fungi'].includes(a.kind)&&a.tech&&!ownsTech(0,a.tech)).tech);
  $('close-selection').onclick=()=>{selected=null;updateSelection()};if($('select-terrain'))$('select-terrain').onclick=()=>{selectCity=true;updateSelection();sound()};if($('unit-power'))$('unit-power').onclick=()=>unitPower(u);if($('preview-attack'))$('preview-attack').onclick=()=>{const target=attackable(u).sort((a,b)=>distance(u,a)-distance(u,b)||a.id-b.id)[0];if(target)presentBattlePreview(u,target,true)};
@@ -1729,13 +1776,25 @@ for(const [i,root]of TECH_ROOTS.entries()){
  const angle=(-90+i*72)*Math.PI/180;TECH_POS[root]=[TECH_MAP_CENTER+130*Math.cos(angle),TECH_MAP_CENTER+130*Math.sin(angle)];
  Object.keys(TECHS).filter(k=>TECHS[k].parent===root).forEach((key,j)=>{const theta=angle+(j?1:-1)*17*Math.PI/180;TECH_POS[key]=[TECH_MAP_CENTER+240*Math.cos(theta),TECH_MAP_CENTER+240*Math.sin(theta)];for(const child of Object.keys(TECHS).filter(k=>TECHS[k].parent===key))TECH_POS[child]=[TECH_MAP_CENTER+350*Math.cos(theta),TECH_MAP_CENTER+350*Math.sin(theta)]});
 }
-let techZoom=.85,techDrag=null;
+let techZoom=.85,techDrag=null,techView='branch';
 function techRoot(key){while(TECHS[key]?.parent)key=TECHS[key].parent;return key}
+function techLayout(){
+ const map=$('tech-map');
+ if(techView==='all')return{width:TECH_MAP_SIZE,height:TECH_MAP_SIZE,positions:TECH_POS,keys:Object.keys(TECHS)};
+ const root=techRoot(techSelected),children=Object.keys(TECHS).filter(key=>TECHS[key].parent===root);
+ const width=Math.max(372,map.clientWidth/techZoom),height=map.clientHeight/techZoom,left=(width-372)/2,disc=Math.max(44,56*techZoom),header=map.clientHeight>=220?20:0;
+ const gap=Math.min(140*techZoom,Math.max(disc+36,map.clientHeight-disc-32-header-12)),top=(map.clientHeight-gap-disc-32-header)/2+header+disc/2;
+ const positions={[root]:[58+left,(top+gap/2)/techZoom]};
+ children.forEach((key,index)=>{const y=(top+index*gap)/techZoom;positions[key]=[186+left,y];for(const child of Object.keys(TECHS).filter(child=>TECHS[child].parent===key))positions[child]=[314+left,y]});
+ return{width,height,positions,headings:!!header,keys:Object.keys(positions)};
+}
+function techPath(key){const path=[];while(key){path.unshift(key);key=TECHS[key].parent}return path}
+
 function centerTechBranch(){
  if(!$('tech-layer').classList.contains('open'))return;
- const map=$('tech-map'),root=techRoot(techSelected),nodes=[...$('tech-tree').querySelectorAll('[data-tech]')].filter(el=>techRoot(el.dataset.tech)===root);
- // Center the branch's five nodes together, rather than hiding its outer tier.
- const bounds=nodes.map(el=>{const p=TECH_POS[el.dataset.tech];return{x:p[0]*techZoom,y:p[1]*techZoom,w:el.offsetWidth,h:el.offsetHeight}});
+ const map=$('tech-map'),root=techRoot(techSelected),layout=techLayout(),nodes=[...$('tech-tree').querySelectorAll('[data-tech]')].filter(el=>!el.hidden&&techRoot(el.dataset.tech)===root);
+ // Include labels below each circle when framing all three tiers.
+ const bounds=nodes.map(el=>{const p=layout.positions[el.dataset.tech],disc=el.querySelector('.tech-disc');return{x:p[0]*techZoom,y:p[1]*techZoom+(el.offsetHeight-disc.offsetHeight)/2,w:el.offsetWidth,h:el.offsetHeight}});
  map.scrollLeft=(Math.min(...bounds.map(p=>p.x-p.w/2))+Math.max(...bounds.map(p=>p.x+p.w/2))-map.clientWidth)/2;
  map.scrollTop=(Math.min(...bounds.map(p=>p.y-p.h/2))+Math.max(...bounds.map(p=>p.y+p.h/2))-map.clientHeight)/2;
 }
@@ -1744,26 +1803,36 @@ function zoomTech(delta){
  techZoom=Math.max(.8,Math.min(1.3,Math.round((techZoom+delta)*100)/100));renderTech();
  map.scrollLeft=x*techZoom-map.clientWidth/2;map.scrollTop=y*techZoom-map.clientHeight/2;
 }
-function openTech(key=null){if(busy||isAnimating()||game.over){if(busy)toast('Wait for your turn.');return}clearBattlePreview();closeModal(true);techSelected=TECHS[key]?key:techSelected||tribeFor(0).start||'organization';$('tech-layer').classList.add('open');renderTech();centerTechBranch();sound();setTimeout(()=>$('close-tech').focus({preventScroll:true}),30)}
+function openTech(key=null){if(busy||isAnimating()||game.over){if(busy)toast('Wait for your turn.');return}clearBattlePreview();closeModal(true);techView='branch';techSelected=TECHS[key]?key:techSelected||tribeFor(0).start||'organization';$('tech-layer').classList.add('open');renderTech();centerTechBranch();sound();setTimeout(()=>$('close-tech').focus({preventScroll:true}),30)}
 function finishTechDrag(){const id=techDrag?.id;techDrag=null;$('tech-map').classList.remove('dragging');if(id!=null&&$('tech-map').hasPointerCapture(id))$('tech-map').releasePointerCapture(id)}
 function closeTech(){finishTechDrag();$('tech-layer').classList.remove('open');requestRender();$('tech-button').focus({preventScroll:true});if(upgradeQueue.length)showNextUpgrade();else scheduleContactPresentation(30)}
 function renderTech(){
  const tree=$('tech-tree'),map=$('tech-map'),stars=faction(0).stars,roots=TECH_ROOTS,focused=document.activeElement?.dataset.tech,wasResearch=document.activeElement?.id==='research-tech';
  const scroll={x:map.scrollLeft,y:map.scrollTop},keys=Object.keys(TECHS),root=techRoot(techSelected);
- tree.style.width=tree.style.height=TECH_MAP_SIZE*techZoom+'px';tree.style.setProperty('--tech-zoom',techZoom);tree.style.setProperty('--tech-owned',mixColor(tribeFor(0).color,'#32745c',.6));
- const links=keys.map(key=>{const d=TECHS[key],a=d.parent?TECH_POS[d.parent]:[TECH_MAP_CENTER,TECH_MAP_CENTER],b=TECH_POS[key],learned=ownsTech(0,key),available=canResearch(key);return `<line data-path="${key}" class="${learned?'learned':available?'available':'locked'}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`}).join('');
- tree.innerHTML=`<svg class="tech-links" viewBox="0 0 ${TECH_MAP_SIZE} ${TECH_MAP_SIZE}" aria-hidden="true">${links}</svg><div class="tech-center" style="left:${TECH_MAP_CENTER*techZoom}px;top:${TECH_MAP_CENTER*techZoom}px">${tribePortrait(faction(0).tribe,0)}<b>${tribeFor(0).name}</b>Research paths</div>`+keys.map(key=>{
-  const d=techInfo(key),learned=ownsTech(0,key),available=canResearch(key),chosen=key===techSelected,cost=learned?null:techCost(key),p=TECH_POS[key];
-  const status=learned?'researched':!available?'locked, requires '+techInfo(d.parent).name:stars<cost?'need '+(cost-stars)+' more stars':'available';
-  return `<button type="button" class="tech-node ${learned?'learned ':''}${chosen?'chosen ':''}${!learned&&!available?'locked ':''}${!learned&&available&&stars<cost?'expensive':''}" data-tech="${key}" style="left:${p[0]*techZoom}px;top:${p[1]*techZoom}px" aria-pressed="${chosen}" aria-controls="tech-detail" aria-label="${d.name}, ${status}${learned?'':', '+cost+' stars'}"><span class="tech-disc">${icon(d.icon)}${learned?'<span class="tech-owned-badge">'+icon('check')+'</span>':''}</span><b>${d.name}</b>${learned?'':'<span class="tech-cost">'+cost+icon('star')+'</span>'}</button>`;
- }).join('');
- $('tech-branches').innerHTML=roots.map(key=>`<button type="button" data-tech-branch="${key}" aria-pressed="${root===key}" aria-label="Show ${techInfo(key).name} research branch">${techInfo(key).name}</button>`).join('');
- tree.querySelectorAll('[data-tech]').forEach(el=>{el.onclick=()=>{techSelected=el.dataset.tech;renderTech();sound()}});
- $('tech-branches').querySelectorAll('[data-tech-branch]').forEach(el=>{el.onclick=()=>{techSelected=el.dataset.techBranch;renderTech();centerTechBranch();$('tech-branches').querySelector(`[data-tech-branch="${techSelected}"]`).focus({preventScroll:true});sound()}});
- $('tech-stars').innerHTML=stars+icon('star');$('tech-stars').setAttribute('aria-label',stars+' available stars');$('tech-progress').textContent=keys.filter(key=>ownsTech(0,key)).length+' / '+keys.length+' researched';
- $('tech-zoom-out').disabled=techZoom<=.8;$('tech-zoom-in').disabled=techZoom>=1.3;
  const d=techInfo(techSelected),learned=ownsTech(0,techSelected),available=canResearch(techSelected),cost=learned?null:techCost(techSelected);
  $('tech-detail').innerHTML=`<div class="detail-top"><div class="detail-icon">${icon(d.icon)}</div><h3>${d.name}</h3>${learned?'<span class="learned">✓ Researched</span>':''}</div><p>${d.desc}</p>${learned?'<div class="learned">Ready to use · no further research needed</div>':`<div class="tech-status">${!available?'Research '+techInfo(d.parent).name+' to unlock this path.':stars<cost?'You need '+(cost-stars)+' more stars.':'Available to research'}</div><button class="large-button" id="research-tech" ${!available||stars<cost?'disabled':''}>${!available?'Locked':stars<cost?'Not enough stars':'Research'} <span class="research-price">${cost}${icon('star')}</span></button>`}`;
+ $('tech-branches').innerHTML=`<button type="button" class="tech-all" id="tech-all" aria-pressed="${techView==='all'}">All techs</button>`+roots.map(key=>`<button type="button" data-tech-branch="${key}" aria-pressed="${techView==='branch'&&root===key}" aria-label="Show ${techInfo(key).name}: two three-step research paths">${techInfo(key).name}</button>`).join('');
+ const layout=techLayout(),shown=new Set(layout.keys),path=new Set(techPath(techSelected));
+ tree.style.width=layout.width*techZoom+'px';tree.style.height=layout.height*techZoom+'px';tree.style.setProperty('--tech-zoom',techZoom);tree.style.setProperty('--tech-owned',mixColor(tribeFor(0).color,'#32745c',.6));
+ map.setAttribute('aria-label',techView==='branch'?techInfo(root).name+' branch: two paths, three tiers each':'Scrollable complete technology map');
+ const links=layout.keys.filter(key=>techView==='all'||TECHS[key].parent).map(key=>{
+  const d=TECHS[key],a=d.parent?layout.positions[d.parent]:[TECH_MAP_CENTER,TECH_MAP_CENTER],b=layout.positions[key],learned=ownsTech(0,key),available=canResearch(key);
+  // Lines meet the circles, not the surrounding labels or price badges.
+  const length=Math.hypot(b[0]-a[0],b[1]-a[1]),inset=(Math.max(44,56*techZoom)/2+3)/techZoom,dx=(b[0]-a[0])/length,dy=(b[1]-a[1])/length;
+  return `<line data-path="${key}" data-parent="${d.parent||''}" class="${learned?'learned':available?'available':'locked'} ${path.has(key)?'focused':''}" x1="${a[0]+dx*inset}" y1="${a[1]+dy*inset}" x2="${b[0]-dx*inset}" y2="${b[1]-dy*inset}"/>`;
+ }).join('');
+ const headings=techView==='branch'&&layout.headings?[root,...layout.keys.filter(key=>TECHS[key].tier>1).filter((key,index,all)=>all.findIndex(other=>TECHS[other].tier===TECHS[key].tier)===index)].map(key=>`<span class="tech-tier-heading" style="left:${layout.positions[key][0]*techZoom}px;top:${Math.min(...Object.values(layout.positions).map(p=>p[1]))*techZoom-Math.max(44,56*techZoom)/2-20}px">Tier ${TECHS[key].tier}</span>`).join(''):'';
+ tree.innerHTML=`<svg class="tech-links" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">${links}</svg>${headings}`+(techView==='all'?`<div class="tech-center" style="left:${TECH_MAP_CENTER*techZoom}px;top:${TECH_MAP_CENTER*techZoom}px">${tribePortrait(faction(0).tribe,0)}<b>${tribeFor(0).name}</b>Research paths</div>`:'')+keys.map(key=>{
+  const d=techInfo(key),learned=ownsTech(0,key),available=canResearch(key),chosen=key===techSelected,cost=learned?null:techCost(key),p=layout.positions[key]||[0,0];
+  const status=learned?'researched':!available?'locked, requires '+techInfo(d.parent).name:stars<cost?'need '+(cost-stars)+' more stars':'available';
+  return `<button type="button" class="tech-node ${learned?'learned ':''}${chosen?'chosen ':''}${!learned&&!available?'locked ':''}${!learned&&available&&stars<cost?'expensive':''}" data-tech="${key}" data-tier="${d.tier}" ${shown.has(key)?'':'hidden'} style="left:${p[0]*techZoom}px;top:${p[1]*techZoom}px" aria-pressed="${chosen}" aria-controls="tech-detail" aria-label="${d.name}, tier ${d.tier} of 3, ${status}${learned?'':', '+cost+' stars'}"><span class="tech-disc">${icon(d.icon)}<span class="tech-tier" aria-hidden="true">${d.tier}</span>${learned?'<span class="tech-owned-badge">'+icon('check')+'</span>':''}</span><b>${d.name}</b>${learned?'':'<span class="tech-cost">'+cost+icon('star')+'</span>'}</button>`;
+ }).join('');
+ tree.querySelectorAll('[data-tech]').forEach(el=>{el.onclick=()=>{techSelected=el.dataset.tech;renderTech();sound()}});
+ $('tech-all').onclick=()=>{techView='all';renderTech();centerTechBranch();$('tech-all').focus({preventScroll:true});sound()};
+ $('tech-branches').querySelectorAll('[data-tech-branch]').forEach(el=>{el.onclick=()=>{techView='branch';techSelected=el.dataset.techBranch;renderTech();centerTechBranch();$('tech-branches').querySelector(`[data-tech-branch="${techSelected}"]`).focus({preventScroll:true});sound()}});
+ $('tech-stars').innerHTML=stars+icon('star');$('tech-stars').setAttribute('aria-label',stars+' available stars');$('tech-progress').textContent=keys.filter(key=>ownsTech(0,key)).length+' / '+keys.length+' researched';
+ $('tech-path-summary').textContent=techView==='branch'?'Each path: 1 → 2 → 3':'Drag to explore · tap a branch';
+ $('tech-zoom-out').disabled=techZoom<=.8;$('tech-zoom-in').disabled=techZoom>=1.3;
  const researchKey=techSelected;
  if($('research-tech'))$('research-tech').onclick=()=>{
   // Recheck live rules and balance; an old button must never purchase twice.
@@ -1785,7 +1854,7 @@ function showResult(){
  openModal(`<div class="game-result"><div class="outcome-icon">${icon(win?'trophy':'shield')}</div><span class="eyebrow">${label}</span><h2>${heading}</h2><p class="subtitle">${perfection?'Your civilization after '+game.turn+' turns.':win?'Victory · '+('★'.repeat(award)||'No stars')+(rating.total===100?' · Perfect conquest':''):'Your tribe has fallen.'}</p>${perfection?scoreRows():ratingRows()}<div class="result-grid"><div><b>${game.turn}</b><small>TURNS PLAYED</small></div><div><b>${game.kills}</b><small>ENEMIES DEFEATED</small></div><div><b>${game.losses||0}</b><small>UNITS LOST</small></div></div>${perfection?'<p class="save-label">Base points only. Difficulty bonuses are not applied.</p>':''}<button class="large-button" id="result-new">${icon('new')}Play again</button><button class="large-button secondary" id="result-view">${icon('eye')}Explore the world</button></div>`,'Game result');$('result-new').onclick=openNewGame;$('result-view').onclick=()=>closeModal(true);sound(win?'victory':'turn');updateUI();
 }
 function openStats(){
- const factionRows=game.factions.map(f=>{const known=f.id===0||!!contactFor(0,f.id);return known?'<div class="stats-row"><div class="portrait">'+tribePortrait(f.tribe,f.id)+'</div><strong>'+factionName(f.id)+'</strong><small>'+(f.eliminated?'Defeated':game.cities.filter(c=>c.owner===f.id).length+' cities<br>'+game.units.filter(u=>u.owner===f.id).length+' units')+'</small></div>':'<div class="stats-row"><div>'+icon('eye')+'</div><strong>Uncharted tribe</strong><small>Explore the fog to make contact.</small></div>'}).join('');
+ const factionRows=game.factions.map(f=>{const known=f.id===0||!!contactFor(0,f.id);return known?'<div class="stats-row"><div class="portrait">'+tribePortrait(f.tribe,f.id)+'</div><strong><span class="stats-team" style="background:'+tribeFor(f.id).color+';color:'+contrastInk(tribeFor(f.id).color)+'">'+(f.id+1)+'</span>'+factionName(f.id)+(f.id===0?' · You':'')+'</strong><small>'+(f.eliminated?'Defeated':game.cities.filter(c=>c.owner===f.id).length+' cities<br>'+game.units.filter(u=>u.owner===f.id).length+' units')+'</small></div>':'<div class="stats-row"><div>'+icon('eye')+'</div><strong>Uncharted tribe</strong><small>Explore the fog to make contact.</small></div>'}).join('');
  openModal(modalCloseButton()+'<span class="eyebrow">'+game.mode.toUpperCase()+' · TURN '+game.turn+'</span><h2>Game Stats</h2><p class="subtitle">'+tribeFor(0).name+' · '+(MAP_TYPES[game.mapType]?.name||'Legacy map')+' · '+game.size*game.size+' tiles<br>'+playerCities().length+' cities · '+income(0)+' stars per turn</p>'+scoreRows()+(game.mode==='domination'?'<span class="eyebrow">CONQUEST RATING · '+dominationRating().total.toFixed(1)+'%</span>'+ratingRows():'')+'<button class="menu-item" id="stats-monuments">'+icon('trophy')+'<span>Monuments</span><small>'+faction(0).tasks.unlocked.length+'/7 unlocked</small></button><button class="menu-item" id="stats-diplomacy">'+icon('flag')+'<span>Diplomacy</span>'+icon('chevron')+'</button><div class="stats-list">'+factionRows+'</div><button class="large-button" id="stats-done">Back to game</button>','Game statistics');$('stats-done').onclick=()=>closeModal();$('stats-monuments').onclick=()=>openMonuments();$('stats-diplomacy').onclick=openDiplomacy;
 }
 $('stats-button').onclick=openStats;$('menu-button').onclick=openMenu;$('tech-button').onclick=()=>openTech();$('end-turn').onclick=endTurn;$('close-tech').onclick=closeTech;$('next-unit').onclick=nextUnit;
@@ -1798,7 +1867,7 @@ document.addEventListener('keydown',e=>{
  if(e.key.toLowerCase()==='t')openTech();if(e.key.toLowerCase()==='e'){e.preventDefault();endTurn()}if(e.key.toLowerCase()==='c')$('center-map').click();if(e.key==='+'||e.key==='=')zoomMap(1.15);if(e.key==='-')zoomMap(1/1.15);if(e.key.startsWith('Arrow'))cameraMotion=panMotion=null;if(e.key==='ArrowLeft'){e.preventDefault();view.x+=35}if(e.key==='ArrowRight'){e.preventDefault();view.x-=35}if(e.key==='ArrowUp'){e.preventDefault();view.y+=35}if(e.key==='ArrowDown'){e.preventDefault();view.y-=35}requestRender();saveViewSoon();
 });
 new ResizeObserver(()=>{resize();render()}).observe($('stage'));resize();
-function refreshResolution(){resize();const p=battlePreviewModel();if(p&&battlePreview.pinned)focusOn((p.attacker.x+p.target.x)/2,(p.attacker.y+p.target.y)/2);if($('tech-layer').classList.contains('open'))centerTechBranch();requestRender()}
+function refreshResolution(){resize();const p=battlePreviewModel();if(p&&battlePreview.pinned)focusOn((p.attacker.x+p.target.x)/2,(p.attacker.y+p.target.y)/2);if($('tech-layer').classList.contains('open')){renderTech();centerTechBranch()}requestRender()}
 window.addEventListener('resize',refreshResolution);window.visualViewport?.addEventListener('resize',refreshResolution);
 function watchResolution(){const query=matchMedia('(resolution: '+(window.devicePixelRatio||1)+'dppx)');query.addEventListener('change',()=>{refreshResolution();watchResolution()},{once:true})}watchResolution();
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearBattlePreview();panMotion=cameraMotion=null;save();cancelAnimationFrame(frameId);frameId=0;clearTimeout(idleFrameTimer);pointerState.clear();gesture=null;canvas.classList.remove('dragging')}else{requestRender();if(game.turnState&&!busy&&!game.over)resumeTurn()}});

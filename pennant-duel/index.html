@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#101d3d">
+  <meta name="description" content="Pennant Duel — a quick original two-lane strategy game.">
+  <title>Pennant Duel</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+</head>
+<body>
+  <main id="app">
+    <section id="home" class="screen home-screen" aria-labelledby="game-title">
+      <div class="brand-mark" aria-hidden="true"><span></span><i></i><span></span></div>
+      <p class="eyebrow">SKYLINE LEAGUE</p>
+      <h1 id="game-title">Pennant Duel</h1>
+      <p class="tagline">Outsmart two lanes. Build a bold push. Topple the rival beacon.</p>
+      <button id="continue-button" class="primary jumbo" type="button">Start a duel</button>
+      <div class="mode-grid" aria-label="Battle modes">
+        <button class="mode-card" data-mode="classic" type="button"><b>Classic</b><span>3-minute tactical battle</span></button>
+        <button class="mode-card" data-mode="frenzy" type="button"><b>Frenzy</b><span>Double spark, nonstop action</span></button>
+        <button class="mode-card" data-mode="draft" type="button"><b>Draft Challenge</b><span>Choose every card, then duel</span></button>
+      </div>
+      <button id="collection-button" class="quiet wide" type="button">Deck &amp; arenas</button>
+      <button id="settings-button" class="quiet wide" type="button">Settings &amp; local save</button>
+      <p id="save-note" class="microcopy">Progress stays on this browser. Export a backup before changing device or app mode.</p>
+      <div class="site-actions">
+        <button type="button" data-install-game>Install game</button>
+        <a data-all-games href="../">All games</a>
+      </div>
+      <p data-game-offline-status class="offline-status" aria-live="polite">Offline status checks after the published game loads.</p>
+    </section>
+
+    <section id="collection" class="screen panel-screen hidden" aria-labelledby="collection-title">
+      <header><button class="back-button" data-back type="button" aria-label="Back">←</button><div><p class="eyebrow">HANGAR</p><h2 id="collection-title">Deck &amp; arenas</h2></div></header>
+      <div id="arena-list" class="arena-list"></div>
+      <h3>Battle deck <span id="deck-count">8 / 8</span></h3>
+      <p class="microcopy">Tap an unlocked card to add or remove it. A battle deck needs exactly eight.</p>
+      <div id="card-library" class="card-library"></div>
+    </section>
+
+    <section id="draft" class="screen panel-screen hidden" aria-labelledby="draft-title">
+      <header><button class="back-button" data-back type="button" aria-label="Cancel draft">←</button><div><p class="eyebrow">DRAFT CHALLENGE</p><h2 id="draft-title">Pick your crew</h2></div></header>
+      <div class="draft-progress"><span id="draft-step">Pick 1 of 8</span><div><i id="draft-bar"></i></div></div>
+      <p>Choose one card from each pair. Your rival brings its arena deck.</p>
+      <div id="draft-choices" class="draft-choices"></div>
+      <div id="draft-deck" class="draft-deck" aria-label="Drafted cards"></div>
+    </section>
+
+    <section id="battle" class="screen battle-screen hidden" aria-label="Pennant Duel battle">
+      <div id="top-hud" class="top-hud">
+        <div><span id="arena-name">Rooftop Rally</span><small id="mode-name">Classic</small></div>
+        <div id="battle-clock" class="clock">3:00</div>
+        <button id="pause-button" type="button" aria-label="Pause battle">Ⅱ</button>
+      </div>
+      <div id="canvas-shell">
+        <canvas id="game-canvas" width="1000" height="1400" tabindex="0" aria-label="Two-lane battle arena. Select a card then tap your half to deploy."></canvas>
+        <div id="tutorial-tip" class="tutorial-tip hidden" role="status"></div>
+        <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+      </div>
+      <div class="hand-zone">
+        <div class="energy-row"><span>Spark</span><div id="energy-track" class="energy-track" aria-label="Energy: 5 of 10"></div><b id="energy-number">5</b></div>
+        <div class="hand-strip">
+          <div id="next-card" class="next-card" aria-label="Next card"><span>Next</span><div id="next-card-art"></div></div>
+          <div id="hand" class="hand" aria-label="Your hand"></div>
+        </div>
+      </div>
+    </section>
+
+    <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-card">
+        <p id="modal-kicker" class="eyebrow">PAUSED</p>
+        <h2 id="modal-title">Take a breather</h2>
+        <div id="modal-body"></div>
+        <div id="modal-actions" class="modal-actions"></div>
+      </div>
+    </div>
+
+    <input id="import-file" class="visually-hidden" type="file" accept="application/json,.json">
+  </main>
+  <script src="engine.js"></script>
+  <script src="tower-renderer.js"></script>
+  <script src="game.js"></script>
+<script data-games-pwa-runtime src="./game-pwa.js"></script>
+</body>
+</html>

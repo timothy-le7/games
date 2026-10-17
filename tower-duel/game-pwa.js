@@ -104,6 +104,23 @@
   }
 
   function prepareControls() {
+    const installControl = document.querySelector('[data-install-game]');
+    const welcomePanel = document.getElementById('startButton')?.parentElement;
+    if ((installControl || welcomePanel) && !document.querySelector('[data-game-privacy]')) {
+      const privacy = document.createElement('a');
+      privacy.href = './privacy.html';
+      privacy.dataset.gamePrivacy = '';
+      privacy.className = 'games-pwa-privacy';
+      privacy.textContent = 'Privacy & saves';
+      privacy.setAttribute('style', 'display:block;min-height:44px;padding:10px 4px;text-align:center;color:inherit;font:inherit;line-height:24px;text-underline-offset:3px');
+      if (installControl) (installControl.closest?.('.site-actions') || installControl).insertAdjacentElement('afterend', privacy);
+      else welcomePanel.append(privacy);
+    }
+    for (const link of selector('[data-game-privacy]')) {
+      if (link.dataset.gamesPrivacyBound) continue;
+      link.dataset.gamesPrivacyBound = '1';
+      link.addEventListener('click', event => { if (!saveBeforeLeaving()) event.preventDefault(); });
+    }
     installStyles();
     for (const install of selector('[data-install-game]')) {
       if (install.dataset.gamesPwaInstallBound) continue;

@@ -107,6 +107,13 @@
     library.innerHTML = icon('back') + '<span>All games</span>' + icon('chevron');
     library.onclick = event => { if (!save()) { event.preventDefault(); toast('Export a save before leaving. Autosave is unavailable.'); } };
     anchor.before(library);
+    const privacy = document.createElement('a');
+    privacy.id = 'web-app-privacy';
+    privacy.className = 'menu-item';
+    privacy.href = './privacy.html';
+    privacy.innerHTML = icon('info') + '<span>Privacy &amp; saves</span>' + icon('chevron');
+    privacy.onclick = event => { if (!save()) { event.preventDefault(); toast('Export a save before leaving. Autosave is unavailable.'); } };
+    anchor.before(privacy);
     refreshStatus();
   }
   function updateMenu() {

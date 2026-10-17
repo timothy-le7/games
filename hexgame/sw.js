@@ -1,9 +1,9 @@
 'use strict';
-const RELEASE = 'd631c9f3dd2e75702d08';
+const RELEASE = 'b396f031253cd743379d';
 // Include the scope so unrelated apps on the same host cannot delete our caches.
 const PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
 const CACHE = PREFIX + RELEASE;
-const ASSETS = ['index.html', 'web-app.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'];
+const ASSETS = ['index.html', 'web-app.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'privacy.html'];
 const urlFor = file => new URL(file, self.registration.scope).href;
 
 self.addEventListener('install', event => {
@@ -42,11 +42,11 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   const scope = new URL(self.registration.scope);
   if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
-  const relative = url.pathname.slice(scope.pathname.length);
-  if (event.request.mode !== 'navigate' && !ASSETS.includes(relative)) return;
+  const relative = url.pathname.slice(scope.pathname.length) || 'index.html';
+  if (!ASSETS.includes(relative)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const key = event.request.mode === 'navigate' ? urlFor('index.html') : urlFor(relative);
+    const key = urlFor(relative);
     const response = await cache.match(key);
     return response || fetch(event.request);
   })());
