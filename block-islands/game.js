@@ -1,359 +1,534 @@
+/* Block Islands first-person controller. Rendering is supplied by voxel-view.js. */
 (function () {
   'use strict';
   const R = window.BlockIslandsRules;
+  const V = window.BlockIslandsVoxel;
   const KEY = 'games:block-islands:v1';
   const PREF_KEY = KEY + ':prefs';
-  const clamp = (number, minimum, maximum) => Math.max(minimum, Math.min(maximum, number));
   const $ = id => document.getElementById(id);
-  const canvas = $('world');
-  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-  const overlay = $('overlay');
-  const panel = $('panel');
-  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let state;
-  let world;
-  let profiles;
-  let activeMode = 'campaign';
-  let selectedBlock = 'plank';
-  let target = null;
-  let lastTime = performance.now();
-  let previousStageComplete = false;
-  let completionOpen = false;
-  let running = true;
-  let moveTimer = 0;
-  let saveTimer = 0;
-  let lastSavedAt = performance.now();
-  let lastDayPhase = -1;
+  const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const canvas = $('world'), overlay = $('overlay'), panel = $('panel');
+  const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const EYE = 1.58, RADIUS = .28, BODY = 1.68;
+  let state, world, profiles, activeMode = 'campaign', selectedBlock = 'plank';
+  let renderer = null, blocks = new Map(), renderBlocks = [], worldRevision = 0;
+  let pose = { x: 2.5, y: 3.5, z: 3.5, yaw: 0, pitch: -.08, vy: 0, grounded: false };
+  let target = null, running = true, previousStageComplete = false, completionOpen = false;
+  let saveTimer = 0, lastSavedAt = performance.now(), lastTime = performance.now(), lastTargetAt = 0;
+  let mineHold = null, mining = 0, audioContext = null, lastDamage = 0;
+  const input = { joy: { x: 0, y: 0, pointer: null }, look: null, keys: new Set() };
   let prefs = readPrefs();
-  let pickMap = [];
-  let renderOrder = [];
-  let view = { width: 0, height: 0, scale: 30, dpr: 1, centerX: 0, centerY: 0, cameraX: 0, cameraY: 0, cameraZ: 0 };
-  let audioContext = null;
 
   function readPrefs() {
     try {
-      const value = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
-      return { sound: value.sound !== false, motion: value.motion !== false };
-    } catch (_) { return { sound: true, motion: true }; }
+      const raw = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+      return { sound: raw.sound !== false, motion: raw.motion !== false, sensitivity: clamp(Number(raw.sensitivity) || 1, .45, 2.1), buttonSize: clamp(Number(raw.buttonSize) || 1, .8, 1.28), handedness: raw.handedness === 'left' ? 'left' : 'right' };
+    } catch (_) { return { sound: true, motion: true, sensitivity: 1, buttonSize: 1, handedness: 'right' }; }
   }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (_) {} }
-  function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function applyPrefs() {
+    document.documentElement.style.setProperty('--action-scale', String(prefs.buttonSize));
+    const actions = document.querySelector('.action-cluster'), move = document.querySelector('.move-zone');
+    actions.style.right = prefs.handedness === 'left' ? 'auto' : ''; actions.style.left = prefs.handedness === 'left' ? 'max(12px, env(safe-area-inset-left))' : '';
+    actions.style.transform = 'scale(' + prefs.buttonSize + ')'; actions.style.transformOrigin = prefs.handedness === 'left' ? 'bottom left' : 'bottom right';
+    move.style.left = prefs.handedness === 'left' ? 'auto' : ''; move.style.right = prefs.handedness === 'left' ? 'max(12px, env(safe-area-inset-right))' : '';
+  }
   function makeCreative() {
-    const creative = R.createGame(R.DEFAULT_SEED ^ 0x51f15e);
-    creative.creative = true;
-    creative.unlocked = R.STAGES.length - 1;
-    for (const item of R.INVENTORY_KEYS) creative.inventory[item] = 99;
-    R.startStage(creative, 9, false);
-    creative.message = 'Creative sandbox: unlimited building blocks and tools.';
-    return creative;
+    const next = R.createGame(R.DEFAULT_SEED ^ 0x51f15e);
+    next.creative = true; next.unlocked = R.STAGES.length - 1;
+    for (const item of R.INVENTORY_KEYS) next.inventory[item] = 99;
+    R.startStage(next, 9, false);
+    next.message = 'Creative sandbox: unlimited building blocks and tools.';
+    return next;
   }
   function syncProfile() { if (state && profiles) profiles[activeMode] = clone(state); }
-  function packed() {
-    syncProfile();
-    return { format: 'block-islands-save', version: R.SAVE_VERSION, payload: { activeMode, campaign: profiles.campaign, creative: profiles.creative } };
-  }
+  function packed() { syncProfile(); return { format: 'block-islands-save', version: R.SAVE_VERSION, payload: { activeMode, campaign: profiles.campaign, creative: profiles.creative } }; }
   function validPacked(value) {
     if (!value || value.format !== 'block-islands-save' || value.version !== R.SAVE_VERSION) return null;
-    const payload = value.payload;
-    if (payload && payload.campaign) {
-      const campaign = R.sanitizeState(payload.campaign);
-      const creative = payload.creative ? R.sanitizeState(payload.creative) : null;
-      if (!campaign || payload.creative && !creative || creative && !creative.creative) return null;
+    const source = value.payload;
+    if (source && source.campaign) {
+      const campaign = R.sanitizeState(source.campaign), creative = source.creative ? R.sanitizeState(source.creative) : null;
+      if (!campaign || source.creative && !creative || creative && !creative.creative) return null;
       campaign.creative = false;
-      return { activeMode: payload.activeMode === 'creative' && creative ? 'creative' : 'campaign', campaign, creative, legacy: false };
+      return { activeMode: source.activeMode === 'creative' && creative ? 'creative' : 'campaign', campaign, creative, legacy: false };
     }
-    const legacy = R.sanitizeState(payload);
+    const legacy = R.sanitizeState(source);
     if (!legacy) return null;
-    const mode = legacy.creative ? 'creative' : 'campaign';
-    return { activeMode: mode, campaign: mode === 'campaign' ? legacy : null, creative: mode === 'creative' ? legacy : null, legacy: true };
+    return { activeMode: legacy.creative ? 'creative' : 'campaign', campaign: legacy.creative ? null : legacy, creative: legacy.creative ? legacy : null, legacy: true };
   }
-  function readStored(storageKey) {
-    try { return validPacked(JSON.parse(localStorage.getItem(storageKey) || 'null')); } catch (_) { return null; }
-  }
+  function readStored(name) { try { return validPacked(JSON.parse(localStorage.getItem(name) || 'null')); } catch (_) { return null; } }
   function loadGame() {
-    const primary = readStored(KEY), backup = readStored(KEY + ':backup');
-    const loaded = primary || backup;
-    if (loaded) {
-      if (loaded.legacy) {
-        const other = backup && backup.legacy && backup.activeMode !== loaded.activeMode ? backup : null;
-        loaded.campaign = loaded.campaign || other?.campaign || R.createGame();
-        loaded.creative = loaded.creative || other?.creative || null;
-      }
-      return { session: loaded, recovered: primary ? (loaded.legacy ? 'Migrated the earlier single-mode save without replacing the other mode.' : '') : 'Recovered the last valid backup.' };
+    const primary = readStored(KEY), backup = readStored(KEY + ':backup'), loaded = primary || backup;
+    if (!loaded) return { session: { activeMode: 'campaign', campaign: R.createGame(), creative: null }, recovered: '' };
+    if (loaded.legacy) {
+      const other = backup && backup.legacy && backup.activeMode !== loaded.activeMode ? backup : null;
+      loaded.campaign = loaded.campaign || other?.campaign || R.createGame();
+      loaded.creative = loaded.creative || other?.creative || null;
     }
-    return { session: { activeMode: 'campaign', campaign: R.createGame(), creative: null }, recovered: '' };
+    return { session: loaded, recovered: primary ? (loaded.legacy ? 'Your earlier save was brought into the first-person world.' : '') : 'Recovered the last valid backup.' };
   }
-  function durableWrite(storageKey, text) {
+  function durableWrite(name, text) {
     let old;
-    try { old = localStorage.getItem(storageKey); } catch (_) { return false; }
-    try {
-      localStorage.setItem(storageKey, text);
-      if (localStorage.getItem(storageKey) !== text) throw new Error('verification failed');
-      return true;
-    } catch (_) {
-      try { if (old === null) localStorage.removeItem(storageKey); else localStorage.setItem(storageKey, old); } catch (_) {}
-      return false;
-    }
+    try { old = localStorage.getItem(name); localStorage.setItem(name, text); if (localStorage.getItem(name) !== text) throw Error('verify'); return true; }
+    catch (_) { try { if (old === null) localStorage.removeItem(name); else localStorage.setItem(name, old); } catch (_) {} return false; }
   }
   function durableSave() {
-    clearTimeout(saveTimer); saveTimer = 0;
+    clearTimeout(saveTimer); saveTimer = 0; persistPose();
     const text = JSON.stringify(packed());
     try {
-      const currentText = localStorage.getItem(KEY);
-      const current = currentText ? validPacked(JSON.parse(currentText)) : null;
-      const backup = readStored(KEY + ':backup');
-      if (current) {
-        if (!durableWrite(KEY + ':backup', currentText)) throw new Error('backup failed');
-      } else if (!backup && !durableWrite(KEY + ':backup', text)) throw new Error('backup seed failed');
-      if (!durableWrite(KEY, text)) throw new Error('primary failed');
-      lastSavedAt = performance.now();
-      return true;
-    } catch (_) {
-      lastSavedAt = performance.now();
-      say('Autosave needs browser storage. Export a backup before leaving.');
-      return false;
-    }
+      const currentText = localStorage.getItem(KEY), current = currentText && validPacked(JSON.parse(currentText)), backup = readStored(KEY + ':backup');
+      if (current && !durableWrite(KEY + ':backup', currentText)) throw Error('backup');
+      if (!current && !backup && !durableWrite(KEY + ':backup', text)) throw Error('seed backup');
+      if (!durableWrite(KEY, text)) throw Error('primary');
+      lastSavedAt = performance.now(); return true;
+    } catch (_) { lastSavedAt = performance.now(); say('Autosave needs browser storage. Export a backup before leaving.'); return false; }
   }
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(durableSave, 700); }
+  function persistPose() {
+    state.player.x = clamp(pose.x, .2, R.SIZE - .2); state.player.y = clamp(pose.z, .2, R.SIZE - .2);
+    state.pose = { x: state.player.x, y: clamp(pose.y, .2, 28), z: state.player.y, yaw: pose.yaw, pitch: pose.pitch };
+  }
   function importSave(value) {
     const next = validPacked(value);
-    if (!next) { say('That save is not a valid Block Islands backup. Your current journey is unchanged.'); return false; }
-    const oldProfiles = clone(profiles), oldMode = activeMode, oldState = clone(state);
-    if (next.legacy) {
-      syncProfile();
-      if (next.activeMode === 'creative') profiles.creative = next.creative;
-      else profiles.campaign = next.campaign;
-    } else profiles = { campaign: next.campaign, creative: next.creative };
-    activeMode = next.activeMode;
-    state = clone(profiles[activeMode]); world = R.makeWorld(state.stage, state.edits, state.seed); target = null; previousStageComplete = state.stageComplete; completionOpen = false;
-    if (!durableSave()) {
-      profiles = oldProfiles; activeMode = oldMode; state = oldState;
-      world = R.makeWorld(state.stage, state.edits, state.seed); target = null; previousStageComplete = state.stageComplete; completionOpen = false;
-      updateUI(); say('Import stopped because browser storage is unavailable. Your current journey is unchanged.');
-      return false;
-    }
-    updateUI();
-    if (activeMode === 'campaign' && state.stageComplete) setTimeout(completion, 0);
-    return true;
+    if (!next) { say('That save is not valid. Your current journey is unchanged.'); return false; }
+    const old = { profiles: clone(profiles), mode: activeMode, state: clone(state) };
+    if (next.legacy) { syncProfile(); if (next.activeMode === 'creative') profiles.creative = next.creative; else profiles.campaign = next.campaign; }
+    else profiles = { campaign: next.campaign, creative: next.creative };
+    activeMode = next.activeMode; state = clone(profiles[activeMode]); loadStage();
+    if (!durableSave()) { profiles = old.profiles; activeMode = old.mode; state = old.state; loadStage(); say('Import stopped because browser storage is unavailable.'); return false; }
+    updateUI(); return true;
   }
-  function getSummary() { return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative }, R.summary(state)); }
+  function getSummary() {
+    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: true, target: target && target.material, pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch } }, R.summary(state));
+  }
 
   const loaded = loadGame();
   profiles = { campaign: loaded.session.campaign || R.createGame(), creative: loaded.session.creative || null };
   activeMode = loaded.session.activeMode === 'creative' && profiles.creative ? 'creative' : 'campaign';
   state = clone(profiles[activeMode]);
-  world = R.makeWorld(state.stage, state.edits, state.seed);
-  previousStageComplete = state.stageComplete;
-
   window.GameApp = { save: durableSave, exportSave: () => clone(packed()), importSave, getSummary };
   window.dispatchEvent(new Event('game-ready'));
 
-  function say(message) {
-    const line = $('statusLine');
-    line.textContent = message;
-    line.classList.remove('toast');
-    void line.offsetWidth;
-    line.classList.add('toast');
+  function say(text) {
+    const node = $('statusLine'); node.textContent = text; node.classList.remove('toast'); void node.offsetWidth; node.classList.add('toast');
   }
   function buzz(kind) {
-    if (!prefs.sound || !window.AudioContext && !window.webkitAudioContext) return;
+    if (!prefs.sound || !(window.AudioContext || window.webkitAudioContext)) return;
     try {
       audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator(); const gain = audioContext.createGain();
-      oscillator.frequency.value = kind === 'danger' ? 150 : kind === 'success' ? 620 : 370;
-      gain.gain.setValueAtTime(.035, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + .11);
-      oscillator.connect(gain).connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + .12);
+      const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+      oscillator.frequency.value = kind === 'danger' ? 145 : kind === 'mine' ? 235 : 580;
+      gain.gain.setValueAtTime(.035, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + .1);
+      oscillator.connect(gain).connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + .11);
     } catch (_) {}
   }
-  function open(html) { panel.innerHTML = html; overlay.classList.add('open'); running = false; }
-  function close() { overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now(); }
   function escape(text) { return String(text).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
   function button(id, text, cls) { return '<button id="' + id + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>'; }
   function bind(id, fn) { const node = $(id); if (node) node.addEventListener('click', fn); }
+  function open(html) { clearInputs(); panel.innerHTML = html; overlay.classList.add('open'); running = false; }
+  function close() { overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now(); }
 
   function welcome(recovered) {
-    const campaignContinued = profiles.campaign.completed.length || profiles.campaign.time > 1;
-    open('<p class="eyebrow">ORIGINAL VOXEL ADVENTURE</p><h1>Block Islands</h1><p class="lead">Explore hand-built island challenges: move, aim, mine, build and craft your way to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Use the arrows or WASD.</div><div><strong>2 · Aim + mine</strong>Tap a nearby block, then Mine.</div><div><strong>3 · Build</strong>Choose a hotbar block and Place.</div><div><strong>4 · Craft</strong>Turn gathered materials into tools.</div></div>' + button('startButton', campaignContinued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + '<p class="tiny">Campaign and creative progress are saved separately on this device. The menu can export both in one backup for another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
-    bind('startButton', () => activateMode('campaign'));
-    bind('creativeButton', () => activateMode('creative'));
+    const continued = profiles.campaign.completed.length || profiles.campaign.time > 1;
+    const rendererNote = V ? '' : '<p class="tiny"><strong>3D view is loading.</strong> This build needs its local voxel renderer before play can begin.</p>';
+    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands in first person. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD.</div><div><strong>2 · Look</strong>Drag the open right side of the view.</div><div><strong>3 · Mine</strong>Hold Mine on a block in the crosshair.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">Campaign and Creative saves stay separate. Export both from the pause menu before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
+    bind('startButton', () => activateMode('campaign')); bind('creativeButton', () => activateMode('creative'));
   }
   function activateMode(mode) {
-    syncProfile();
-    if (mode === 'creative' && !profiles.creative) profiles.creative = makeCreative();
-    activeMode = mode;
-    state = clone(profiles[mode]);
-    world = R.makeWorld(state.stage, state.edits, state.seed);
-    target = null; previousStageComplete = !!state.stageComplete; completionOpen = false;
-    durableSave(); updateUI(); close();
-    if (mode === 'campaign' && state.stageComplete) setTimeout(completion, 0);
+    syncProfile(); if (mode === 'creative' && !profiles.creative) profiles.creative = makeCreative();
+    activeMode = mode; state = clone(profiles[mode]); loadStage(); durableSave(); updateUI(); close();
   }
   function menu() {
-    const status = document.querySelector('[data-game-offline-status]')?.textContent || 'Offline status will appear after the game is cached.';
-    open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>Autosaves after each action. Campaign and creative builds stay separate.</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('modeButton', state.creative ? 'Return to campaign' : (profiles.creative ? 'Open creative sandbox' : 'Start creative sandbox'), 'secondary') + button('soundButton', 'Sound: ' + (prefs.sound ? 'On' : 'Off'), 'secondary') + button('exportButton', 'Export both saves', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(status) + '</p>');
-    bind('resumeButton', close); bind('stagesButton', stages); bind('modeButton', () => activateMode(state.creative ? 'campaign' : 'creative')); bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); menu(); }); bind('exportButton', downloadSave); bind('importButton', () => $('importInput').click());
+    const offline = document.querySelector('[data-game-offline-status]')?.textContent || 'Offline status will appear after the local game is cached.';
+    open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>First-person controls save after meaningful actions.</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('modeButton', state.creative ? 'Return to campaign' : profiles.creative ? 'Open creative sandbox' : 'Start creative sandbox', 'secondary') + button('settingsButton', 'Controls and accessibility', 'secondary') + button('exportButton', 'Export both saves', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(offline) + '</p>');
+    bind('resumeButton', close); bind('stagesButton', stages); bind('modeButton', () => activateMode(state.creative ? 'campaign' : 'creative')); bind('settingsButton', settings); bind('exportButton', downloadSave); bind('importButton', () => $('importInput').click());
     if (typeof window.GamesPWARefreshControls === 'function') window.GamesPWARefreshControls();
-    else bind('installButton', () => { say('Safari: Share → Add to Home Screen → Add. Offline is ready only after the status confirms caching.'); close(); });
+    else bind('installButton', () => { say('Safari: Share → Add to Home Screen → Add. Offline is ready only after caching finishes.'); close(); });
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
+  }
+  function settings() {
+    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">These controls are kept only in this game’s preferences.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'));
+    bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
+    bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
+    bind('sizeButton', () => { prefs.buttonSize = prefs.buttonSize >= 1.2 ? .9 : +(prefs.buttonSize + .1).toFixed(2); savePrefs(); settings(); });
+    bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); settings(); }); bind('backMenu', menu);
   }
   function stages() {
     let cards = '';
     for (let i = 0; i <= state.unlocked; i++) cards += '<button class="recipe-card" data-stage="' + i + '"><strong>' + (i + 1) + '. ' + escape(R.STAGES[i].name) + '</strong><span>' + escape(R.STAGES[i].goalText) + (state.completed.includes(i) ? ' · Complete' : '') + '</span></button>';
     open('<p class="eyebrow">CAMPAIGN MAP</p><h2>Choose an unlocked island</h2><div class="recipe-grid">' + cards + '</div>' + button('backMenu', 'Back', 'secondary'));
-    panel.querySelectorAll('[data-stage]').forEach(node => node.addEventListener('click', () => { const number = Number(node.dataset.stage); if (number <= state.unlocked) { R.startStage(state, number, false); previousStageComplete = false; world = R.makeWorld(state.stage, state.edits, state.seed); target = null; durableSave(); updateUI(); close(); } }));
+    panel.querySelectorAll('[data-stage]').forEach(node => node.addEventListener('click', () => { const stage = Number(node.dataset.stage); if (stage <= state.unlocked) { R.startStage(state, stage, false); loadStage(); durableSave(); updateUI(); close(); } }));
     bind('backMenu', menu);
   }
   function craftMenu() {
     let recipes = '';
     for (const [name, recipe] of Object.entries(R.RECIPES)) {
       const need = Object.entries(recipe.cost).map(([item, amount]) => amount + ' ' + item).join(' · ');
-      const blocked = recipe.requires && !state.inventory[recipe.requires];
-      recipes += '<button class="recipe-card" data-recipe="' + name + '"' + (blocked ? ' disabled' : '') + '><strong>' + escape(recipe.label) + '</strong><span>' + escape(need + (recipe.requires ? ' · needs ' + recipe.requires : '')) + '</span></button>';
+      recipes += '<button class="recipe-card" data-recipe="' + name + '"' + (recipe.requires && !state.inventory[recipe.requires] ? ' disabled' : '') + '><strong>' + escape(recipe.label) + '</strong><span>' + escape(need + (recipe.requires ? ' · needs ' + recipe.requires : '')) + '</span></button>';
     }
-    open('<p class="eyebrow">FIELD CRAFTING</p><h2>Make what you need</h2><p class="lead">Crafting consumes only the listed resources. Tools stay in your pack after a stage retry.</p><div class="recipe-grid">' + recipes + '</div>' + button('closeCraft', 'Back to island', 'secondary'));
+    open('<p class="eyebrow">FIELD CRAFTING</p><h2>Make what you need</h2><p class="lead">Recipes consume exactly the listed resources. Better tools unlock tougher materials.</p><div class="recipe-grid">' + recipes + '</div>' + button('closeCraft', 'Back to island', 'secondary'));
     panel.querySelectorAll('[data-recipe]').forEach(node => node.addEventListener('click', () => { const result = R.craft(state, node.dataset.recipe); say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger'); if (result.ok) { durableSave(); updateUI(); handleCompletion(); } craftMenu(); }));
     bind('closeCraft', close);
   }
   function completion() {
-    completionOpen = true; running = false;
-    const final = state.stage === R.STAGES.length - 1;
+    completionOpen = true; const final = state.stage === R.STAGES.length - 1;
     open('<div class="complete-mark">' + (final ? '✦' : '✓') + '</div><p class="eyebrow">' + (final ? 'AURORA RESTORED' : 'ISLAND COMPLETE') + '</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">' + escape(state.message) + '</p>' + (final ? button('finishButton', 'Explore the islands') : button('nextIsland', 'Travel to ' + escape(R.STAGES[state.stage + 1].name))) + button('mapButton', 'Campaign map', 'secondary'));
     if (final) bind('finishButton', close);
-    else bind('nextIsland', () => { R.startStage(state, state.stage + 1, false); previousStageComplete = false; world = R.makeWorld(state.stage, state.edits, state.seed); target = null; durableSave(); updateUI(); close(); });
+    else bind('nextIsland', () => { R.startStage(state, state.stage + 1, false); loadStage(); durableSave(); updateUI(); close(); });
     bind('mapButton', stages);
   }
-  function downloadSave() {
-    const blob = new Blob([JSON.stringify(window.GameApp.exportSave(), null, 2)], { type: 'application/json' });
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'block-islands-save.json'; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 500); say('Save backup downloaded.');
+  function retry() { R.retryStage(state); loadStage(); durableSave(); updateUI(); close(); say('Back at camp with most of your pack.'); }
+  function handleCompletion() { if (state.stageComplete && !previousStageComplete) { previousStageComplete = true; durableSave(); setTimeout(completion, 120); } }
+  function downloadSave() { const blob = new Blob([JSON.stringify(window.GameApp.exportSave(), null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'block-islands-save.json'; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 500); say('Save backup downloaded.'); }
+
+  function setBlock(x, y, z, material, source) {
+    if (x < 0 || z < 0 || x >= R.SIZE || z >= R.SIZE || y < 0 || y > 24) return;
+    blocks.set(R.voxelKey(x, y, z), { x, y, z, material, source: source || 'terrain' });
+  }
+  function groundMaterial(cell, y) {
+    if (y < cell.h - 1) return y === 0 ? 'stone' : 'dirt';
+    if (cell.surface === 'sand' || cell.surface === 'ice' || cell.surface === 'basalt') return cell.surface;
+    return cell.h > 1 ? 'stone' : 'grass';
+  }
+  function visibleMaterial(material) {
+    return ({ berry: 'leaves', relic: 'beacon', leaf: 'leaves' })[material] || material;
+  }
+  function populateTerrain() {
+    blocks = new Map();
+    for (const cell of world.cells) {
+      for (let y = 0; y < cell.h; y++) setBlock(cell.x, y, cell.y, groundMaterial(cell, y), 'base');
+      if (cell.water) setBlock(cell.x, 0, cell.y, 'water', 'fluid');
+      if (cell.lava) setBlock(cell.x, 0, cell.y, 'lava', 'fluid');
+      if (cell.resource) {
+        setBlock(cell.x, cell.h, cell.y, visibleMaterial(cell.resource), 'resource');
+        // A few authored trees make a navigable forest.  Treating every
+        // randomized wood resource as a full tree produced a solid wall of
+        // trunks on a phone-sized first-person view.
+        // The camp's harvestable logs stay low, leaving its first-person
+        // opening sky and route readable. Later forest resources grow into
+        // full trees for exploration silhouettes.
+        const tree = cell.resource === 'wood' && state.stage !== 0 && (cell.x * 7 + cell.y * 3) % 5 === 0;
+        if (tree) {
+          setBlock(cell.x, cell.h + 1, cell.y, 'wood', 'decor');
+          for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) if (dx || dz) setBlock(cell.x + dx, cell.h + 3, cell.y + dz, 'leaves', 'decor');
+          setBlock(cell.x, cell.h + 3, cell.y, 'leaves', 'decor');
+          setBlock(cell.x, cell.h + 4, cell.y, 'leaves', 'decor');
+        }
+      } else if (cell.bridge) setBlock(cell.x, cell.h, cell.y, 'plank', 'bridge');
+      else for (let i = 0; i < cell.extra.length; i++) setBlock(cell.x, cell.h + i, cell.y, cell.extra[i], 'extra');
+    }
+    const stage = R.STAGES[state.stage];
+    if (stage.biome === 'settlement') for (let x = 12; x < 16; x++) { setBlock(x, 2, 13, 'plank', 'landmark'); setBlock(x, 3, 13, 'leaves', 'landmark'); }
+    if (stage.biome === 'forge') { setBlock(10, 2, 10, 'basalt', 'landmark'); setBlock(10, 3, 10, 'ore', 'landmark'); }
+    if (stage.biome === 'aurora') { setBlock(14, 3, 14, 'crystal', 'landmark'); setBlock(14, 4, 14, 'crystal', 'landmark'); }
+    for (const [name, material] of Object.entries(state.voxelEdits || {})) {
+      const [x, y, z] = name.split(',').map(Number);
+      if (material === null) blocks.delete(name); else setBlock(x, y, z, material, 'custom');
+    }
+    renderBlocks = Array.from(blocks.values()).map(({ x, y, z, material }) => ({ x, y, z, material }));
+  }
+  function topAt(x, z) { let top = -1; for (let y = 0; y <= 24; y++) { const block = getBlock(x, y, z); if (block && !fluid(block)) top = y; } return top; }
+  function footingTopAt(x, z) {
+    let top = -1;
+    for (let y = 0; y <= 24; y++) {
+      const block = getBlock(x, y, z);
+      if (block && !fluid(block) && block.material !== 'leaves' && block.source !== 'decor') top = y;
+    }
+    return top;
+  }
+  function getBlock(x, y, z) { return blocks.get(R.voxelKey(x, y, z)); }
+  // Foliage remains visible and casts body shadows, but it is not an invisible
+  // interaction wall in front of a tree trunk.
+  function rayBlock(x, y, z) { const block = getBlock(x, y, z); return block && block.material !== 'leaves' ? block : null; }
+  function fluid(block) { return block && (block.material === 'water' || block.material === 'lava'); }
+  function rebuildWorld() {
+    populateTerrain(); worldRevision++;
+    if (renderer) renderer.setWorld(renderBlocks, worldRevision);
+    updateTarget();
+  }
+  function derivePose() {
+    const stored = state.pose;
+    if (stored) pose = { x: stored.x, y: stored.y, z: stored.z, yaw: stored.yaw, pitch: stored.pitch, vy: 0, grounded: false };
+    else {
+      // Begin in an open part of the clearing, framing the authored logs and
+      // pale rock rather than spawning the camera inside a landmark.
+      const camp = state.stage === 0 && !state.creative;
+      const x = camp ? 1.5 : clamp(state.player.x, .5, R.SIZE - .5), z = camp ? 1.5 : clamp(state.player.y, .5, R.SIZE - .5);
+      // Yaw -2.25 points toward the camp's real wood/stone objectives.
+      pose = { x, z, y: Math.max(1, footingTopAt(Math.floor(x), Math.floor(z)) + 1) + EYE + .02, yaw: camp ? -2.25 : .15, pitch: camp ? -.08 : -.28, vy: 0, grounded: true };
+    }
+    if (collides(pose.x, pose.y - EYE)) pose.y = Math.max(1, footingTopAt(Math.floor(pose.x), Math.floor(pose.z)) + 1) + EYE + .03;
+  }
+  function loadStage() {
+    world = R.makeWorld(state.stage, state.edits, state.seed, state.worldVersion); target = null; previousStageComplete = !!state.stageComplete; populateTerrain(); derivePose(); rebuildWorld();
+    if (renderer) renderer.setWorld(renderBlocks, worldRevision);
+  }
+  function ensureRenderer() {
+    if (renderer || !V || typeof V.createRenderer !== 'function') return !!renderer;
+    try { renderer = V.createRenderer(canvas); resize(); renderer.setWorld(renderBlocks, worldRevision); return true; }
+    catch (_) { say('This browser could not start the 3D island view. Try a current browser with WebGL enabled.'); return false; }
+  }
+  function resize() {
+    const landscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
+    $('statusLine').style.top = landscape ? '108px' : '142px';
+    if (!renderer) return;
+    const rect = canvas.getBoundingClientRect(); renderer.resize(rect.width, rect.height, window.devicePixelRatio || 1);
+  }
+
+  function collides(x, feet, z) {
+    const x0 = Math.floor(x - RADIUS + .001), x1 = Math.floor(x + RADIUS - .001);
+    const z0 = Math.floor(z - RADIUS + .001), z1 = Math.floor(z + RADIUS - .001);
+    const y0 = Math.floor(feet + .03), y1 = Math.floor(feet + BODY - .03);
+    for (let bx = x0; bx <= x1; bx++) for (let bz = z0; bz <= z1; bz++) for (let by = y0; by <= y1; by++) { const block = getBlock(bx, by, bz); if (block && !fluid(block) && block.material !== 'leaves') return true; }
+    return false;
+  }
+  function tryHorizontal(dx, dz) {
+    const feet = pose.y - EYE, beforeX = pose.x, beforeZ = pose.z;
+    pose.x = clamp(pose.x + dx, .2, R.SIZE - .2);
+    if (collides(pose.x, feet, pose.z)) {
+      pose.y += .62;
+      if (collides(pose.x, pose.y - EYE, pose.z)) { pose.x = beforeX; pose.y -= .62; } else pose.grounded = true;
+    }
+    pose.z = clamp(pose.z + dz, .2, R.SIZE - .2);
+    if (collides(pose.x, pose.y - EYE, pose.z)) {
+      pose.y += .62;
+      if (collides(pose.x, pose.y - EYE, pose.z)) { pose.z = beforeZ; pose.y -= .62; } else pose.grounded = true;
+    }
+  }
+  function isInWater() {
+    const block = getBlock(Math.floor(pose.x), Math.floor(pose.y - EYE + .2), Math.floor(pose.z));
+    return block && block.material === 'water';
+  }
+  function updatePhysics(dt) {
+    const forward = (input.keys.has('w') || input.keys.has('arrowup') ? 1 : 0) - (input.keys.has('s') || input.keys.has('arrowdown') ? 1 : 0) - input.joy.y;
+    const sideways = (input.keys.has('d') || input.keys.has('arrowright') ? 1 : 0) - (input.keys.has('a') || input.keys.has('arrowleft') ? 1 : 0) + input.joy.x;
+    const length = Math.hypot(forward, sideways) || 1, speed = isInWater() ? 2 : 3.55;
+    if (forward || sideways) {
+      const f = forward / length * speed * dt, s = sideways / length * speed * dt;
+      // The renderer's contract is yaw 0 → -Z and positive yaw → -X.
+      // Keep movement on exactly the same axes as the camera.
+      tryHorizontal(-Math.sin(pose.yaw) * f + Math.cos(pose.yaw) * s, -Math.cos(pose.yaw) * f - Math.sin(pose.yaw) * s);
+    }
+    const feet = pose.y - EYE;
+    pose.vy += (isInWater() ? -7 : -17) * dt;
+    pose.vy = Math.max(pose.vy, -11);
+    pose.y += pose.vy * dt;
+    if (collides(pose.x, pose.y - EYE, pose.z)) {
+      if (pose.vy < 0) { let safe = pose.y; while (collides(pose.x, safe - EYE, pose.z) && safe < 28) safe += .03; pose.y = safe; pose.grounded = true; }
+      else pose.y = feet + EYE;
+      pose.vy = 0;
+    } else pose.grounded = false;
+    if (pose.y < -3) { pose.y = Math.max(1, topAt(Math.floor(pose.x), Math.floor(pose.z)) + 1) + EYE; pose.vy = 0; say('The current carried you back to solid ground.'); }
+    const cell = R.getCell(world, Math.floor(pose.x), Math.floor(pose.z));
+    if (cell && cell.lava && performance.now() - lastDamage > 900) { state.player.health = Math.max(0, state.player.health - .7); lastDamage = performance.now(); buzz('danger'); }
+    // Campaign enemies and spatial objectives retain the published rule model;
+    // continuously mirror the physical body into its legacy x/z coordinates.
+    state.player.x = pose.x; state.player.y = pose.z; R.checkGoal(state);
+  }
+  function jump() {
+    if (!running) return;
+    if (pose.grounded || isInWater()) { pose.vy = isInWater() ? 4 : 5.6; pose.grounded = false; buzz('mine'); scheduleSave(); }
+  }
+
+  function fallbackRaycast(origin, direction, maxDistance) {
+    let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+    if (rayBlock(x, y, z)) return { x, y, z, normal: { x: 0, y: 0, z: 0 }, block: rayBlock(x, y, z) };
+    const dx = direction.x || 1e-9, dy = direction.y || 1e-9, dz = direction.z || 1e-9;
+    const stepX = dx > 0 ? 1 : -1, stepY = dy > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
+    let tx = ((dx > 0 ? x + 1 - origin.x : origin.x - x) / Math.abs(dx)), ty = ((dy > 0 ? y + 1 - origin.y : origin.y - y) / Math.abs(dy)), tz = ((dz > 0 ? z + 1 - origin.z : origin.z - z) / Math.abs(dz));
+    const ddx = 1 / Math.abs(dx), ddy = 1 / Math.abs(dy), ddz = 1 / Math.abs(dz); let distance = 0, normal = { x: 0, y: 0, z: 0 };
+    while (distance <= maxDistance) {
+      if (tx < ty && tx < tz) { x += stepX; distance = tx; tx += ddx; normal = { x: -stepX, y: 0, z: 0 }; }
+      else if (ty < tz) { y += stepY; distance = ty; ty += ddy; normal = { x: 0, y: -stepY, z: 0 }; }
+      else { z += stepZ; distance = tz; tz += ddz; normal = { x: 0, y: 0, z: -stepZ }; }
+      const block = rayBlock(x, y, z); if (block) return { x, y, z, normal, block, distance };
+    }
+    return null;
+  }
+  function direction() {
+    const vector = V && typeof V.forward === 'function' ? V.forward(pose.yaw, pose.pitch) : [-Math.sin(pose.yaw) * Math.cos(pose.pitch), Math.sin(pose.pitch), -Math.cos(pose.yaw) * Math.cos(pose.pitch)];
+    return { x: vector[0], y: vector[1], z: vector[2] };
+  }
+  function normalizeRay(ray) {
+    if (!ray) return null;
+    const coordinates = Array.isArray(ray.block) ? ray.block : [ray.x, ray.y, ray.z];
+    const [x, y, z] = coordinates;
+    const block = getBlock(x, y, z) || (!Array.isArray(ray.block) && ray.block);
+    const sourceNormal = ray.normal || ray.face || [0, 0, 0];
+    const normal = Array.isArray(sourceNormal) ? { x: sourceNormal[0], y: sourceNormal[1], z: sourceNormal[2] } : sourceNormal;
+    return Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z) && block ? { x, y, z, normal, block, material: block.material || ray.material || block } : null;
+  }
+  function updateTarget() {
+    const now = performance.now(); if (now - lastTargetAt < 20) return; lastTargetAt = now;
+    const origin = { x: pose.x, y: pose.y, z: pose.z }, dir = direction();
+    let ray = null;
+    try { if (V && typeof V.raycast === 'function') ray = V.raycast((x, y, z) => rayBlock(x, y, z), [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 5); } catch (_) {}
+    target = normalizeRay(ray) || fallbackRaycast(origin, dir, 5);
+    const tag = $('targetTag');
+    if (target && target.block && !fluid(target.block)) { tag.hidden = false; tag.textContent = String(target.material).replace(/^./, m => m.toUpperCase()) + ' · ' + (target.block.source === 'resource' ? 'hold Mine' : 'mine / build'); }
+    else tag.hidden = true;
+  }
+  function bodyWouldOverlap(x, y, z) {
+    const foot = pose.y - EYE;
+    return x + 1 > pose.x - RADIUS && x < pose.x + RADIUS && z + 1 > pose.z - RADIUS && z < pose.z + RADIUS && y + 1 > foot && y < foot + BODY;
+  }
+  function mineTarget(hit) {
+    if (!hit || !hit.block) return { ok: false, reason: 'Aim at a block within reach first.' };
+    const block = hit.block;
+    if (block.source === 'decor' || block.source === 'landmark') {
+      if (!R.setVoxelEdit(state, hit.x, hit.y, hit.z, null)) return { ok: false, reason: 'That foliage cannot be cleared here.' };
+      rebuildWorld(); state.message = 'Cleared foliage.'; return { ok: true };
+    }
+    if (block.source === 'custom') {
+      const material = block.material;
+      R.setVoxelEdit(state, hit.x, hit.y, hit.z, null);
+      if (!state.creative && R.INVENTORY_KEYS.includes(material)) state.inventory[material] = (state.inventory[material] || 0) + 1;
+      state.mined[material] = (state.mined[material] || 0) + 1; rebuildWorld(); state.message = '+1 ' + material + '.'; return { ok: true };
+    }
+    const cell = R.getCell(world, hit.x, hit.z);
+    if (!cell) return { ok: false, reason: 'That block is beyond the island.' };
+    const expected = block.source === 'resource' ? cell.h : block.source === 'bridge' ? cell.h : block.source === 'extra' ? cell.h + cell.extra.length - 1 : cell.h - 1;
+    if (hit.y !== expected) return { ok: false, reason: 'Mine the exposed top layer, not through the rock.' };
+    state.player.x = pose.x; state.player.y = pose.z;
+    const result = R.mine(state, world, hit.x, hit.z);
+    if (result.ok) rebuildWorld();
+    return result;
+  }
+  function genericPlace(x, y, z, item) {
+    if (!state.creative && !(state.inventory[item] > 0)) return { ok: false, reason: 'You do not have that block.' };
+    if (!R.setVoxelEdit(state, x, y, z, item)) return { ok: false, reason: 'That spot is outside the build boundary.' };
+    if (!state.creative) state.inventory[item]--;
+    state.placed[item] = (state.placed[item] || 0) + 1;
+    state.message = 'Placed ' + item + '.'; R.checkGoal(state); rebuildWorld(); return { ok: true };
+  }
+  function placeTarget() {
+    if (!target) return say('Aim at a nearby face before placing.');
+    const normal = target.normal || {}, x = target.x + (normal.x || 0), y = target.y + (normal.y || 0), z = target.z + (normal.z || 0);
+    if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z) || x < 0 || z < 0 || x >= R.SIZE || z >= R.SIZE || y < 0 || y > 24) return say('That face is outside the island build boundary.');
+    if (getBlock(x, y, z) || bodyWouldOverlap(x, y, z)) return say('There is no room to place a block there.');
+    const columnTop = topAt(x, z), cell = R.getCell(world, x, z);
+    let result;
+    if (cell && y === columnTop + 1) { state.player.x = pose.x; state.player.y = pose.z; result = R.place(state, world, x, z, selectedBlock); if (result.ok) rebuildWorld(); }
+    else result = genericPlace(x, y, z, selectedBlock);
+    say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger');
+    if (result.ok) { durableSave(); updateUI(); handleCompletion(); }
+  }
+  function attack() {
+    let chosen = null, best = Infinity, dir = direction();
+    for (const enemy of state.enemies) if (enemy.alive) {
+      const dx = enemy.x - pose.x, dz = enemy.y - pose.z, distance = Math.hypot(dx, dz);
+      if (distance > 3.3) continue;
+      const facing = (dx * dir.x + dz * dir.z) / Math.max(distance, .01);
+      if (facing > .3 && distance < best) { best = distance; chosen = enemy; }
+    }
+    const result = chosen ? R.attack(state, chosen.x, chosen.y) : { ok: false, reason: 'Aim at a nearby skitter to strike.' };
+    say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger');
+    if (result.ok) { durableSave(); updateUI(); handleCompletion(); }
+  }
+  function beginMine(event) {
+    event.preventDefault(); event.stopPropagation();
+    if (!running || !target || fluid(target.block)) { say('Aim at a solid block first.'); return; }
+    mineHold = { x: target.x, y: target.y, z: target.z, source: target.block.source, pointer: event.pointerId }; mining = 0;
+    $('mineProgress').removeAttribute('aria-hidden'); event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+  function endMine(event) {
+    if (event) event.stopPropagation();
+    mineHold = null; mining = 0; $('mineProgress').setAttribute('aria-hidden', 'true'); $('mineProgress').firstElementChild.style.width = '0%';
+  }
+  function updateMine(dt) {
+    if (!mineHold || !target || target.x !== mineHold.x || target.y !== mineHold.y || target.z !== mineHold.z || target.block.source !== mineHold.source) return endMine();
+    const block = target.block, duration = state.creative ? .08 : block.material === 'ore' || block.material === 'ice' ? .85 : block.material === 'crystal' || block.material === 'basalt' ? 1.15 : .48;
+    mining = Math.min(1, mining + dt / duration); $('mineProgress').firstElementChild.style.width = Math.round(mining * 100) + '%';
+    if (mining >= 1) {
+      const result = mineTarget(target); say(result.ok ? state.message : result.reason); buzz(result.ok ? 'mine' : 'danger');
+      endMine(); if (result.ok) { durableSave(); updateUI(); handleCompletion(); }
+    }
   }
   function updateUI() {
     const stage = R.STAGES[state.stage];
     $('stageNumber').textContent = state.creative ? 'CREATIVE SANDBOX' : 'ISLAND ' + (state.stage + 1) + ' / 12';
-    $('stageName').textContent = stage.name; $('goalText').textContent = stage.goalText;
-    $('questProgress').textContent = state.stageComplete ? 'Complete — choose your next island.' : stage.goalText;
-    $('healthText').textContent = Math.max(0, Math.ceil(state.player.health));
-    const phase = Math.floor(state.time / 18) % 2; $('dayClock').textContent = phase ? 'NIGHT' : 'DAY';
-    const bar = $('hotbar'); let html = '';
-    for (const item of ['plank', 'dirt', 'stone', 'basalt', 'beacon']) {
-      const count = state.creative ? '∞' : state.inventory[item] || 0;
-      html += '<button class="slot ' + (selectedBlock === item ? 'selected' : '') + '" data-block="' + item + '"' + (!state.creative && !state.inventory[item] ? ' disabled' : '') + '>' + item + '<em>' + count + '</em></button>';
-    }
-    bar.innerHTML = html;
-    bar.querySelectorAll('[data-block]').forEach(node => node.addEventListener('click', () => { selectedBlock = node.dataset.block; updateUI(); say('Selected ' + selectedBlock + '.'); }));
-    if (target) { const cell = R.getCell(world, target.x, target.y); if (cell) { $('targetTag').hidden = false; $('targetTag').textContent = R.cellMaterial(cell) + ' · height ' + (R.topHeight(cell) || 0); } } else $('targetTag').hidden = true;
-    requestAnimationFrame(positionHud);
+    $('stageName').textContent = stage.name; $('questProgress').textContent = state.stageComplete ? 'Complete — choose your next island.' : stage.goalText;
+    $('healthText').textContent = Math.max(0, Math.ceil(state.player.health)); $('dayClock').textContent = Math.floor(state.time / 18) % 2 ? 'NIGHT' : 'DAY';
+    $('heldReadout').textContent = (selectedBlock === 'plank' && state.inventory.stonePick ? 'Stone pick' : selectedBlock) + ' · ' + (state.creative ? '∞' : state.inventory[selectedBlock] || 0);
+    const colors = { plank: '#b77b49', dirt: '#8e6745', stone: '#8997a0', basalt: '#59616b', beacon: '#91e4d6' };
+    $('hotbar').innerHTML = ['plank', 'dirt', 'stone', 'basalt', 'beacon'].map(item => '<button class="slot ' + (selectedBlock === item ? 'selected' : '') + '" data-block="' + item + '"' + (!state.creative && !state.inventory[item] ? ' disabled' : '') + '><span style="background:' + colors[item] + '"></span>' + item + '<em>' + (state.creative ? '∞' : state.inventory[item] || 0) + '</em></button>').join('');
+    $('hotbar').querySelectorAll('[data-block]').forEach(node => node.addEventListener('click', event => { event.stopPropagation(); selectedBlock = node.dataset.block; updateUI(); say('Selected ' + selectedBlock + '.'); }));
   }
-  function action(name) {
-    let result;
-    if (name === 'mine') result = target ? R.mine(state, world, target.x, target.y) : { ok: false, reason: 'Aim at a nearby block first.' };
-    else if (name === 'place') result = target ? R.place(state, world, target.x, target.y, selectedBlock) : { ok: false, reason: 'Aim at a nearby block first.' };
-    else result = R.attack(state, target ? target.x : state.player.x, target ? target.y : state.player.y);
-    say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger');
-    if (result.ok) { durableSave(); updateUI(); handleCompletion(); }
-  }
-  function moveBy(dx, dy) {
-    if (!running) return;
-    const result = R.move(state, world, dx, dy); if (!result.ok) say(result.reason); else if (result.water) say('Wading is slow. Build planks for a safe crossing.');
-    if (result.ok) scheduleSave();
-    updateUI(); handleCompletion();
-  }
-  function handleCompletion() { if (!state.creative && state.stageComplete && !previousStageComplete) { durableSave(); setTimeout(completion, 160); } previousStageComplete = state.stageComplete; }
-  function retry() { R.retryStage(state); world = R.makeWorld(state.stage, state.edits, state.seed); target = null; previousStageComplete = false; durableSave(); updateUI(); close(); say('Back at camp with most of your pack.'); }
 
-  function positionHud() {
-    const portrait = window.matchMedia && window.matchMedia('(max-width:540px) and (orientation:portrait)').matches;
-    if (!portrait) { $('statusLine').style.top = ''; return; }
-    const appTop = $('app').getBoundingClientRect().top;
-    $('statusLine').style.top = Math.ceil($('questCard').getBoundingClientRect().bottom - appTop + 8) + 'px';
+  function clearInputs() {
+    input.joy.x = input.joy.y = 0; input.joy.pointer = null; input.look = null; input.keys.clear(); endMine();
+    const knob = $('joyKnob'); knob.style.transform = 'translate(-50%,-50%)';
   }
-  function resize() {
-    const rect = canvas.getBoundingClientRect();
-    const pixelBudget = 12000000;
-    const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(pixelBudget / Math.max(1, rect.width * rect.height)));
-    view.width = rect.width; view.height = rect.height; view.dpr = dpr; view.scale = Math.max(17, Math.min(39, Math.min(rect.width / 15.5, rect.height / 9.2)));
-    if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) { canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); }
-    pickMap = new Array(R.SIZE * R.SIZE); renderOrder = new Array(R.SIZE * R.SIZE);
-    let index = 0; for (let total = 0; total <= (R.SIZE - 1) * 2; total++) for (let y = 0; y < R.SIZE; y++) { const x = total - y; if (x >= 0 && x < R.SIZE) renderOrder[index++] = { x, y }; }
-    for (let i = 0; i < pickMap.length; i++) pickMap[i] = { x: 0, y: 0, sx: 0, sy: 0 };
-    positionHud();
+  function moveStart(event) {
+    if (!running) return; event.preventDefault(); event.stopPropagation(); input.joy.pointer = event.pointerId; event.currentTarget.setPointerCapture?.(event.pointerId); updateJoy(event);
   }
-  function raw(x, y, z) { return { x: (x - y) * view.scale * .78, y: (x + y) * view.scale * .4 - z * view.scale * .68 }; }
-  function point(x, y, z) { const p = raw(x, y, z); return { x: view.centerX + p.x - view.cameraX, y: view.centerY + p.y - view.cameraY }; }
-  function color(base, amount) { const num = parseInt(base.slice(1), 16); const r = clamp((num >> 16) + amount, 0, 255) | 0; const g = clamp(((num >> 8) & 255) + amount, 0, 255) | 0; const b = clamp((num & 255) + amount, 0, 255) | 0; return '#' + (r << 16 | g << 8 | b).toString(16).padStart(6, '0'); }
-  const PALETTE = { dirt: '#8a6845', sand: '#d6b169', ice: '#a7dbe0', basalt: '#55606e', stone: '#7c8791', wood: '#77523c', ore: '#c77b4e', crystal: '#75e3df', berry: '#bf4e69', plank: '#a8794b', beacon: '#a6f0e4', relic: '#e4b85b' };
-  function polygon(points, fill, stroke) { ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y); for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); } }
-  function cube(x, y, z, material, size) {
-    const s = size || 1; const a = point(x, y, z + s), b = point(x + s, y, z + s), c = point(x + s, y + s, z + s), d = point(x, y + s, z + s);
-    const aa = point(x, y, z), bb = point(x + s, y, z), cc = point(x + s, y + s, z);
-    const base = PALETTE[material] || PALETTE.dirt;
-    polygon([a, b, c, d], color(base, 18), '#00000015'); polygon([d, c, cc, point(x, y + s, z)], color(base, -13), '#00000013'); polygon([b, c, cc, bb], color(base, -29), '#00000013');
+  function updateJoy(event) {
+    if (event.pointerId !== input.joy.pointer) return;
+    const rect = $('moveZone').getBoundingClientRect(), cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2, max = Math.min(rect.width, rect.height) * .29;
+    let dx = event.clientX - cx, dy = event.clientY - cy, length = Math.hypot(dx, dy) || 1;
+    if (length > max) { dx *= max / length; dy *= max / length; }
+    input.joy.x = dx / max; input.joy.y = dy / max; $('joyKnob').style.transform = 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px))';
   }
-  function diamond(x, y, z, fill, outline) { polygon([point(x, y, z), point(x + 1, y, z), point(x + 1, y + 1, z), point(x, y + 1, z)], fill, outline); }
-  function drawResource(cell, z) {
-    const type = cell.resource; if (!type) return;
-    if (type === 'wood') { cube(cell.x + .34, cell.y + .34, z, 'wood', .32); cube(cell.x + .14, cell.y + .14, z + .32, 'wood', .72); ctx.globalAlpha = .92; cube(cell.x + .02, cell.y + .02, z + .83, 'berry', .96); ctx.globalAlpha = 1; }
-    else if (type === 'berry') { cube(cell.x + .2, cell.y + .2, z, 'berry', .6); }
-    else if (type === 'crystal') { cube(cell.x + .3, cell.y + .3, z, 'crystal', .42); cube(cell.x + .56, cell.y + .44, z, 'crystal', .25); }
-    else if (type === 'ore' || type === 'relic') { cube(cell.x + .24, cell.y + .24, z, type, .52); }
-    else if (type === 'stone' || type === 'sand' || type === 'ice') { cube(cell.x + .2, cell.y + .2, z, type, .58); }
+  function lookStart(event) {
+    if (!running || event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault(); input.look = { pointer: event.pointerId, x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture?.(event.pointerId);
   }
-  function render() {
-    if (!ctx) return;
-    const expectedDpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(12000000 / Math.max(1, view.width * view.height)));
-    if (Math.abs(expectedDpr - view.dpr) > .01) resize();
-    const stage = R.STAGES[state.stage]; const night = (Math.sin(state.time / 18 * Math.PI) + 1) * .5;
-    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0); ctx.clearRect(0, 0, view.width, view.height);
-    ctx.fillStyle = night < .18 ? '#152940' : '#7bcde0'; ctx.fillRect(0, 0, view.width, view.height);
-    const current = R.getCell(world, Math.floor(state.player.x), Math.floor(state.player.y)); const camera = raw(state.player.x, state.player.y, current ? R.topHeight(current) : 1);
-    view.centerX = view.width * .5; view.centerY = view.height * .51; view.cameraX = camera.x; view.cameraY = camera.y; view.cameraZ = 0;
-    for (let n = 0; n < renderOrder.length; n++) {
-      const cell = R.getCell(world, renderOrder[n].x, renderOrder[n].y); const projected = point(cell.x + .5, cell.y + .5, R.topHeight(cell));
-      const pick = pickMap[cell.y * R.SIZE + cell.x]; pick.x = cell.x; pick.y = cell.y; pick.sx = projected.x; pick.sy = projected.y;
-      if (projected.x < -view.scale * 4 || projected.x > view.width + view.scale * 4 || projected.y < -view.scale * 5 || projected.y > view.height + view.scale * 5) continue;
-      if (cell.water || cell.lava) diamond(cell.x, cell.y, 0, cell.lava ? '#e35f3f' : '#55b7c4', '#ffffff35');
-      for (let z = 0; z < cell.h; z++) cube(cell.x, cell.y, z, z === cell.h - 1 ? cell.surface : 'dirt');
-      if (cell.bridge) cube(cell.x, cell.y, cell.h, 'plank');
-      for (let z = 0; z < cell.extra.length; z++) cube(cell.x, cell.y, cell.h + (cell.bridge ? 1 : 0) + z, cell.extra[z]);
-      drawResource(cell, R.topHeight(cell));
-    }
-    const goal = R.GOAL_SITES[state.stage];
-    if (goal) {
-      const marked = goal.cells ? goal.cells.slice() : [goal.cell];
-      if (goal.relic) marked.push(goal.relic);
-      ctx.save(); ctx.lineWidth = 3;
-      for (const site of marked) { const cell = R.getCell(world, site[0], site[1]); if (cell) diamond(cell.x, cell.y, R.topHeight(cell) + .06, 'rgba(255,223,102,.12)', '#ffe06d'); }
-      ctx.restore();
-    }
-    for (const enemy of state.enemies) if (enemy.alive) { const enemyCell = R.getCell(world, Math.floor(enemy.x), Math.floor(enemy.y)); const enemyZ = enemyCell ? R.topHeight(enemyCell) : 1; const p = point(enemy.x - .24, enemy.y - .24, enemyZ + .15); ctx.fillStyle = '#2d324c'; ctx.beginPath(); ctx.ellipse(p.x, p.y, view.scale * .24, view.scale * .16, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffcc72'; ctx.fillRect(p.x - 2, p.y - 1, 3, 2); }
-    const playerZ = current ? R.topHeight(current) : 1;
-    const pp = point(state.player.x - .18, state.player.y - .18, playerZ + .6); ctx.fillStyle = '#f6d7b4'; ctx.beginPath(); ctx.arc(pp.x, pp.y - view.scale * .24, view.scale * .15, 0, Math.PI * 2); ctx.fill(); cube(state.player.x - .28, state.player.y - .28, playerZ, state.creative ? 'crystal' : 'plank', .56);
-    if (target) { const cell = R.getCell(world, target.x, target.y); if (cell) diamond(cell.x, cell.y, R.topHeight(cell) + .03, 'rgba(255,241,143,.23)', '#fff1a0'); }
-    if (night < .3) { ctx.fillStyle = 'rgba(13,23,48,' + (.42 - night).toFixed(2) + ')'; ctx.fillRect(0, 0, view.width, view.height); }
+  function lookMove(event) {
+    if (!input.look || event.pointerId !== input.look.pointer) return;
+    event.preventDefault(); const factor = .006 * prefs.sensitivity; pose.yaw -= (event.clientX - input.look.x) * factor; pose.pitch = clamp(pose.pitch - (event.clientY - input.look.y) * factor, -1.42, 1.42); input.look.x = event.clientX; input.look.y = event.clientY;
   }
-  function aim(clientX, clientY) {
-    const rect = canvas.getBoundingClientRect(); const x = clientX - rect.left, y = clientY - rect.top; let best = null; let closest = Infinity;
-    for (const pick of pickMap) { const d = Math.hypot(x - pick.sx, y - pick.sy); if (d < closest) { closest = d; best = pick; } }
-    if (best && closest < Math.max(54, view.scale * 1.7)) { target = { x: best.x, y: best.y }; const aimed = R.getCell(world, best.x, best.y); const inRange = Math.hypot(state.player.x - best.x - .5, state.player.y - best.y - .5) <= 3.9; say(inRange ? 'Aimed at ' + R.cellMaterial(aimed) + ' — Mine removes its top layer; Place builds above it.' : 'Aim set — move closer to interact.'); updateUI(); }
+  function keyboard(event, down) {
+    const key = event.key.toLowerCase();
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+    if (key === ' ') { if (down && !event.repeat) jump(); return; }
+    if (key === 'e' && down && !event.repeat) { beginMine({ preventDefault() {}, stopPropagation() {}, pointerId: -1, currentTarget: $('mineButton') }); return; }
+    if (key === 'q' && down && !event.repeat) { placeTarget(); return; }
+    if (key === 'f' && down && !event.repeat) { attack(); return; }
+    if (key === 'escape' && down && !event.repeat) { overlay.classList.contains('open') ? close() : menu(); return; }
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) down ? input.keys.add(key) : input.keys.delete(key);
+  }
+  function entities() {
+    return state.enemies.filter(e => e.alive).map(e => ({
+      x: e.x, y: Math.max(topAt(Math.floor(e.x), Math.floor(e.y)) + 1, 1), z: e.y,
+      team: 'enemy', heading: Math.atan2(pose.x - e.x, pose.z - e.y), walk: state.time * .6, attack: e.cooldown > .7 ? 1 : 0
+    }));
   }
   function loop(now) {
-    const dt = Math.min(.08, Math.max(0, (now - lastTime) / 1000)); lastTime = now;
+    const dt = Math.min(.05, Math.max(0, (now - lastTime) / 1000)); lastTime = now;
     if (running && !document.hidden) {
+      updatePhysics(dt); handleCompletion(); updateTarget(); updateMine(dt);
       const ticked = R.tick(state, world, dt);
       if (ticked.defeated) { durableSave(); open('<p class="eyebrow">RECOVERY</p><h2>Back at camp</h2><p class="lead">The island wildlife overwhelmed you. Retrying keeps tools and most materials, but resets this island’s terrain and foes.</p>' + button('retryButton', 'Retry island') + button('mapAfterLoss', 'Campaign map', 'secondary')); bind('retryButton', retry); bind('mapAfterLoss', stages); }
-      else if (ticked.damaged) updateUI();
-      const phase = Math.floor(state.time / 18) % 2;
-      if (phase !== lastDayPhase) { lastDayPhase = phase; $('dayClock').textContent = phase ? 'NIGHT' : 'DAY'; }
-      if (!saveTimer && performance.now() - lastSavedAt >= 5000) durableSave();
+      else if (ticked.damaged) { buzz('danger'); updateUI(); }
+      if (!saveTimer && now - lastSavedAt > 5000) durableSave();
     }
-    render(); requestAnimationFrame(loop);
+    if (ensureRenderer()) {
+      try {
+        renderer.render({
+          camera: { position: [pose.x, pose.y, pose.z], yaw: pose.yaw, pitch: pose.pitch, fov: 82 }, time: state.time,
+          daylight: clamp(.7 + Math.sin(state.time / 18 * Math.PI) * .24, .34, .94),
+          target: target && { block: [target.x, target.y, target.z], normal: [target.normal.x || 0, target.normal.y || 0, target.normal.z || 0], progress: mining },
+          entities: entities(), held: { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: mining }
+        });
+      } catch (_) {}
+    }
+    requestAnimationFrame(loop);
   }
 
-  $('menuButton').addEventListener('click', menu); $('mineButton').addEventListener('click', () => action('mine')); $('placeButton').addEventListener('click', () => action('place')); $('strikeButton').addEventListener('click', () => action('strike')); $('craftButton').addEventListener('click', craftMenu);
-  canvas.addEventListener('pointerdown', event => { aim(event.clientX, event.clientY); });
-  function startMove(direction) { const vectors = { up: [0, -.38], down: [0, .38], left: [-.38, 0], right: [.38, 0] }; const v = vectors[direction]; moveBy(v[0], v[1]); clearInterval(moveTimer); moveTimer = setInterval(() => moveBy(v[0], v[1]), 130); }
-  document.querySelectorAll('[data-move]').forEach(node => { node.addEventListener('pointerdown', event => { event.preventDefault(); startMove(node.dataset.move); }); node.addEventListener('pointerup', () => clearInterval(moveTimer)); node.addEventListener('pointercancel', () => clearInterval(moveTimer)); node.addEventListener('pointerleave', () => clearInterval(moveTimer)); });
-  window.addEventListener('pointerup', () => clearInterval(moveTimer));
-  window.addEventListener('keydown', event => { if (event.repeat || !running) return; const key = event.key.toLowerCase(); const vectors = { w: [0, -.38], arrowup: [0, -.38], s: [0, .38], arrowdown: [0, .38], a: [-.38, 0], arrowleft: [-.38, 0], d: [.38, 0], arrowright: [.38, 0] }; if (vectors[key]) { event.preventDefault(); moveBy(...vectors[key]); } else if (key === 'e') action('mine'); else if (key === 'q') action('place'); else if (key === ' ') { event.preventDefault(); action('strike'); } else if (key === 'escape') menu(); });
+  $('menuButton').addEventListener('click', event => { event.stopPropagation(); menu(); });
+  $('objectiveButton').addEventListener('click', event => { event.stopPropagation(); const node = event.currentTarget; node.setAttribute('aria-expanded', node.getAttribute('aria-expanded') !== 'true'); });
+  $('jumpButton').addEventListener('click', event => { event.stopPropagation(); jump(); });
+  $('placeButton').addEventListener('click', event => { event.stopPropagation(); placeTarget(); });
+  $('strikeButton').addEventListener('click', event => { event.stopPropagation(); attack(); });
+  $('craftButton').addEventListener('click', event => { event.stopPropagation(); craftMenu(); });
+  $('mineButton').addEventListener('pointerdown', beginMine); $('mineButton').addEventListener('pointerup', endMine); $('mineButton').addEventListener('pointercancel', endMine); $('mineButton').addEventListener('lostpointercapture', endMine);
+  $('moveZone').addEventListener('pointerdown', moveStart); $('moveZone').addEventListener('pointermove', updateJoy); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('moveZone').addEventListener(type, event => { if (event.pointerId === input.joy.pointer) clearInputs(); }));
+  $('lookZone').addEventListener('pointerdown', lookStart); $('lookZone').addEventListener('pointermove', lookMove); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('lookZone').addEventListener(type, event => { if (input.look && event.pointerId === input.look.pointer) input.look = null; }));
+  canvas.addEventListener('pointerdown', event => { if (event.pointerType === 'mouse' && running) lookStart(event); }); canvas.addEventListener('pointermove', lookMove); canvas.addEventListener('pointerup', () => { input.look = null; });
+  window.addEventListener('keydown', event => keyboard(event, true)); window.addEventListener('keyup', event => keyboard(event, false));
   $('importInput').addEventListener('change', event => { const file = event.target.files && event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { importSave(JSON.parse(String(reader.result))); } catch (_) { say('That file is not valid JSON. Your current journey is unchanged.'); } close(); }; reader.readAsText(file); event.target.value = ''; });
-  window.addEventListener('resize', resize); document.addEventListener('visibilitychange', () => { if (document.hidden) { durableSave(); clearInterval(moveTimer); } else lastTime = performance.now(); }); window.addEventListener('pagehide', durableSave);
-  resize(); updateUI(); welcome(loaded.recovered); requestAnimationFrame(loop);
+  window.addEventListener('resize', () => { clearInputs(); resize(); }); window.addEventListener('orientationchange', clearInputs); window.addEventListener('blur', clearInputs);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInputs(); durableSave(); } else lastTime = performance.now(); }); window.addEventListener('pagehide', durableSave);
+  applyPrefs(); loadStage(); updateUI(); welcome(loaded.recovered); requestAnimationFrame(loop);
 })();

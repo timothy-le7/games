@@ -30,6 +30,10 @@
 
 body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.stat-value{font-weight:650}.tribe-title strong{font-weight:650}.nav-button{font-weight:600}
 
+/* Atlas interface: broad touch targets and a compact independent branch ledger. */
+.map-tools button{width:44px;height:44px;border-radius:13px}.map-tools svg{width:20px;height:20px}.map-tools .zoom{font-size:27px}.ready-pill{min-height:44px;padding:8px 12px}.close-mini{width:44px;height:44px}.action{min-height:44px}.tech-map{display:block;overflow:auto;padding:12px 14px;background:linear-gradient(150deg,#e7ecdf,#d7e2d4)}#tech-tree{width:auto;max-height:none;overflow:visible}.tech-branch-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start}.tech-branch{padding:8px;border:1px solid #c3d1c2;border-radius:15px;background:#f6f5e9;box-shadow:0 3px 0 #60776518}.tech-branch h3{margin:1px 3px 7px;color:#496b69;font-size:10px;letter-spacing:.1em;text-transform:uppercase}.tech-path{display:grid;gap:5px}.tech-node{min-height:48px;border:1px solid #ccd7c9;border-radius:11px;background:#e5eadf;color:#315464;padding:6px 7px;display:grid;grid-template-columns:29px minmax(0,1fr) auto;align-items:center;gap:6px;text-align:left}.tech-node>svg{width:25px;height:25px;padding:4px;border-radius:8px;background:#d4dfd2}.tech-node b{font-size:10px;line-height:1.15}.tech-node small{display:block;margin-top:2px;color:#7a908b;font-size:8px}.tech-node .tech-cost{font-size:9px;color:#98752f;font-weight:800}.tech-node.learned{background:#d9ead9;border-color:#83aa8c}.tech-node.learned>svg{color:#fff;background:#56896b}.tech-node.chosen{outline:3px solid #d5a346;outline-offset:1px}.tech-node.locked{opacity:.64}.tribe-card .portrait,.tribe-summary .portrait,.contact-badge{filter:drop-shadow(0 3px 2px #173b4a30)}
+@media(max-width:360px){.tech-branch-cards{grid-template-columns:1fr}.tech-map{padding:9px}.map-tools button{width:44px;height:44px}}
+
 </style>
 <!-- data-poly-top-package -->
 <meta name="apple-mobile-web-app-title" content="Hexgame">
@@ -48,7 +52,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.s
  <nav class="nav"><button class="nav-button" id="menu-button"><span class="nav-disc" data-icon="menu"></span><span>Menu</span></button><button class="nav-button" id="stats-button" aria-label="Game statistics"><span class="nav-disc"><span id="stats-mark"></span></span><span>Game Stats</span></button><button class="nav-button" id="tech-button"><span class="nav-disc" data-icon="tech"></span><span>Tech Tree</span></button><button class="nav-button end-button" id="end-turn"><span class="nav-disc" data-icon="check"></span><span id="end-label">Next Turn</span></button></nav><div class="home-bar" aria-hidden="true"></div>
  <div class="toast" id="toast" role="status" aria-live="polite"></div><div class="turn-banner" id="turn-banner"><div><strong id="banner-title">Your turn</strong><span id="banner-subtitle"></span></div></div>
  <div class="modal-layer" id="modal-layer"><section class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Game menu"></section></div>
- <div class="modal-layer tech-layer" id="tech-layer"><section class="modal tech-modal" role="dialog" aria-modal="true" aria-label="Technology"><div class="tech-header"><button class="close-mini" id="close-tech" aria-label="Back to game"><span data-icon="back"></span></button><h2>Technology</h2><span class="price" id="tech-stars"></span></div><div class="tech-map"><svg id="tech-tree" viewBox="-20 -10 480 475" aria-label="Technology tree"></svg></div><div class="tech-detail" id="tech-detail"></div></section></div>
+ <div class="modal-layer tech-layer" id="tech-layer"><section class="modal tech-modal" role="dialog" aria-modal="true" aria-label="Technology"><div class="tech-header"><button class="close-mini" id="close-tech" aria-label="Back to game"><span data-icon="back"></span></button><h2>Technology</h2><span class="price" id="tech-stars"></span></div><div class="tech-map"><div id="tech-tree" class="tech-branch-cards" role="list" aria-label="Technology branches"></div></div><div class="tech-detail" id="tech-detail"></div></section></div>
 </main>
 <script>
 'use strict';
@@ -87,11 +91,41 @@ const TRIBES={
  hive:{name:'Hivekin',color:'#a6b749',dark:'#627331',light:'#d7e57b',start:'farming',unit:'shaman',special:true,super:'centipede',land:'#a3ba83',shade:'#758c65',roof:'#d69850',description:'Hive Tender · Fungi · Poisonous insect army',roster:{rider:'runnerbug',archer:'venomfly',defender:'shellbug',swordsman:'mantis',catapult:'spitter',mindbender:'shaman'}}
 };
 TRIBES.ridge.stars=7;
-const LAND_COLORS={crown:['#80bf20','#63a717'],pine:['#e7eef5','#c8d9e5'],ridge:['#82b844','#619431'],dune:['#d9be70','#bba15d'],coast:['#4bbd63','#23964e'],oak:['#98bb3b','#779a2b'],marble:['#88b53b','#649328'],iron:['#78757e','#55525f'],sunfield:['#c7b15c','#a38e42'],highland:['#9bb281','#778c68'],river:['#50a765','#29864c'],caravan:['#b8a272','#9a8359'],reef:['#69bfba','#429d98'],wildwood:['#a5d57a','#7fb350'],frost:['#e7f2f8','#c1dbe7'],hive:['#9eac61','#798a49']};
+const LAND_COLORS={crown:['#86ad63','#6f9554'],pine:['#dce8e2','#bdcec6'],ridge:['#91aa62','#748d51'],dune:['#d4bd7c','#b29a62'],coast:['#78ad71','#5b9161'],oak:['#94aa66','#748c52'],marble:['#8fa96b','#708d57'],iron:['#777b78','#5c625f'],sunfield:['#c0ae72','#9e8d59'],highland:['#9bad8c','#7d9175'],river:['#72a17b','#568563'],caravan:['#b4a17d','#938064'],reef:['#78b4af','#579591'],wildwood:['#92b870','#729956'],frost:['#dbe9e9','#b9d1d4'],hive:['#99a66d','#79865a']};
 for(const [key,[land,shade]]of Object.entries(LAND_COLORS))Object.assign(TRIBES[key],{land,shade});
 const TRIBE_COLORS={"crown": "#367ecb", "pine": "#536a80", "ridge": "#cb6b4e", "dune": "#d2aa53", "coast": "#3fba95", "oak": "#8f9f4f", "marble": "#9a7dbd", "iron": "#7e7d8a", "sunfield": "#d4974e", "highland": "#64a4b2", "river": "#3b9b7b", "caravan": "#b66364", "reef": "#56a8c4", "wildwood": "#a86f9b", "frost": "#83bccd", "hive": "#8aa64f"};
 for(const [key,color]of Object.entries(TRIBE_COLORS))Object.assign(TRIBES[key],{color,dark:mixColor(color,'#16191b',.48),light:mixColor(color,'#ffffff',.42),roof:color});
-Object.assign(TRIBES.coast,{land:'#9ece20',shade:'#80b71c'});Object.assign(TRIBES.river,{land:'#80b832',shade:'#669a27'});Object.assign(TRIBES.wildwood,{land:'#97ca30',shade:'#79ae23'});
+Object.assign(TRIBES.coast,{land:'#78ad71',shade:'#5b9161'});Object.assign(TRIBES.river,{land:'#72a17b',shade:'#568563'});Object.assign(TRIBES.wildwood,{land:'#92b870',shade:'#729956'});
+
+// Project-authored monochrome geometry gives every faction a stable identity
+// independent of hue. The same geometry is used in badges, banners and units.
+const TRIBE_EMBLEMS={
+ crown:{name:'Courtyard',polys:[[[6,6],[11,6],[11,11],[6,11]],[[13,6],[18,6],[18,11],[13,11]],[[6,13],[11,13],[11,18],[6,18]],[[13,13],[18,13],[18,18],[13,18]]]},
+ pine:{name:'Seed cone',polys:[[[12,3],[17,9],[12,12],[7,9]],[[12,10],[18,15],[12,21],[6,15]]],lines:[[[12,4],[12,20]]]},
+ ridge:{name:'Stepped ridge',lines:[[[4,18],[8,18],[8,14],[12,14],[12,10],[16,10],[16,6],[20,6]],[[5,21],[10,21],[10,17],[15,17],[15,13],[20,13]]]},
+ dune:{name:'Hourglass sun',polys:[[[6,4],[18,4],[14,10],[18,20],[6,20],[10,10]]],circles:[[12,12,2]]},
+ coast:{name:'Paired surf',lines:[[[3,9],[7,6],[11,9],[15,6],[21,9]],[[3,16],[7,13],[11,16],[15,13],[21,16]]]},
+ oak:{name:'Acorn',polys:[[[7,9],[17,9],[18,13],[12,21],[6,13]]],lines:[[[7,9],[9,5],[15,5],[17,9]],[[12,5],[15,2]]]},
+ marble:{name:'Stone arch',lines:[[[5,20],[5,11],[8,6],[12,4],[16,6],[19,11],[19,20]],[[9,20],[9,12],[12,9],[15,12],[15,20]]]},
+ iron:{name:'Angled forge',polys:[[[4,7],[15,7],[20,11],[15,14],[10,14],[8,20],[5,20],[7,13],[4,11]]],lines:[[[10,4],[18,4]]]},
+ sunfield:{name:'Grain fan',lines:[[[12,21],[12,5]],[[12,9],[7,5]],[[12,12],[5,9]],[[12,9],[17,5]],[[12,12],[19,9]]],circles:[[12,4,2]]},
+ highland:{name:'Hill contour',lines:[[[3,18],[7,12],[12,8],[17,12],[21,18]],[[6,19],[10,15],[14,15],[18,19]],[[9,20],[12,18],[15,20]]]},
+ river:{name:'Braided streams',lines:[[[5,3],[9,8],[7,13],[11,21]],[[13,3],[10,8],[14,13],[12,21]],[[19,3],[15,8],[17,13],[13,21]]]},
+ caravan:{name:'Trail wheel',circles:[[12,12,8],[12,12,2]],lines:[[[12,4],[12,20]],[[4,12],[20,12]],[[6,6],[18,18]],[[18,6],[6,18]]]},
+ reef:{name:'Branching coral',lines:[[[12,21],[12,9],[7,5]],[[12,13],[18,7]],[[8,17],[4,13]],[[16,11],[20,13]],[[12,9],[12,3]]]},
+ wildwood:{name:'Curled leaf',polys:[[[5,16],[8,6],[18,3],[20,12],[14,20]]],lines:[[[6,19],[16,7]],[[11,13],[8,9]],[[13,11],[17,12]]]},
+ frost:{name:'Frost lattice',lines:[[[12,2],[12,22]],[[3,7],[21,17]],[[3,17],[21,7]],[[7,4],[12,7],[17,4]],[[7,20],[12,17],[17,20]]]},
+ hive:{name:'Honeycomb',polys:[[[8,3],[13,3],[16,7],[13,11],[8,11],[5,7]],[[13,12],[18,12],[21,16],[18,20],[13,20],[10,16]],[[3,12],[8,12],[11,16],[8,20],[3,20],[0,16]]]}
+};
+const TRIBE_PATTERNS={crown:'M17 14h30M17 22h30M17 30h30',pine:'M17 39 32 14l15 25M20 43 32 24l12 19',ridge:'m17 36 8-8 7 7 8-8 7 7',dune:'M18 15 46 41M46 15 18 41',coast:'M17 21q7-7 14 0t14 0M17 34q7-7 14 0t14 0',oak:'M19 16q13 8 26 0M19 38q13-8 26 0',marble:'M18 41V25q0-11 14-11t14 11v16',iron:'m18 17 28 22M18 26l18 15',sunfield:'M32 13v30M21 18l11 10 11-10',highland:'M17 38 25 27l7 5 7-10 8 8',river:'M21 13q11 8 0 16t0 16M34 13q11 8 0 16t0 16',caravan:'M20 16 44 40M44 16 20 40M32 13v30',reef:'M32 42V24l-10-9m10 16 11-12M24 34l-7-6',wildwood:'M19 38q22 0 24-23-20 2-24 23Zm4-3 15-15',frost:'M18 18 46 38M18 38 46 18M32 12v32',hive:'m22 16 8-5 8 5v9l-8 5-8-5Zm8 14 8 5v9'};
+function emblemSVG(key,color='#fff',transform=''){
+ const e=TRIBE_EMBLEMS[key]||TRIBE_EMBLEMS.crown,points=shape=>shape.map(point=>point.join(',')).join(' ');
+ return `<g ${transform?`transform="${transform}"`:''} color="${color}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${(e.polys||[]).map(shape=>`<polygon points="${points(shape)}" fill="currentColor" stroke="none"/>`).join('')}${(e.lines||[]).map(shape=>`<polyline points="${points(shape)}"/>`).join('')}${(e.circles||[]).map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}"/>`).join('')}</g>`;
+}
+function paintFactionEmblem(key,x,y,size,color){
+ const e=TRIBE_EMBLEMS[key]||TRIBE_EMBLEMS.crown;ctx.save();ctx.translate(x-size/2,y-size/2);ctx.scale(size/24,size/24);ctx.lineWidth=2.2;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=ctx.fillStyle=color;
+ for(const shape of e.polys||[])polygon(shape,color);for(const shape of e.lines||[])line(shape,color,2.2);for(const [cx,cy,r]of e.circles||[]){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke()}ctx.restore();
+}
 
 function initializeOre(){for(const t of game.tiles)if(typeof t.ore!=='boolean'){const probability=t.biome==='iron'?.9:t.biome==='ridge'?.7:.5;t.ore=t.terrain==='mountain'&&(t.building==='mine'||rng(game.seed^Math.imul(t.y*game.size+t.x+1,2654435761))()<probability)}}
 const oreVisible=(owner=0)=>ownsTech(owner,'climbing')||ownsTech(owner,'mining');
@@ -1224,11 +1258,12 @@ function drawWater(t,p=iso(t.x,t.y)){
  polygon([[p.x-16,p.y-6],[p.x-11,p.y-9],[p.x-6,p.y-6],[p.x-11,p.y-3]],'#e9fcff');if(t.variant%2)polygon([[p.x+16,p.y+5],[p.x+19,p.y+3],[p.x+22,p.y+5],[p.x+19,p.y+7]],'#d3f6ff');ctx.restore();
 }
 function drawTile(t,staticWater=false){
- const p=iso(t.x,t.y),x=p.x,y=p.y,known=seen(t),tribe=TRIBES[t.biome],water=['water','ocean'].includes(t.terrain),color=!known?'#cbd6f4':t.frozen?'#dcf5ff':water?(t.terrain==='ocean'?'#4286e2':'#55bde9'):tribe.land;
+ const p=iso(t.x,t.y),x=p.x,y=p.y,known=seen(t),tribe=TRIBES[t.biome],water=['water','ocean'].includes(t.terrain),color=!known?'#d8e2e7':t.frozen?'#d8edf0':water?(t.terrain==='ocean'?'#397d9d':'#4f9fbb'):tribe.land;
  const depth=13;if(t.x===game.size-1)polygon([[x,y+TH/2],[x+TW/2,y],[x+TW/2,y+depth],[x,y+TH/2+depth]],known?(water?'#258cbe':'#a07340'):'#99b0ef');
  if(t.y===game.size-1)polygon([[x-TW/2,y],[x,y+TH/2],[x,y+TH/2+depth],[x-TW/2,y+depth]],known?(water?'#1c9bb4':'#79522e'):'#a8baf0');
- const corners=[[x,y-TH/2],[x+TW/2,y],[x,y+TH/2],[x-TW/2,y]];polygon(corners,color,known?(water?'#245d934f':'#284c3c4d'):null,1.1);if(!known)return;
- const center=[x+(t.variant-2)*3,y+(t.variant%3-1)*3];polygon([corners[0],corners[1],center],water?'#ffffff12':tribe.shade+'60');polygon([corners[2],corners[3],center],water?'#ffffff0a':'#ffffff0c');
+ const corners=[[x,y-TH/2],[x+TW/2,y],[x,y+TH/2],[x-TW/2,y]];polygon(corners,color,known?(water?'#163f5368':'#33483d73'):null,1.25);if(!known)return;
+ const center=[x+(t.variant-2)*3,y+(t.variant%3-1)*3];polygon([corners[0],corners[1],center],water?'#c9edf018':tribe.shade+'54');polygon([corners[2],corners[3],center],water?'#0e566214':'#f2eadb18');
+ if(!water){ctx.fillStyle='#263f3427';for(const [dx,dy]of [[-23,-3],[18,5],[(t.variant-2)*7,8]]){ctx.beginPath();ctx.arc(x+dx,y+dy,1.2,0,Math.PI*2);ctx.fill()}}
  if(!water&&!t.frozen)for(const [dx,dy,a,b]of [[0,-1,corners[0],corners[1]],[1,0,corners[1],corners[2]],[0,1,corners[2],corners[3]],[-1,0,corners[3],corners[0]]]){const n=tileAt(t.x+dx,t.y+dy);if(n&&seen(n)&&waterTile(n)&&!n.frozen){line([a,b],'#f4f0d2',2.4);line([[a[0],a[1]+2],[b[0],b[1]+2]],'#8d704a',1.3)}}
  if(t.frozen){line([[x-24,y-2],[x-6,y+1],[x+2,y-5],[x+21,y-1]],'#9bcce68c',1)}else if(water){if(!staticWater)drawWater(t,p)}
  else if(t.terrain==='field'&&!t.building&&cropsVisible()){for(const [dx,dy]of [[-18,-3],[-6,-8],[6,-3],[18,2],[-6,5],[6,10]]){line([[x+dx,y+dy],[x+dx,y+dy-7]],'#b59a1c',1.4);line([[x+dx-3,y+dy-5],[x+dx,y+dy-3],[x+dx+3,y+dy-6]],'#e6d443',1.8)}}
@@ -1237,7 +1272,7 @@ function drawTile(t,staticWater=false){
 function drawBorders(t){
  if(!seen(t)||t.owner<0)return;
  const p=iso(t.x,t.y),b=tribeFor(t.owner),checks=[{dx:0,dy:-1,a:[p.x,p.y-TH/2],b:[p.x+TW/2,p.y]},{dx:1,dy:0,a:[p.x+TW/2,p.y],b:[p.x,p.y+TH/2]},{dx:0,dy:1,a:[p.x,p.y+TH/2],b:[p.x-TW/2,p.y]},{dx:-1,dy:0,a:[p.x-TW/2,p.y],b:[p.x,p.y-TH/2]}];
- for(const edge of checks){if(tileAt(t.x+edge.dx,t.y+edge.dy)?.owner===t.owner)continue;line([edge.a,edge.b],b.dark,4.2);line([edge.a,edge.b],b.color,2.5)}
+ const pattern=Object.keys(TRIBES).indexOf(faction(t.owner).tribe);for(const edge of checks){if(tileAt(t.x+edge.dx,t.y+edge.dy)?.owner===t.owner)continue;line([edge.a,edge.b],'#213d3bb8',5);ctx.save();ctx.setLineDash(pattern%3===0?[7,3]:pattern%3===1?[3,3]:[9,2,2,2]);line([edge.a,edge.b],b.color,2.7);ctx.restore()}
 }
 function pine(x,y,size,snow=false,red=false){
  ellipse(x+1,y+1,size*.43,size*.17,'#274b4928');polygon([[x-2,y],[x-2,y-size*.3],[x+2,y-size*.3],[x+2,y]],'#795a49');
@@ -1263,19 +1298,19 @@ function deer(x,y){
  ellipse(x,y+2,13,4,'#36544023');line([[x-7,y],[x-8,y+5]],'#916f55',2);line([[x+5,y],[x+6,y+5]],'#916f55',2);polygon([[x-10,y-7],[x-3,y-11],[x+8,y-6],[x+8,y],[x-6,y]],'#bf9e76');polygon([[x+4,y-8],[x+5,y-17],[x+11,y-18],[x+14,y-14],[x+10,y-10],[x+11,y-4]],'#d3b990');line([[x+7,y-17],[x+6,y-24],[x+3,y-27]],'#8c775f',1.4);line([[x+11,y-17],[x+13,y-24],[x+16,y-26]],'#8c775f',1.4);line([[x+6,y-22],[x+2,y-23]],'#8c775f',1.3);ctx.fillStyle='#465052';ctx.fillRect(x+11,y-15,1.5,1.5);
 }
 function starfish(x,y){const points=[];for(let i=0;i<10;i++){const angle=i*Math.PI/5-Math.PI/2,r=i%2?4:12;points.push([x+Math.cos(angle)*r,y+Math.sin(angle)*r*.55])}polygon(points,'#f4cd54','#cc9956');ellipse(x,y,2,1.3,'#fff0a2')}
-function fish(x,y){polygon([[x-12,y],[x-3,y-5],[x+8,y],[x-3,y+5]],'#e9f0de');polygon([[x+7,y],[x+15,y-5],[x+15,y+5]],'#cbdfd0');polygon([[x-4,y-5],[x-1,y-9],[x+2,y-3]],'#cfdfd6');ellipse(x-7,y-1,1,1,'#507e8a')}
+function fish(x,y){ellipse(x-3,y,12,6,'#d9e6d9');polygon([[x+7,y],[x+16,y-7],[x+16,y+7]],'#aac8bc','#496f71',.8);polygon([[x-4,y-5],[x,y-10],[x+4,y-4]],'#b7d1c5');line([[x-10,y+2],[x+7,y+2]],'#8fafaa',1);ellipse(x-8,y-1,1.4,1.4,'#315a62')}
 function hut(x,y,color='#99b29c',roof='#789482',scale=1){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);box(0,-2,11,11,12,'#f4ebce','#d3d5bc','#e8e6ca');polygon([[-14,-9],[0,-25],[14,-9],[0,-2]],roof);polygon([[-14,-9],[0,-25],[0,-2]],color);polygon([[-4,6],[-4,-1],[0,-3],[3,-1],[3,8]],'#729393');ctx.restore()}
 function drawCity(c){
- const p=iso(c.x,c.y),b=c.owner<0?{color:'#9bac9d',dark:'#718c86',light:'#d2dfc3'}:tribeFor(c.owner);ctx.save();ctx.translate(p.x,p.y);
- ellipse(0,9,30,10,'#264c4930');polygon([[-30,1],[0,-14],[30,1],[0,17]],'#e8dbb8',b.color,1.3);
+ const p=iso(c.x,c.y),b=c.owner<0?{color:'#9bac9d',dark:'#718c86',light:'#d2dfc3'}:tribeFor(c.owner),key=c.owner<0?'crown':faction(c.owner).tribe;ctx.save();ctx.translate(p.x,p.y);
+ ellipse(1,10,33,11,'#1f3b3b38');polygon([[-32,1],[0,-16],[32,1],[0,18]],'#b7ab87','#4d6258',1.2);polygon([[-27,0],[0,-13],[27,0],[0,14]],'#e1d4ad',b.dark,1.2);
  if(c.owner<0){hut(-11,-3,'#a5ac87','#9a9778',.75);hut(12,1,'#b1b392','#aa9c75',.8);ctx.restore();return}
- if(c.walls){box(0,-6,28,25,9,'#d9ddd2','#9fafad','#b7c6b6')}
- if(c.level>=2)hut(-17,-1,b.dark,b.color,.75);if(c.level>=3)hut(18,-3,b.dark,b.color,.7);
- const h=21+Math.min(5,c.level)*3;box(0,-8,12,14,h,'#e9e9d8','#b3c5bb','#d0d9c6');
- polygon([[-15,-h-8],[0,-h-23],[16,-h-8],[0,-h]],b.color);polygon([[-15,-h-8],[0,-h-23],[0,-h]],b.dark);
- polygon([[-3,8],[-3,-7],[3,-10],[6,-6],[6,9]],'#577a82');ctx.fillStyle='#edf4d3';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
- if(c.level>=5)for(const dx of [-23,23]){box(dx,-4,5,7,h-2,b.light,b.dark,b.color);polygon([[dx-7,-h+1],[dx,-h-10],[dx+7,-h+1]],b.color)}
- if(c.capital){line([[0,-h-22],[0,-h-40]],'#6d8784',1.4);polygon([[0,-h-39],[13,-h-35],[0,-h-29]],b.color)}ctx.restore();
+ if(c.walls){box(0,-5,29,25,9,'#d4d2c4','#8e9b94','#b3b9ad');for(const x of [-23,-8,8,23])box(x,-10,4,5,8,'#dedacb','#8e9b94','#b8beb1')}
+ if(c.level>=2)hut(-18,0,b.dark,b.color,.66);if(c.level>=3)hut(18,0,b.dark,b.color,.66);
+ const h=18+Math.min(5,c.level)*2.5;box(0,-7,12,15,h,'#e4dfca','#9eaaa2','#c8cdc0');
+ polygon([[-15,-h-7],[0,-h-20],[16,-h-7],[0,-h+1]],b.color,'#4c5c58',1.1);polygon([[-15,-h-7],[0,-h-20],[0,-h+1]],b.dark);
+ polygon([[-4,9],[-4,-5],[2,-9],[7,-5],[7,10]],'#526e70');ctx.fillStyle='#f5e5b4';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
+ if(c.level>=4)for(const dx of [-24,24]){box(dx,-3,5,7,h-4,b.light,b.dark,b.color);polygon([[dx-7,-h+3],[dx,-h-7],[dx+7,-h+3]],b.color)}
+ const mastX=c.capital?0:23,mastTop=-h-(c.capital?40:24);line([[mastX,-h-4],[mastX,mastTop]],'#556c6b',1.8);polygon([[mastX,mastTop],[mastX+15,mastTop+4],[mastX,mastTop+12]],b.color,b.dark,1);paintFactionEmblem(key,mastX+5,mastTop+5,c.capital?8:6,'#fff4c8');ctx.restore();
 }
 
 function drawBuilding(t){const p=iso(t.x,t.y);ctx.save();ctx.translate(p.x,p.y);if(t.effect&&!reducedMotion.matches){const progress=Math.max(0,Math.min(1,(drawTime-t.effect.start)/t.effect.duration)),scale=.82+.18*(1-Math.pow(1-progress,3));ctx.scale(scale,scale)}if(t.building==='farm'||t.building==='fungi'){
@@ -1308,9 +1343,9 @@ function drawUnit(u){
  if(['rider','knight','amphibian','wildguard'].includes(u.type)){polygon([[-15,3],[-11,-7],[8,-6],[13,1],[9,11],[-11,10]],'#c4ad85');polygon([[7,-5],[8,-17],[14,-18],[18,-11],[13,-7],[13,3]],'#e1cba4');line([[-10,7],[-10,15]],'#9b876d',3);line([[8,7],[8,15]],'#9b876d',3);ctx.translate(-2,-9)}
  if(u.type==='catapult'){polygon([[-18,5],[0,-4],[18,5],[0,13]],'#ae8f5c');line([[-11,7],[0,-18],[12,7]],'#d5b77d',4);line([[-4,-14],[15,-29]],'#8c724b',4);ellipse(-11,10,5,5,'#526b71');ellipse(12,10,5,5,'#526b71');polygon([[12,-32],[20,-31],[22,-25],[16,-23]],'#aeb9b6');ctx.restore();return}
  if(u.type==='battlesled'){polygon([[-20,7],[0,-3],[21,7],[0,15]],'#d1e7ec');line([[-18,12],[14,17]],b.dark,3);ctx.translate(0,-5)}
- line([[-5,2],[-5,10]],b.dark,5);line([[5,2],[5,10]],b.dark,5);box(0,-13,9,8,15,b.color,b.dark,b.light);
- ellipse(0,-24,8,9,'#e8c6a1');ctx.beginPath();ctx.arc(0,-26,9,Math.PI,Math.PI*2);ctx.fillStyle=def.defense>=3?'#80949e':b.dark;ctx.fill();line([[-8,-25],[8,-25]],def.defense>=3?'#c3d1d4':b.color,2);
- ellipse(-3,-23,1.2,1.4,'#314b58');ellipse(3,-23,1.2,1.4,'#314b58');
+ const step=u.anim?.kind==='move'&&!reducedMotion.matches?Math.sin((drawTime-u.anim.start)*.035)*2:0;line([[-5,1],[-6+step,11]],b.dark,6);line([[5,1],[6-step,11]],b.dark,6);line([[-8,-10],[-13,-1]],b.dark,5);line([[8,-10],[13,-1]],b.dark,5);box(0,-13,10,9,16,b.color,b.dark,b.light);paintFactionEmblem(faction(u.owner).tribe,0,-13,8,'#fff4c8');
+ ellipse(0,-25,8.5,9.5,'#e8c6a1');ctx.beginPath();ctx.arc(0,-27,9.5,Math.PI,Math.PI*2);ctx.fillStyle=def.defense>=3?'#748990':b.dark;ctx.fill();if(def.icon==='bow'){polygon([[-9,-27],[0,-38],[9,-27],[4,-29],[0,-25],[-4,-29]],b.dark);line([[-6,-29],[0,-34],[6,-29]],b.light,1.5)}else if(def.icon==='rider'){polygon([[-4,-36],[0,-43],[5,-35],[2,-29]],b.light)}else if(def.defense>=3){line([[-9,-26],[9,-26]],b.light,2);line([[0,-36],[0,-26]],b.light,1.5)}else line([[-8,-27],[8,-27]],b.light,1.6);
+ ellipse(-3,-24,1.2,1.4,'#314b58');ellipse(3,-24,1.2,1.4,'#314b58');line([[-2,-20],[2,-20]],'#9d6d58',1);
  if(def.convert||def.swarm){line([[13,3],[13,-25]],'#ac9569',2);polygon([[8,-26],[18,-26],[16,-20],[10,-20]],b.color)}
  else if(def.icon==='bow'){ctx.beginPath();ctx.arc(12,-10,10,-Math.PI/2,Math.PI/2);ctx.strokeStyle='#a98553';ctx.lineWidth=2;ctx.stroke();line([[12,-20],[12,0]],'#e9e4be',1);line([[11,-9],[24,-9]],'#e1e7d7',1.5)}
  else{polygon([[-10,-13],[-21,-9],[-20,0],[-13,6],[-8,-1]],b.dark);polygon([[-11,-11],[-19,-8],[-18,-1],[-13,3]],b.color);if(def.icon!=='shield'){line([[12,0],[20,-24]],'#d8e5e9',3);line([[10,-4],[17,-1]],'#dbbb71',2)}}
@@ -1322,15 +1357,15 @@ function roundedRect(x,y,w,h,r,fill){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ct
 function drawCityLabel(c){
  const anchor=screenPoint(c.x,c.y),labelScale=Math.max(.7,Math.min(1.4,view.zoom));ctx.save();ctx.translate(anchor.x,anchor.y);ctx.scale(labelScale,labelScale);
  const owned=c.owner===0,b=c.owner>=0?tribeFor(c.owner):null,name=c.owner<0?'Village':c.name;
- ctx.font='600 12px -apple-system, sans-serif';const nameW=ctx.measureText(name).width,info=owned?'★ '+cityIncome(c):b?'Lv '+c.level:'',infoW=info?ctx.measureText(info).width:0,w=nameW+infoW+(b?27:14),x=-w/2,y=17*view.zoom/labelScale;
- roundedRect(x,y,w,19,2,b?b.dark+'dd':'#393f42cc');ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText(name,x+(b?14:7),y+13.5);
- if(b){ellipse(x+7,y+9,3.5,3.5,b.color);ctx.strokeStyle='#fff9';ctx.lineWidth=.7;ctx.stroke();ctx.font='500 11px sans-serif';ctx.fillStyle=owned?'#ffe066':'#eef6ff';ctx.textAlign='right';ctx.fillText(info,x+w-5,y+13.5);
-  if(owned){const p=cityProgress(c),count=p.capacity,barW=Math.max(52,Math.min(100,Math.max(w-4,count*10))),slot=barW/count,gap=Math.min(1.5,slot*.18),height=8;
-   roundedRect(-barW/2-.7,y+20.3,barW+1.4,height+1.4,3,'#25354590');
-   for(let i=0;i<count;i++){const filled=i<p.population,negative=p.population<0&&i<-p.population,fill=negative?'#ed7665':filled?'#12a9ed':'#f1f4ef',left=-barW/2+i*slot;
-    roundedRect(left,y+21,slot-gap,height,Math.min(2,(slot-gap)/2),fill);if(i<p.supported)ellipse(left+(slot-gap)/2,y+25,Math.min(1.7,slot*.22),1.7,filled||negative?'#fff':'#181c1f');
+ ctx.font='650 11px -apple-system, sans-serif';const nameW=ctx.measureText(name).width,info=owned?'★'+cityIncome(c):b?'L'+c.level:'',infoW=info?ctx.measureText(info).width:0,w=Math.min(112,Math.max(58,nameW+infoW+(b?26:14))),x=-w/2,y=18*view.zoom/labelScale;
+ roundedRect(x,y,w,18,5,b?b.dark+'e8':'#393f42df');ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText(name,x+(b?14:7),y+12.5);
+ if(b){ellipse(x+7,y+8.5,3.3,3.3,b.color);ctx.strokeStyle='#fff9';ctx.lineWidth=.7;ctx.stroke();ctx.font='650 9px sans-serif';ctx.fillStyle=owned?'#ffe087':'#eef6ff';ctx.textAlign='right';ctx.fillText(info,x+w-5,y+12.2);
+  if(owned){const p=cityProgress(c),count=p.capacity,barW=Math.max(48,Math.min(80,w-8)),slot=barW/count,gap=Math.min(1.3,slot*.16),height=5;
+   roundedRect(-barW/2-1,y+20,barW+2,height+2,3,'#19313ddd');
+   for(let i=0;i<count;i++){const filled=i<p.population,negative=p.population<0&&i<-p.population,fill=negative?'#df6f61':filled?'#45bdd5':'#d8ded4',left=-barW/2+i*slot;
+    roundedRect(left,y+21,slot-gap,height,1.5,fill);if(i<p.supported)ellipse(left+(slot-gap)/2,y+23.5,1.25,1.25,filled||negative?'#fff':'#243c43');
    }
-   ctx.font='600 9px "Avenir Next", sans-serif';ctx.textAlign='center';ctx.strokeStyle='#203340c0';ctx.lineWidth=2.3;const stage='Lv '+c.level+' · '+p.population+'/'+p.capacity;ctx.strokeText(stage,0,y+40);ctx.fillStyle=p.population<0?'#ffb4a7':'#f6faf4';ctx.fillText(stage,0,y+40);
+   ctx.font='650 8px "Avenir Next", sans-serif';ctx.textAlign='center';const stage='Level '+c.level+' · '+p.population+'/'+p.capacity+' population';ctx.strokeStyle='#18303bc9';ctx.lineWidth=2;ctx.strokeText(stage,0,y+35);ctx.fillStyle=p.population<0?'#ffb4a7':'#f0f3e7';ctx.fillText(stage,0,y+35);
   }
  }
  ctx.restore();
@@ -1350,7 +1385,7 @@ function drawUnitLabel(u,preview=null){
 function fogEdgeMask(t){return [[0,-1],[1,0],[0,1],[-1,0]].reduce((mask,[dx,dy],i)=>{const n=tileAt(t.x+dx,t.y+dy);return mask|(n&&seen(n)?1<<i:0)},0)}
 function fogFacetVariant(t){return(Math.imul(t.x+17,73856093)^Math.imul(t.y+31,19349663)^Math.imul((t.variant||0)+1,83492791))>>>0}
 function drawFog(t,opacity=1){
- const p=iso(t.x,t.y),mask=fogEdgeMask(t),variant=fogFacetVariant(t),north=[p.x,p.y-TH/2],east=[p.x+TW/2,p.y],south=[p.x,p.y+TH/2],west=[p.x-TW/2,p.y],center=[p.x+((variant&3)-1.5)*2,p.y+(((variant>>2)&3)-1.5)*1.4],palettes=[['#f7fbff','#e8f2fb','#dce7f5','#f1edfa'],['#eef7fb','#f8fbff','#e5eafa','#d7e9f2'],['#fbfcff','#e9effa','#dfeaf7','#f2edfa'],['#f3f8fe','#e2eef8','#edf0fb','#d8e7f5']][variant%4];ctx.save();ctx.globalAlpha*=opacity;
+ const p=iso(t.x,t.y),mask=fogEdgeMask(t),variant=fogFacetVariant(t),north=[p.x,p.y-TH/2],east=[p.x+TW/2,p.y],south=[p.x,p.y+TH/2],west=[p.x-TW/2,p.y],center=[p.x+((variant&3)-1.5)*1.3,p.y+(((variant>>2)&3)-1.5)],palettes=[['#f4f2e8','#e7ece6','#dce7e5','#ece8df'],['#edf1e9','#f6f3e9','#e3e7e2','#dbe7e6'],['#f5f3ea','#e8ece7','#dee8e7','#eee9e1'],['#f0f1e8','#e2eae6','#e9ebe4','#dce6e5']][variant%4];ctx.save();ctx.globalAlpha*=opacity;
  polygon([north,east,south,west],palettes[0]);ctx.clip();
  const facets=[[north,east,center],[east,south,center],[south,west,center],[west,north,center]];
  facets.forEach((points,index)=>polygon(points,palettes[(index+1+(variant>>4))%palettes.length]));
@@ -1358,6 +1393,7 @@ function drawFog(t,opacity=1){
  for(let index=0;index<4;index++)polygon([center,inset[index],inset[(index+1)%4]],index%2?'#ffffff36':'#bdd2ea24');
  const edgeFaces=[[[north,west,center],'#b8cce138'],[[north,east,center],'#ffffff7a'],[[east,south,center],'#c7d9ed3b'],[[south,west,center],'#aebfd73a']];
  edgeFaces.forEach(([points,color],index)=>{if(mask&(1<<index))polygon(points,color)});
+ if(mask){ctx.setLineDash([7,5]);ctx.strokeStyle='#9fb7b5aa';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(west[0],west[1]);ctx.quadraticCurveTo(center[0],center[1]-4,east[0],east[1]);ctx.stroke();ctx.setLineDash([])}
  if(!seen(t)&&faction(0).tribe==='wildwood'&&t.building==='ruin'){polygon([[p.x,p.y-18],[p.x+6,p.y-12],[p.x,p.y-7],[p.x-6,p.y-12]],'#c5afd9');line([[p.x-7,p.y-12],[p.x+7,p.y-12]],'#fff6d8',1.5)}ctx.restore();
 }
 function drawForest(t,p){
@@ -1457,16 +1493,16 @@ function frame(t){
  if(motion)requestRender();else if(ambientWater&&!reducedMotion.matches&&!$('modal-layer').classList.contains('open')&&!$('tech-layer').classList.contains('open'))idleFrameTimer=setTimeout(requestRender,40);
 }
 function factionBadge(key,b=TRIBES[key]){
- const i=Object.keys(TRIBES).indexOf(key),stripes=1+i%3;
- return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 5h44v39L32 60 10 44Z" fill="${b.dark}" stroke="#eff5e7" stroke-width="2"/><path d="M15 10h34v31L32 53 15 41Z" fill="${b.color}"/>${Array.from({length:stripes},(_,j)=>`<path d="M${20+j*10} 16v22" stroke="${b.light}" stroke-width="4"/>`).join('')}<path d="m32 22 9 7-9 10-9-10Z" fill="#f9ebba"/><circle cx="32" cy="29" r="3" fill="${b.dark}"/></svg>`;
+ return `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 5h48v38L32 61 8 43Z" fill="${b.dark}" stroke="#f4efd9" stroke-width="2.5"/><path d="M13 10h38v30L32 54 13 40Z" fill="${b.color}"/><path d="${TRIBE_PATTERNS[key]||TRIBE_PATTERNS.crown}" fill="none" stroke="${b.light}" stroke-width="3" opacity=".42"/><path d="M19 17h26v24L32 49 19 41Z" fill="${b.dark}" opacity=".72"/>${emblemSVG(key,'#fff7d2','translate(20 18) scale(1)')}</svg>`;
 }
 function portrait(key,type='warrior',owner=null){
  const b=owner==null?TRIBES[key]:tribeFor(owner),d=TYPES[type]||TYPES.warrior,creature=creatureParts(type,key,b);if(creature)return `<svg viewBox="0 0 64 64" aria-hidden="true">${partsSVG(creature)}</svg>`;
  if(type==='catapult')return `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#b69a65" d="m7 46 25-12 25 12-25 12Z"/><path stroke="#846b43" stroke-width="6" fill="none" d="m18 49 14-31 15 31M14 14l37 20"/><circle cx="15" cy="53" r="7" fill="#637c81"/><circle cx="49" cy="53" r="7" fill="#637c81"/><path d="m6 8 14-3 5 11-15 3Z" fill="#a4b5b4"/></svg>`;
- return `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="59" rx="22" ry="4" fill="#193d4824"/><path d="M21 43h8v18h-8m15-18h8v18h-8" fill="${b.dark}"/><path d="m16 32 16-7 16 7-3 20H20Z" fill="${b.color}"/><path d="m32 25 16 7-3 20-13-5Z" fill="${b.light}"/><ellipse cx="32" cy="21" rx="13" ry="15" fill="#e6c59e"/><path d="M18 17a14 13 0 0 1 28 0Z" fill="${d.defense>=3?'#8197a3':b.dark}"/><path d="M18 17h28" stroke="${b.light}" stroke-width="3"/><circle cx="27" cy="22" r="2" fill="#324c58"/><circle cx="37" cy="22" r="2" fill="#324c58"/>${d.convert?`<path d="M52 58V26" stroke="#9f865e" stroke-width="3"/><path d="M47 26h11v10H47Z" fill="${b.color}"/>`:d.icon==='bow'?'<path d="M50 33q18 11 0 23V33m-7 12h20" stroke="#a68852" stroke-width="2" fill="none"/>':`<path d="m4 36 11-5 12 7-3 15-10 9-10-11Z" fill="${b.dark}" stroke="${b.light}" stroke-width="1.5"/><path d="m48 52 10-25" stroke="#dfe9e8" stroke-width="4"/><path d="m43 46 12 5" stroke="#d6b573" stroke-width="3"/>`}</svg>`;
+ const headgear=d.icon==='bow'?`<path d="M18 19Q20 4 32 4t14 15l-8-5-6 5-6-5Z" fill="${b.dark}"/><path d="m19 16 13-7 13 7" fill="none" stroke="${b.light}" stroke-width="2"/>`:d.icon==='rider'?`<path d="M19 18Q20 5 32 5t13 13Z" fill="${b.dark}"/><path d="m32 5 4-5 4 7" fill="${b.light}"/>`:d.defense>=3?`<path d="M18 18Q19 5 32 5t14 13Z" fill="#788d91"/><path d="M19 16h27M32 5v13" stroke="${b.light}" stroke-width="2"/>`:`<path d="M18 17Q20 5 32 5t14 12l-7-3-7 4-7-4Z" fill="${b.dark}"/>`;
+ return `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="59" rx="22" ry="4" fill="#193d4824"/><path d="M20 43h9v18h-9m15-18h9v18h-9" fill="${b.dark}"/><path d="m14 34 18-10 18 10-4 21H18Z" fill="${b.color}" stroke="${b.dark}" stroke-width="2"/><path d="m32 24 18 10-4 21-14-7Z" fill="${b.light}" opacity=".72"/>${emblemSVG(key,'#fff6ce','translate(27 33) scale(.42)')}<ellipse cx="32" cy="21" rx="12" ry="14" fill="#e6c59e"/>${headgear}<circle cx="27" cy="22" r="2" fill="#324c58"/><circle cx="37" cy="22" r="2" fill="#324c58"/><path d="M28 28q4 3 8 0" fill="none" stroke="#9f6f5d" stroke-width="1.4"/>${d.convert?`<path d="M53 59V25" stroke="#9f865e" stroke-width="4"/><path d="M47 25h12v11H47Z" fill="${b.color}"/>`:d.icon==='bow'?'<path d="M50 33q18 11 0 23V33m-7 12h20" stroke="#a68852" stroke-width="3" fill="none"/>':`<path d="m4 36 11-5 12 7-3 15-10 9-10-11Z" fill="${b.dark}" stroke="${b.light}" stroke-width="2"/><path d="m48 52 10-25" stroke="#dfe9e8" stroke-width="4"/><path d="m43 46 12 5" stroke="#d6b573" stroke-width="3"/>`}</svg>`;
 }
 function tribePortrait(key,owner=null){return factionBadge(key,owner==null?TRIBES[key]:tribeFor(owner))}
-function cityPortrait(owner){const b=owner<0?{color:'#849e8b',dark:'#5b7b70'}:tribeFor(owner);return `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#acd28c" d="m3 47 29-15 29 15-29 16Z"/><path fill="#d8dcc5" d="m14 30 18-10 18 10v23l-18 9-18-9Z"/><path fill="#f1ecd3" d="m32 20 18 10v23l-18 9Z"/><path fill="${b.color}" d="m8 30 24-23 25 23-25 13Z"/><path fill="${b.dark}" d="M8 30 32 7v36Z"/><path fill="#678b8e" d="M28 58V43l7-3v18Z"/></svg>`}
+function cityPortrait(owner){const b=owner<0?{color:'#849e8b',dark:'#5b7b70',light:'#d8e1d5'}:tribeFor(owner),key=owner<0?'crown':faction(owner).tribe;return `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#8ca27d" d="m3 48 29-15 29 15-29 15Z"/><path fill="#d5d2bc" d="M9 36 32 24l23 12v18L32 64 9 54Z"/><path fill="${b.dark}" d="m8 34 11-13 11 12-11 7Z"/><path fill="${b.color}" d="m27 31 12-18 17 18-17 9Z"/><path fill="#f0e7ca" d="M17 39h30v17L32 63l-15-7Z"/><path fill="#566f70" d="M28 61V47l8-4v15Z"/>${emblemSVG(key,b.light,'translate(27 31) scale(.42)')}</svg>`}
 
 function updateUI(){
  floorRevision++;
@@ -1594,11 +1630,9 @@ for(const [i,root]of ['hunting','organization','fishing','riding','climbing'].en
 function openTech(key=null){if(busy||isAnimating()||game.over){if(busy)toast('Wait for your turn.');return}clearBattlePreview();closeModal(true);techSelected=key||techSelected||'organization';$('tech-layer').classList.add('open');renderTech();sound();setTimeout(()=>$('close-tech').focus(),30)}
 function closeTech(){$('tech-layer').classList.remove('open');requestRender();$('tech-button').focus({preventScroll:true});if(upgradeQueue.length)showNextUpgrade();else scheduleContactPresentation(30)}
 function renderTech(){
- const tree=$('tech-tree'),baseKeys=Object.keys(TECHS).filter(k=>!TECHS[k].parent),hub=[220,229];let graph=`<circle cx="220" cy="238" r="101" fill="none" stroke="#64896f20" stroke-dasharray="2 8"/><circle cx="220" cy="238" r="175" fill="none" stroke="#64896f18" stroke-dasharray="2 8"/>`;
- for(const[key,d]of Object.entries(TECHS)){const p=TECH_POS[key],from=d.parent?TECH_POS[d.parent]:hub,learned=ownsTech(0,key);graph+=`<path d="M${from[0]} ${from[1]}L${p[0]} ${p[1]}" fill="none" stroke="${learned?'#529775':'#849d8966'}" stroke-width="2.2"/>`}
- graph+=`<circle cx="220" cy="229" r="30" fill="#2b718f" stroke="#c4dfca" stroke-width="1.5"/><svg x="195" y="202" width="50" height="50" viewBox="0 0 64 64">${portrait(faction(0).tribe).match(/<svg[^>]*>([\s\S]*)<\/svg>/)[1]}</svg><text x="220" y="274" text-anchor="middle" fill="#315c6a" font-size="11" font-weight="700">${tribeFor(0).name}</text>`;
- for(const key of Object.keys(TECHS)){const d=techInfo(key),[x,y]=TECH_POS[key],learned=ownsTech(0,key),available=canResearch(key),chosen=key===techSelected,labelY=d.tier===3&&y<240&&(x<85||x>355)?y-25:y+28;graph+=`<g class="tech-node" data-tech="${key}" tabindex="0" role="button" aria-label="${d.name}, ${learned?'researched':techCost(key)+' stars'}"><circle cx="${x}" cy="${y}" r="${d.tier===1?21:17}" fill="${learned?'#53996e':available?'#e0ecd9':'#d4dfd1'}" stroke="${chosen?'#d4993d':learned?'#306b59':available?'#819983':'#9cac9b'}" stroke-width="${chosen?3:1.7}"/><g color="${learned?'#fff':available?'#315f6a':'#8e9f94'}">${icon(d.icon).replace('<svg ',`<svg x="${x-10}" y="${y-10}" width="20" height="20" `)}</g><text x="${x}" y="${labelY}" text-anchor="${x<60?'start':x>380?'end':'middle'}" fill="${learned?'#2e6358':available?'#264f62':'#7d94a7'}" font-size="9" font-weight="700">${d.name}</text>${learned?`<circle cx="${x+15}" cy="${y-14}" r="6" fill="#fafbef"/><path d="m${x+12} ${y-14} 2 2 4-4" fill="none" stroke="#2195de" stroke-width="1.6"/>`:''}</g>`}
- tree.innerHTML=graph;tree.querySelectorAll('[data-tech]').forEach(el=>{el.onclick=()=>{techSelected=el.dataset.tech;renderTech();sound()};el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();techSelected=el.dataset.tech;renderTech()}}});
+ const tree=$('tech-tree'),roots=Object.keys(TECHS).filter(key=>!TECHS[key].parent),branchKeys=root=>Object.keys(TECHS).filter(key=>{let cursor=key;while(TECHS[cursor]?.parent){cursor=TECHS[cursor].parent;if(cursor===root)return true}return key===root}).sort((a,b)=>TECHS[a].tier-TECHS[b].tier||a.localeCompare(b));
+ tree.innerHTML=roots.map(root=>`<section class="tech-branch" role="listitem"><h3>${techInfo(root).name} branch</h3><div class="tech-path">${branchKeys(root).map(key=>{const d=techInfo(key),learned=ownsTech(0,key),available=canResearch(key),chosen=key===techSelected,cost=techCost(key);return `<button type="button" class="tech-node ${learned?'learned ':''}${chosen?'chosen ':''}${!learned&&!available?'locked':''}" data-tech="${key}" aria-pressed="${chosen}" aria-label="${d.name}, tier ${d.tier}, ${learned?'researched':cost+' stars'}">${icon(d.icon)}<span><b>${d.name}</b><small>Tier ${d.tier}${d.parent?' · after '+techInfo(d.parent).name:''}</small></span><span class="tech-cost">${learned?'✓':cost+' ★'}</span></button>`}).join('')}</div></section>`).join('');
+ tree.querySelectorAll('[data-tech]').forEach(el=>{el.onclick=()=>{techSelected=el.dataset.tech;renderTech();sound()}});
  $('tech-stars').innerHTML=faction(0).stars+icon('star');const d=techInfo(techSelected),learned=ownsTech(0,techSelected),available=canResearch(techSelected),cost=techCost(techSelected);$('tech-detail').innerHTML=`<div class="detail-top"><div class="detail-icon">${icon(d.icon)}</div><h3>${d.name}</h3>${learned?'<span class="learned" style="margin-left:auto">✓ Researched</span>':''}</div><p>${d.desc}</p>${learned?'<div class="learned">Your tribe has mastered this technology.</div>':`<button class="large-button" id="research-tech" ${!available||faction(0).stars<cost?'disabled':''}>${!available?'Requires '+techInfo(d.parent).name:faction(0).stars<cost?'Need '+(cost-faction(0).stars)+' more stars':'Research'} <span style="display:flex;gap:4px;align-items:center">${cost}${icon('star')}</span></button>`}`;
  if($('research-tech'))$('research-tech').onclick=()=>{if(ownsTech(0,techSelected)||!available||faction(0).stars<cost)return;faction(0).stars-=cost;faction(0).tech.push(techSelected);updateTasks();sound('research');save();updateUI();renderTech()};
 }

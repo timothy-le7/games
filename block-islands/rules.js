@@ -7,8 +7,12 @@
   'use strict';
 
   const SIZE = 18;
+  // Keep the public save envelope at v1.  The phone renderer adds optional,
+  // bounded fields below, so existing v1 exports remain valid rather than
+  // forcing players to abandon a campaign or Creative profile.
   const SAVE_VERSION = 1;
   const DEFAULT_SEED = 861733;
+  const WORLD_VERSION = 2;
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const key = (x, y) => x + ',' + y;
   const hash = (seed, x, y) => {
@@ -19,7 +23,7 @@
   const distance = (a, b, x, y) => Math.hypot(a - x, b - y);
 
   const STAGES = [
-    { name: 'Mosslight Camp', biome: 'forest', seed: 1147, goal: 'craft-campfire', goalText: 'Gather wood and stone, then craft a campfire.', hint: 'Mine the marked trees and pale rocks. Open Craft when you have 3 wood and 2 stone.', enemies: 0 },
+    { name: 'Mosslight Camp', biome: 'forest', seed: 1147, goal: 'craft-campfire', goalText: 'Gather wood and stone, then craft a campfire.', hint: 'Mine the marked logs and pale rocks. Open Craft when you have 3 wood and 2 stone.', enemies: 0 },
     { name: 'Quarry Span', biome: 'quarry', seed: 2281, goal: 'bridge', goalText: 'Build four plank bridge tiles across the quarry stream.', hint: 'Mine trees, craft Planks, aim at water beside solid ground, then Place.', enemies: 0 },
     { name: 'Echo Hollow', biome: 'cave', seed: 3413, goal: 'ore-and-pick', goalText: 'Craft a stone pick, then mine four copper ore veins.', hint: 'A stone pick breaks copper. Use the Craft shelf before entering the hollow.', enemies: 1 },
     { name: 'Hearthfield', biome: 'meadow', seed: 4579, goal: 'shelter', goalText: 'Raise six plank blocks for a storm shelter.', hint: 'Place planks one block at a time on solid ground. Keep an eye on the dusk meter.', enemies: 1 },
@@ -72,11 +76,20 @@
     11: { type: 'summit', cell: [14, 14] }
   };
 
-  function terrainFor(stageIndex, x, y, chosenSeed) {
+  function terrainFor(stageIndex, x, y, chosenSeed, worldVersion) {
     const stage = STAGES[stageIndex];
     const seedOffset = Number.isInteger(chosenSeed) ? (chosenSeed ^ DEFAULT_SEED) : 0;
     const n = hash(stage.seed ^ seedOffset, x, y);
     let h = 1 + (n % 2);
+    // Version two keeps the established seed/resources but gives new
+    // first-person journeys a navigable camp and sparse elevation.  Missing
+    // version fields are deliberately v1 so released saves never regenerate
+    // beneath their existing edits.
+    if (worldVersion >= 2) {
+      h = 1 + ((n >>> 4) % 11 === 0 ? 1 : 0);
+      if (stageIndex === 0 && x <= 7 && y <= 7) h = 1;
+      if (stageIndex >= 5 && n % 13 === 0) h = Math.min(3, h + 1);
+    }
     let surface = stage.biome === 'desert' ? 'sand' : stage.biome === 'frost' ? 'ice' : stage.biome === 'ember' ? 'basalt' : 'dirt';
     let water = false;
     let lava = false;
@@ -97,10 +110,10 @@
     return { x, y, h, surface, resource, water, lava, bridge: false, extra: [] };
   }
 
-  function makeWorld(stageIndex, edits, chosenSeed) {
+  function makeWorld(stageIndex, edits, chosenSeed, worldVersion) {
     const cells = new Array(SIZE * SIZE);
     for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-      const cell = terrainFor(stageIndex, x, y, chosenSeed);
+      const cell = terrainFor(stageIndex, x, y, chosenSeed, worldVersion || 1);
       const edit = edits && edits[key(x, y)];
       if (edit) {
         if (Number.isInteger(edit.h)) cell.h = clamp(edit.h, 0, 12);
@@ -126,9 +139,13 @@
   function emptyInventory() { const inventory = {}; for (const name of INVENTORY_KEYS) inventory[name] = 0; return inventory; }
   function createGame(seed) {
     const state = {
-      version: SAVE_VERSION, seed: Number.isInteger(seed) ? seed : DEFAULT_SEED, stage: 0, unlocked: 0, completed: [], stageComplete: false,
+      version: SAVE_VERSION, worldVersion: WORLD_VERSION, seed: Number.isInteger(seed) ? seed : DEFAULT_SEED, stage: 0, unlocked: 0, completed: [], stageComplete: false,
       inventory: emptyInventory(), crafted: {}, placed: {}, mined: {}, bridgeBuilt: 0, tallest: 0, enemiesDefeated: 0,
-      minedSites: {}, siteStacks: {}, placedSites: {}, player: { x: 2.5, y: 3.5, health: 8, maxHealth: 8 }, edits: {}, time: 0, enemies: [], creative: false, message: 'Welcome to Mosslight Camp.'
+      minedSites: {}, siteStacks: {}, placedSites: {}, player: { x: 2.5, y: 3.5, health: 8, maxHealth: 8 }, edits: {},
+      // `pose` and `voxelEdits` are deliberately optional v1 additions.  The
+      // first-person controller derives a safe pose for old saves and stores
+      // only changed sparse cubes, never a per-frame terrain snapshot.
+      pose: null, voxelEdits: {}, time: 0, enemies: [], creative: false, message: 'Welcome to Mosslight Camp.'
     };
     startStage(state, 0, false);
     return state;
@@ -147,6 +164,8 @@
     state.siteStacks = {};
     state.placedSites = {};
     state.player = { x: 2.5, y: 3.5, health: 8, maxHealth: 8 };
+    state.pose = null;
+    state.voxelEdits = {};
     state.enemies = [];
     const count = STAGES[stageIndex].enemies;
     for (let i = 0; i < count; i++) state.enemies.push({ id: stageIndex + '-' + i, x: 13 + (i % 3), y: 12 + Math.floor(i / 3), health: 3 + Math.floor(stageIndex / 4), cooldown: 0, alive: true });
@@ -315,6 +334,21 @@
     for (const item of INVENTORY_KEYS) if (!Number.isFinite(value.inventory[item] || 0) || (value.inventory[item] || 0) < 0 || (value.inventory[item] || 0) > 9999) return false;
     return true;
   }
+  function voxelKey(x, y, z) { return x + ',' + y + ',' + z; }
+  function validVoxel(value) {
+    if (!value || typeof value !== 'object') return false;
+    return Number.isInteger(value.x) && Number.isInteger(value.y) && Number.isInteger(value.z) && value.x >= 0 && value.x < SIZE && value.z >= 0 && value.z < SIZE && value.y >= 0 && value.y <= 24 && (value.material === null || ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(value.material));
+  }
+  function setVoxelEdit(state, x, y, z, material) {
+    const value = { x, y, z, material };
+    if (!validVoxel(value)) return false;
+    state.voxelEdits = state.voxelEdits && typeof state.voxelEdits === 'object' ? state.voxelEdits : {};
+    const keys = Object.keys(state.voxelEdits);
+    const name = voxelKey(x, y, z);
+    if (!Object.prototype.hasOwnProperty.call(state.voxelEdits, name) && keys.length >= 768) return false;
+    state.voxelEdits[name] = material;
+    return true;
+  }
   function sanitizeState(value) {
     if (!isValidState(value)) return null;
     const state = JSON.parse(JSON.stringify(value));
@@ -325,6 +359,7 @@
     state.player.x = clamp(state.player.x, .15, SIZE - .15); state.player.y = clamp(state.player.y, .15, SIZE - .15); state.player.health = clamp(state.player.health, 0, 20); state.player.maxHealth = clamp(Number(state.player.maxHealth) || 8, 1, 20);
     state.time = clamp(Number(state.time) || 0, 0, 10000000);
     state.seed = Number.isInteger(state.seed) ? state.seed : DEFAULT_SEED;
+    state.worldVersion = state.worldVersion === WORLD_VERSION ? WORLD_VERSION : 1;
     state.creative = state.creative === true;
     state.stageComplete = state.stageComplete === true;
     state.bridgeBuilt = clamp(Math.floor(Number(state.bridgeBuilt) || 0), 0, SIZE * SIZE);
@@ -338,6 +373,18 @@
       if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && edit && typeof edit === 'object') cleanedEdits[k] = { h: clamp(Math.floor(Number(edit.h) || 0), 0, 12), resource: typeof edit.resource === 'string' && MATERIALS[edit.resource] ? edit.resource : null, bridge: !!edit.bridge, extra: Array.isArray(edit.extra) ? edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12) : [] };
     }
     state.edits = cleanedEdits;
+    const cleanVoxelEdits = {};
+    if (state.voxelEdits && typeof state.voxelEdits === 'object') {
+      for (const name of Object.keys(state.voxelEdits).slice(0, 768)) {
+        const parts = name.split(',').map(Number);
+        const value = { x: parts[0], y: parts[1], z: parts[2], material: state.voxelEdits[name] };
+        if (parts.length === 3 && validVoxel(value)) cleanVoxelEdits[voxelKey(value.x, value.y, value.z)] = value.material;
+      }
+    }
+    state.voxelEdits = cleanVoxelEdits;
+    if (state.pose && typeof state.pose === 'object' && Number.isFinite(state.pose.x) && Number.isFinite(state.pose.y) && Number.isFinite(state.pose.z) && Number.isFinite(state.pose.yaw) && Number.isFinite(state.pose.pitch)) {
+      state.pose = { x: clamp(Number(state.pose.x), .2, SIZE - .2), y: clamp(Number(state.pose.y), .2, 28), z: clamp(Number(state.pose.z), .2, SIZE - .2), yaw: clamp(Number(state.pose.yaw), -Math.PI * 8, Math.PI * 8), pitch: clamp(Number(state.pose.pitch), -1.48, 1.48) };
+    } else state.pose = null;
     const cleanCounts = (source, allowed) => {
       const result = {};
       if (!source || typeof source !== 'object') return result;
@@ -359,5 +406,5 @@
   }
   function summary(state) { return { stage: state.stage, stageName: STAGES[state.stage].name, unlocked: state.unlocked, complete: !!state.stageComplete, health: Math.ceil(state.player.health), inventory: Object.assign({}, state.inventory), enemies: state.enemies.filter(e => e.alive).length }; }
 
-  return { SIZE, SAVE_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, summary, hash };
+  return { SIZE, SAVE_VERSION, WORLD_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, setVoxelEdit, validVoxel, voxelKey, summary, hash };
 });

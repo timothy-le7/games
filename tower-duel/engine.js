@@ -63,7 +63,7 @@
   function makeTower(side, type, lane, x, y) {
     const base = type === 'base';
     const maxHp = base ? 2400 : 1500;
-    return { id: side + '-' + type + '-' + lane, side, type, lane, x, y, hp: maxHp, maxHp, radius: base ? 62 : 48, range: base ? 235 : 210, damage: base ? 72 : 58, cooldown: base ? .8 : .9, attackTimer: 0, alive: true };
+    return { id: side + '-' + type + '-' + lane, side, type, lane, x, y, hp: maxHp, maxHp, radius: base ? 62 : 48, range: base ? 235 : 210, damage: base ? 72 : 58, cooldown: base ? .8 : .9, attackTimer: 0, recoil: 0, hit: 0, heading: side === 'player' ? -Math.PI / 2 : Math.PI / 2, alive: true };
   }
 
   function makeTowers() {
@@ -136,7 +136,8 @@
       damage: card.damage, speed: card.speed, range: card.range,
       cooldown: card.cooldown, attackTimer: random(state) * .12, targetType: card.target, projectile: card.projectile || 0,
       flying: !!card.flying, buildingsOnly: !!card.buildingsOnly, splash: card.splash || 0, aura: card.aura || 0,
-      multi: card.multi || 1, radius: card.size, slow: 0, haste: 0, alive: true
+      multi: card.multi || 1, radius: card.size, slow: 0, haste: 0, deploy: .58, heading: side === 'player' ? -Math.PI / 2 : Math.PI / 2,
+      walk: 0, attackAnim: 0, hit: 0, alive: true
     });
   }
 
@@ -162,9 +163,13 @@
 
   function applyDamage(state, target, amount, sourceSide) {
     if (!target.alive || amount <= 0) return;
-    target.hp -= amount;
+    target.hp -= amount; target.hit = .18;
     state.stats[sourceSide + 'Damage'] += amount;
-    if (target.hp <= 0) { target.hp = 0; target.alive = false; pushEvent(state, target.type ? 'towerDown' : 'unitDown', { side: target.side, id: target.id }); }
+    if (target.hp <= 0) {
+      target.hp = 0; target.alive = false;
+      state.effects.push({ id: 'e' + state.nextId++, kind: target.type ? 'rubble' : 'defeat', x: target.x, y: target.y, radius: target.radius || 30, color: target.side === 'player' ? '#61e5d2' : '#ff8067', life: target.type ? 1.5 : .62, maxLife: target.type ? 1.5 : .62, cardId: target.cardId || '' });
+      pushEvent(state, target.type ? 'towerDown' : 'unitDown', { side: target.side, id: target.id });
+    }
   }
 
   function applySpell(state, side, card, x, y) {
@@ -206,6 +211,7 @@
   }
 
   function attack(state, unit, target) {
+    unit.attackAnim = .24;
     let boost = 1;
     for (const ally of state.units) if (ally.alive && ally.side === unit.side && ally.aura && distance(ally, unit) < 145) boost = Math.max(boost, ally.aura);
     if (unit.projectile) {
@@ -221,9 +227,41 @@
     }
   }
 
+  function movementGoal(unit, target) {
+    if (unit.flying) return target;
+    const crossingUp = unit.y > RIVER_BOTTOM && target.y < RIVER_TOP;
+    const crossingDown = unit.y < RIVER_TOP && target.y > RIVER_BOTTOM;
+    if (!crossingUp && !crossingDown && !(unit.y > RIVER_TOP && unit.y < RIVER_BOTTOM)) return target;
+    const bridgeX = LANES[unit.lane];
+    if (crossingUp && unit.y > RIVER_BOTTOM + 18) return { x: bridgeX, y: RIVER_BOTTOM + 8 };
+    if (crossingDown && unit.y < RIVER_TOP - 18) return { x: bridgeX, y: RIVER_TOP - 8 };
+    return { x: bridgeX, y: target.y };
+  }
+
+  function separateUnits(state, dt) {
+    for (let i = 0; i < state.units.length; i++) for (let j = i + 1; j < state.units.length; j++) {
+      const a = state.units[i], b = state.units[j];
+      if (!a.alive || !b.alive || a.side !== b.side || a.flying !== b.flying) continue;
+      let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (d < .001) { const angle = (i * 2.17 + j * 1.31) % (Math.PI * 2); dx = Math.cos(angle); dy = Math.sin(angle); d = 1; }
+      const desired = (a.radius + b.radius) * .7;
+      if (d >= desired) continue;
+      const push = Math.min(28 * dt, (desired - d) * .5), nx = dx / d, ny = dy / d;
+      a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+    }
+    for (const unit of state.units) if (!unit.flying && unit.y > RIVER_TOP && unit.y < RIVER_BOTTOM) {
+      const bridgeX = LANES[unit.lane];
+      unit.x = clamp(unit.x, bridgeX - 56 + unit.radius * .25, bridgeX + 56 - unit.radius * .25);
+    }
+  }
+
   function updateUnits(state, dt) {
     for (const unit of state.units) {
       if (!unit.alive) continue;
+      unit.deploy = Math.max(0, Number(unit.deploy) || 0);
+      unit.heading = Number.isFinite(unit.heading) ? unit.heading : (unit.side === 'player' ? -Math.PI / 2 : Math.PI / 2);
+      unit.walk = Number(unit.walk) || 0; unit.attackAnim = Math.max(0, (Number(unit.attackAnim) || 0) - dt); unit.hit = Math.max(0, (Number(unit.hit) || 0) - dt);
+      if (unit.deploy > 0) { unit.deploy = Math.max(0, unit.deploy - dt); continue; }
       unit.attackTimer = Math.max(0, unit.attackTimer - dt);
       unit.slow = Math.max(0, unit.slow - dt); unit.haste = Math.max(0, unit.haste - dt);
       const target = nearestTarget(state, unit);
@@ -232,13 +270,16 @@
       if (gap <= unit.range) {
         if (unit.attackTimer <= 0) { attack(state, unit, target); unit.attackTimer = unit.cooldown; }
       } else {
-        const dx = target.x - unit.x, dy = target.y - unit.y, length = Math.max(.001, Math.hypot(dx,dy));
+        const goal = movementGoal(unit, target);
+        const dx = goal.x - unit.x, dy = goal.y - unit.y, length = Math.max(.001, Math.hypot(dx,dy));
         const modifier = (unit.slow > 0 ? .53 : 1) * (unit.haste > 0 ? 1.34 : 1);
-        const stride = Math.min(gap, unit.speed * modifier * dt);
+        const stride = Math.min(length, unit.speed * modifier * dt);
         unit.x += dx / length * stride; unit.y += dy / length * stride;
+        unit.heading = Math.atan2(dy, dx); unit.walk = (unit.walk + stride * .055) % (Math.PI * 2);
         unit.lane = laneFor(unit.x);
       }
     }
+    separateUnits(state, dt);
     state.units = state.units.filter((u) => u.alive);
   }
 
@@ -262,9 +303,11 @@
   function updateTowers(state, dt) {
     for (const tower of state.towers) {
       if (!tower.alive) continue;
+      tower.recoil = Math.max(0, (Number(tower.recoil) || 0) - dt); tower.hit = Math.max(0, (Number(tower.hit) || 0) - dt);
       tower.attackTimer = Math.max(0, tower.attackTimer - dt);
       const targets = state.units.filter((u) => u.alive && u.side !== tower.side && distance(tower,u) <= tower.range + u.radius).sort((a,b) => distance(tower,a)-distance(tower,b));
-      if (targets[0] && tower.attackTimer <= 0) { launchProjectile(state, Object.assign({ projectile: 620, cardId: '' }, tower), targets[0], tower.damage, 0); tower.attackTimer = tower.cooldown; }
+      if (targets[0]) tower.heading = Math.atan2(targets[0].y - tower.y, targets[0].x - tower.x);
+      if (targets[0] && tower.attackTimer <= 0) { launchProjectile(state, Object.assign({ projectile: 620, cardId: '' }, tower), targets[0], tower.damage, 0); tower.attackTimer = tower.cooldown; tower.recoil = .2; }
     }
   }
 
@@ -349,7 +392,7 @@
   }
 
   function fixedUpdate(state, dt) {
-    const regen = state.mode === 'frenzy' ? 1.6 : (state.overtime ? 1.45 : .82);
+    const regen = state.mode === 'frenzy' || state.overtime ? 1.64 : .82;
     state.energy.player = clamp(state.energy.player + regen * dt, 0, MAX_ENERGY);
     state.energy.enemy = clamp(state.energy.enemy + regen * dt, 0, MAX_ENERGY);
     updateUnits(state,dt); updateTowers(state,dt); updateProjectiles(state,dt);
@@ -391,7 +434,23 @@
   }
 
   function snapshot(state) { const value = copy(state); value.accumulator = 0; return value; }
-  function restore(value) { if (!validateSnapshot(value)) throw new Error('Invalid Tower Duel match snapshot'); return copy(value); }
+  function restore(value) {
+    if (!validateSnapshot(value)) throw new Error('Invalid Tower Duel match snapshot');
+    const state = copy(value);
+    for (const tower of state.towers) {
+      tower.recoil = Number.isFinite(tower.recoil) ? tower.recoil : 0;
+      tower.hit = Number.isFinite(tower.hit) ? tower.hit : 0;
+      tower.heading = Number.isFinite(tower.heading) ? tower.heading : (tower.side === 'player' ? -Math.PI / 2 : Math.PI / 2);
+    }
+    for (const unit of state.units) {
+      unit.deploy = Number.isFinite(unit.deploy) ? unit.deploy : 0;
+      unit.heading = Number.isFinite(unit.heading) ? unit.heading : (unit.side === 'player' ? -Math.PI / 2 : Math.PI / 2);
+      unit.walk = Number.isFinite(unit.walk) ? unit.walk : 0;
+      unit.attackAnim = Number.isFinite(unit.attackAnim) ? unit.attackAnim : 0;
+      unit.hit = Number.isFinite(unit.hit) ? unit.hit : 0;
+    }
+    return state;
+  }
 
   return { VERSION, WIDTH, HEIGHT, RIVER_TOP, RIVER_BOTTOM, STEP, MAX_ENERGY, LANES, cards, cardMap, arenas, starterDeck, createMatch, playCard, legalPlacement, tick, aiStep, scoreSide, snapshot, restore, validateSnapshot };
 });

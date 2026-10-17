@@ -17,7 +17,7 @@
 <body>
   <main id="app">
     <section id="home" class="screen home-screen" aria-labelledby="game-title">
-      <div class="brand-mark" aria-hidden="true"><span>⚑</span><span>⚐</span></div>
+      <div class="brand-mark" aria-hidden="true"><span></span><i></i><span></span></div>
       <p class="eyebrow">SKYLINE LEAGUE</p>
       <h1 id="game-title">Tower Duel</h1>
       <p class="tagline">Outsmart two lanes. Build a bold push. Topple the rival beacon.</p>
@@ -65,8 +65,11 @@
         <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
       </div>
       <div class="hand-zone">
-        <div class="energy-row"><span>Spark</span><div class="energy-track"><i id="energy-fill"></i></div><b id="energy-number">5</b></div>
-        <div id="hand" class="hand" aria-label="Your hand"></div>
+        <div class="energy-row"><span>Spark</span><div id="energy-track" class="energy-track" aria-label="Energy: 5 of 10"></div><b id="energy-number">5</b></div>
+        <div class="hand-strip">
+          <div id="next-card" class="next-card" aria-label="Next card"><span>Next</span><div id="next-card-art"></div></div>
+          <div id="hand" class="hand" aria-label="Your hand"></div>
+        </div>
       </div>
     </section>
 

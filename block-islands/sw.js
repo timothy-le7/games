@@ -2,9 +2,9 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:block-islands:";
-const RELEASE = "ae1b7ad60699d1c47025";
+const RELEASE = "921c8c147f0cbd250336";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
-const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./game-pwa.js","./game.css","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./rules.js"];
+const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./game-pwa.js","./game.css","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./rules.js","./voxel-view.js"];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {

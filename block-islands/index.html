@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#14263a">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#182d42">
   <title>Block Islands</title>
   <link rel="stylesheet" href="./game.css">
 <meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
@@ -13,38 +13,36 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 </head>
 <body>
-  <main id="app" aria-label="Block Islands">
-    <canvas id="world" aria-label="A voxel island adventure. Use the movement controls, then aim at a block to mine or place it."></canvas>
-    <div class="skyline" aria-hidden="true"></div>
-    <header class="hud top-hud">
-      <button id="menuButton" class="round-button" aria-label="Open game menu">☰</button>
-      <div class="stage-readout"><span id="stageNumber">ISLAND 1 / 12</span><strong id="stageName">Mosslight Camp</strong><small id="goalText">Gather resources and craft a campfire.</small></div>
-      <div class="vitals" aria-label="Player health"><span>♥</span><b id="healthText">8</b><i id="dayClock">DAY</i></div>
+  <main id="app" aria-label="Block Islands first-person island adventure">
+    <canvas id="world" aria-label="First-person voxel island. Look with the right side of the screen, move with the left joystick, then hold Mine or tap Place."></canvas>
+    <header class="top-hud hud">
+      <button id="menuButton" class="round" aria-label="Open pause and save menu">☰</button>
+      <div class="island-readout"><span id="stageNumber">ISLAND 1 / 12</span><strong id="stageName">Mosslight Camp</strong></div>
+      <div class="vitals" aria-label="Health"><span>♥</span><b id="healthText">8</b><small id="dayClock">DAY</small></div>
     </header>
-    <div class="hud status-line" id="statusLine" role="status">Aim at a nearby block, then mine it.</div>
-    <aside class="hud quest-card" id="questCard"><b>FIELD GOAL</b><span id="questProgress">Gather wood and stone, then craft a campfire.</span></aside>
-    <div class="target-tag hud" id="targetTag" hidden></div>
-    <section class="action-dock hud" aria-label="Building and action controls">
-      <div id="hotbar" class="hotbar" role="group" aria-label="Select a building block"></div>
-      <div class="actions">
-        <button id="mineButton" class="action primary">Mine</button>
-        <button id="placeButton" class="action">Place</button>
-        <button id="strikeButton" class="action danger">Strike</button>
-        <button id="craftButton" class="action craft">Craft</button>
+    <button id="objectiveButton" class="objective hud" aria-expanded="false"><b>OBJECTIVE</b><span id="questProgress">Gather wood and stone, then craft a campfire.</span></button>
+    <div id="statusLine" class="status hud" role="status">Look around, then move to the nearby logs and pale rock.</div>
+    <div id="crosshair" class="crosshair hud" aria-hidden="true"><i></i><i></i></div>
+    <div id="targetTag" class="target-tag hud" hidden></div>
+    <div id="mineProgress" class="mine-progress hud" aria-hidden="true"><i></i></div>
+    <aside id="heldReadout" class="held-readout hud" aria-live="polite">Plank · 0</aside>
+    <section id="hotbar" class="hotbar hud" role="group" aria-label="Hotbar"></section>
+    <section class="touch-layer hud" aria-label="Touch game controls">
+      <div id="moveZone" class="move-zone" aria-label="Move with this joystick"><span id="joyBase"></span><span id="joyKnob"></span></div>
+      <div id="lookZone" class="look-zone" aria-label="Drag to look around"></div>
+      <div class="action-cluster" aria-label="Actions">
+        <button id="jumpButton" class="round action-button jump" aria-label="Jump">↑</button>
+        <button id="mineButton" class="action-button mine" aria-label="Hold to mine">Mine</button>
+        <button id="placeButton" class="action-button place" aria-label="Place selected block">Place</button>
+        <button id="strikeButton" class="round action-button strike" aria-label="Strike creature">✦</button>
+        <button id="craftButton" class="round action-button craft" aria-label="Open crafting">⌑</button>
       </div>
     </section>
-    <nav class="touch-controls hud" aria-label="Move around the island">
-      <button data-move="up" aria-label="Move forward">▲</button>
-      <button data-move="left" aria-label="Move left">◀</button>
-      <button data-move="down" aria-label="Move back">▼</button>
-      <button data-move="right" aria-label="Move right">▶</button>
-    </nav>
-    <div id="overlay" class="overlay open" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
-      <section id="panel" class="panel"></section>
-    </div>
+    <div id="overlay" class="overlay open" role="dialog" aria-modal="true" aria-labelledby="overlayTitle"><section id="panel" class="panel"></section></div>
     <input id="importInput" type="file" accept="application/json,.json" hidden>
   </main>
   <script src="./rules.js"></script>
+  <script src="./voxel-view.js"></script>
   <script src="./game.js"></script>
 <script data-games-pwa-runtime src="./game-pwa.js"></script>
 </body>
