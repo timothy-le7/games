@@ -3,3 +3,10 @@
 @media (max-width:340px){.top-hud{gap:6px}.round{width:44px;height:44px}.vitals{min-width:56px;min-height:44px}.island-readout strong{font-size:14px}.objective{max-width:218px}.status{max-width:74vw}.move-zone{transform:scale(.83);transform-origin:bottom left}.action-cluster{transform:scale(.84);transform-origin:bottom right}.hotbar{max-width:calc(100vw - 154px)}.slot{flex-basis:46px;min-height:46px}}
 @media (max-height:500px) and (orientation:landscape){.top-hud{top:6px}.objective{top:58px;max-width:235px}.objective[aria-expanded="false"]{max-height:35px}.status{top:63px;left:54%;max-width:43vw}.move-zone{transform:scale(.78);transform-origin:bottom left}.action-cluster{transform:scale(.77);transform-origin:bottom right}.held-readout{bottom:126px}.hotbar{bottom:5px;max-width:48vw}.slot{flex-basis:43px;min-height:43px}.panel{max-width:600px;padding:17px}.panel h1,.panel h2{font-size:23px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+
+/* Give inventory its own row above the look surface; keep thumb controls clear. */
+.hotbar{z-index:5;width:max-content;max-width:calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right))}
+.slot{flex-basis:50px;min-width:50px;min-height:50px}
+.slot em{top:3px;right:3px;bottom:auto;min-width:13px;padding:0 2px;border-radius:4px;background:#10243aeb;font-size:11px;text-align:center}
+.move-zone,.action-cluster{bottom:calc(max(13px,env(safe-area-inset-bottom)) + 70px);transform:none}
+.held-readout{bottom:calc(max(13px,env(safe-area-inset-bottom)) + 262px)}
