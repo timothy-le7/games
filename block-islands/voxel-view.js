@@ -9,7 +9,10 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function buildVoxelView() {
   'use strict';
 
-  const MATERIALS = ['grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'plank', 'ore', 'ice', 'crystal', 'basalt', 'beacon', 'water', 'lava', 'shadow'];
+  // All scenery is procedural and local. These small material variants give
+  // grassland, trees, and interaction feedback readable depth without an
+  // external texture pack or a per-frame canvas upload.
+  const MATERIALS = ['grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'plank', 'ore', 'ice', 'crystal', 'basalt', 'beacon', 'water', 'lava', 'shadow', 'fern', 'flower', 'moss'];
   const MATERIAL_INDEX = Object.freeze(MATERIALS.reduce((all, name, index) => { all[name] = index; return all; }, Object.create(null)));
   const MAX_RENDER_PIXELS = 5_500_000;
   const EPSILON = 1e-9;
@@ -80,6 +83,32 @@
     }
   }
 
+  /**
+   * Pull a following camera toward its subject before the camera volume can
+   * enter terrain.  The five rays are a deliberately small, deterministic
+   * approximation of a padded camera sweep: center plus horizontal and
+   * vertical shoulders.  It is useful outside the renderer too, so controller
+   * tests can qualify collision without needing a WebGL context.
+   */
+  function retractCamera(getBlock, target, desired, padding = .18) {
+    if (typeof getBlock !== 'function' || !Array.isArray(target) || !Array.isArray(desired)) return null;
+    const start = target.map(Number), end = desired.map(Number);
+    if (!start.every(Number.isFinite) || !end.every(Number.isFinite)) return null;
+    const delta = end.map((value, axis) => value - start[axis]), total = length(delta);
+    if (total < EPSILON) return { position: start.slice(), distance: 0, collision: false };
+    const direction = normalize(delta), safePadding = clamp(Number(padding) || 0, 0, .45);
+    let right = normalize(cross(direction, [0, 1, 0]));
+    if (length(right) < EPSILON) right = [1, 0, 0];
+    const up = normalize(cross(right, direction));
+    const offsets = [[0, 0, 0], right.map(value => value * safePadding), right.map(value => -value * safePadding), up.map(value => value * safePadding), up.map(value => -value * safePadding)];
+    let travel = total, collision = false;
+    for (const offset of offsets) {
+      const hit = raycast(getBlock, start.map((value, axis) => value + offset[axis]), direction, total);
+      if (hit && hit.distance < travel + EPSILON) { travel = Math.max(.055, hit.distance - safePadding); collision = true; }
+    }
+    return { position: start.map((value, axis) => value + direction[axis] * travel), distance: travel, collision };
+  }
+
   function identity() { return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); }
   function multiply(a, b) {
     const result = new Float32Array(16);
@@ -141,6 +170,7 @@
   }
 
   function shaderSources() {
+    const atlasColumns = MATERIALS.length + '.0';
     const vertex = `
       attribute vec3 aPosition; attribute vec3 aNormal; attribute float aMaterial; attribute vec2 aUv;
       uniform mat4 uMvp; uniform mat4 uModel; uniform float uMaterialOverride;
@@ -151,21 +181,33 @@
       precision mediump float;
       uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay;
       varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial;
-      vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/15.0,clamp(uv.y,.02,.98))).rgb; }
+      vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
       void main(){
         float material=floor(vMaterial+.5); vec3 color=sampleMaterial(material,vUv); vec3 normal=normalize(vNormal);
         if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); color=mix(soil,color,smoothstep(.58,.87,vUv.y)); }
         if(abs(material-4.0)<.5 && abs(normal.y)>.5){ float rings=sin(length(vUv-vec2(.5))*38.0); color+=vec3(rings*.075); }
+        if(abs(material-5.0)<.5){ float gaps=fract(vUv.x*7.0+vUv.y*11.0); if(gaps>.89 && abs(normal.y)<.5) discard; color+=vec3(.025,.07,.015)*sin(vUv.x*24.0); }
         if(abs(material-12.0)<.5) color+=vec3(.02,.11,.14)*sin((vUv.x+vUv.y+uTime*.45)*18.0);
-        vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)); float light=.30+uDaylight*(.24+.76*diffuse);
-        color*=light; float fog=smoothstep(25.0,62.0,length(vWorld-uCamera)); color=mix(color,mix(vec3(.08,.18,.29),vec3(.42,.76,.87),uDaylight),fog);
+        vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)); float horizon=max(.0,normal.y)*.10; float light=.22+uDaylight*(.22+.72*diffuse+horizon);
+        color*=light; float fog=smoothstep(36.0,92.0,length(vWorld-uCamera)); color=mix(color,mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight),fog);
         float alpha=1.0;
         if(uOverlay>0.0){ float crack=max(step(.94,fract(vUv.x*13.0+vUv.y*5.0)),step(.96,fract(vUv.y*17.0-vUv.x*7.0))); color=mix(color,vec3(.06,.08,.10),crack*uOverlay); alpha=.12+.36*uOverlay; }
         gl_FragColor=vec4(color,alpha);
       }
     `;
     const skyVertex = 'attribute vec2 aPosition; varying vec2 vUv; void main(){vUv=aPosition*.5+.5;gl_Position=vec4(aPosition,0.,1.);}';
-    const skyFragment = 'precision mediump float; varying vec2 vUv; uniform float uDaylight; void main(){vec3 dusk=vec3(.055,.11,.20),horizon=vec3(.18,.36,.52),day=vec3(.39,.76,.89);vec3 color=mix(dusk,mix(horizon,day,uDaylight),smoothstep(.04,.94,vUv.y));gl_FragColor=vec4(color,1.);}';
+    const skyFragment = `
+      precision mediump float; varying vec2 vUv; uniform float uDaylight; uniform float uTime;
+      float box(vec2 p,vec2 b){vec2 d=abs(p)-b;return max(d.x,d.y);}
+      void main(){
+        vec3 dusk=vec3(.045,.09,.17), horizon=vec3(.26,.43,.58), day=vec3(.34,.72,.88);
+        vec3 color=mix(dusk,mix(horizon,day,uDaylight),smoothstep(.02,.96,vUv.y));
+        vec2 sunPos=vec2(.78,mix(.30,.74,uDaylight)); float sun=smoothstep(.055,.035,length(vUv-sunPos));
+        color=mix(color,vec3(1.0,.86,.48),sun*max(.18,uDaylight));
+        vec2 cloud=vec2(fract(vUv.x+.035*uTime)-.5,vUv.y-.76); float band=step(box(cloud,vec2(.17,.018)),0.0)+step(box(cloud-vec2(.18,.035),vec2(.11,.014)),0.0);
+        color=mix(color,mix(vec3(.24,.31,.40),vec3(.92,.95,.91),uDaylight),band*.42);
+        gl_FragColor=vec4(color,1.0);
+      }`;
     const lineVertex = 'attribute vec3 aPosition; uniform mat4 uMvp; uniform mat4 uModel; void main(){gl_Position=uMvp*uModel*vec4(aPosition,1.);}';
     const lineFragment = 'precision mediump float; uniform vec4 uColor; void main(){gl_FragColor=uColor;}';
     return { vertex, fragment, skyVertex, skyFragment, lineVertex, lineFragment };
@@ -182,7 +224,7 @@
     return program;
   }
   function texturePixels() {
-    const colors = [[84, 163, 67], [128, 83, 48], [117, 128, 135], [212, 187, 121], [128, 81, 40], [65, 133, 66], [174, 123, 68], [112, 126, 132], [129, 205, 231], [151, 100, 213], [62, 67, 75], [236, 194, 70], [47, 166, 205], [221, 83, 39], [20, 31, 38]];
+    const colors = [[76, 158, 65], [126, 82, 48], [114, 125, 133], [211, 183, 115], [122, 76, 37], [53, 124, 62], [176, 120, 65], [101, 111, 118], [142, 198, 225], [137, 92, 198], [55, 60, 69], [222, 189, 76], [43, 153, 194], [205, 73, 36], [17, 25, 31], [41, 117, 59], [231, 112, 87], [72, 140, 73]];
     const side = 16, bytes = new Uint8Array(side * side * MATERIALS.length * 4);
     for (let material = 0; material < MATERIALS.length; material++) for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
       const offset = ((y * side * MATERIALS.length) + material * side + x) * 4, base = colors[material];
@@ -192,6 +234,8 @@
       if (material === 5) pattern += (x + y) % 6 === 0 ? 20 : 0;
       if (material === 10) pattern -= (x + y) % 5 === 0 ? 17 : 0;
       if (material === 11) pattern += (x === 7 || y === 7) ? 35 : 0;
+      if (material === 15) pattern += (x + y) % 4 === 0 ? 22 : -4;
+      if (material === 16) pattern += (x === 7 || y === 7) ? 48 : -10;
       bytes[offset] = clamp(base[0] + pattern, 0, 255); bytes[offset + 1] = clamp(base[1] + pattern, 0, 255); bytes[offset + 2] = clamp(base[2] + pattern, 0, 255); bytes[offset + 3] = 255;
     }
     return { pixels: bytes, width: side * MATERIALS.length, height: side };
@@ -210,7 +254,7 @@
       programs = { world: makeProgram(gl, source.vertex, source.fragment, 'world'), sky: makeProgram(gl, source.skyVertex, source.skyFragment, 'sky'), line: makeProgram(gl, source.lineVertex, source.lineFragment, 'line') };
       locations = {
         world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
-        sky: { position: gl.getAttribLocation(programs.sky, 'aPosition'), daylight: gl.getUniformLocation(programs.sky, 'uDaylight') },
+        sky: { position: gl.getAttribLocation(programs.sky, 'aPosition'), daylight: gl.getUniformLocation(programs.sky, 'uDaylight'), time: gl.getUniformLocation(programs.sky, 'uTime') },
         line: { position: gl.getAttribLocation(programs.line, 'aPosition'), mvp: gl.getUniformLocation(programs.line, 'uMvp'), model: gl.getUniformLocation(programs.line, 'uModel'), color: gl.getUniformLocation(programs.line, 'uColor') }
       };
       worldBuffer = gl.createBuffer(); cubeBuffer = gl.createBuffer(); edgeBuffer = gl.createBuffer(); skyBuffer = gl.createBuffer(); atlas = gl.createTexture();
@@ -280,7 +324,13 @@
       drawCube(mvp, camera, daylight, time, modelBox(x - .12, y + stride, z - .12, .24, .50, .24, yaw), team[0], 0);
       drawCube(mvp, camera, daylight, time, modelBox(x + .14, y - stride, z - .12, .24, .50, .24, yaw), team[0], 0);
       drawCube(mvp, camera, daylight, time, modelBox(x - .34, y + .45, z - .27, .68, .60, .54, yaw), team[1], 0);
+      // Two articulated arms and a crest make the original dusk skitter read
+      // as a creature at a phone distance, not a single animated cube.
+      const arm = Math.sin((Number(entity.walk) || 0) * Math.PI * 2) * .16 + attack * .20;
+      drawCube(mvp, camera, daylight, time, modelBox(x - .46, y + .57 + arm, z - .17, .16, .42, .17, yaw), team[0], 0);
+      drawCube(mvp, camera, daylight, time, modelBox(x + .30, y + .57 - arm, z - .17, .16, .42, .17, yaw), team[0], 0);
       drawCube(mvp, camera, daylight, time, modelBox(x - .29, y + 1.02, z - .25, .58, .52, .50, yaw), team[0], 0);
+      drawCube(mvp, camera, daylight, time, modelBox(x - .08, y + 1.53, z - .10, .16, .18, .18, yaw), team[2], 0);
       const gaze = forward(yaw, 0), side = normalize(cross(gaze, [0, 1, 0])), eye = [x + gaze[0] * .29, y + 1.25, z + gaze[2] * .29];
       drawCube(mvp, camera, daylight, time, modelBox(eye[0] + side[0] * .15, eye[1], eye[2] + side[2] * .15, .12, .12, .08, yaw), team[2], attack * .16);
       drawCube(mvp, camera, daylight, time, modelBox(eye[0] - side[0] * .15, eye[1], eye[2] - side[2] * .15, .12, .12, .08, yaw), team[2], attack * .16);
@@ -292,17 +342,71 @@
       const swing = clamp(Number(held.swing) || 0, 0, 1), position = [camera[0] + look[0] * (1.45 - swing * .12) + right[0] * .18 - up[0] * (.62 + swing * .07), camera[1] + look[1] * (1.45 - swing * .12) + right[1] * .18 - up[1] * (.62 + swing * .07), camera[2] + look[2] * (1.45 - swing * .12) + right[2] * .18 - up[2] * (.62 + swing * .07)];
       const model = modelBasis(position, right, up, [-look[0], -look[1], -look[2]], [held.material === 'tool' ? .09 : .33, held.material === 'tool' ? .55 : .33, held.material === 'tool' ? .09 : .33]);
       drawCube(mvp, camera, daylight, time, model, held.material === 'tool' ? 'wood' : held.material, 0);
-      if (held.material === 'tool') drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .43, position[1] + up[1] * .43, position[2] + up[2] * .43], right, up, [-look[0], -look[1], -look[2]], [.30, .14, .16]), 'stone', 0);
+      if (held.material === 'tool') {
+        // A compact explorer glove makes the tool a held object rather than
+        // a floating HUD prop, while keeping the target and phone actions clear.
+        drawCube(mvp, camera, daylight, time, modelBasis([position[0] - up[0] * .10 - right[0] * .10, position[1] - up[1] * .10 - right[1] * .10, position[2] - up[2] * .10 - right[2] * .10], right, up, [-look[0], -look[1], -look[2]], [.20, .18, .20]), 'sand', 0);
+        drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .43, position[1] + up[1] * .43, position[2] + up[2] * .43], right, up, [-look[0], -look[1], -look[2]], [.30, .14, .16]), 'stone', 0);
+        drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .38 + right[0] * .19, position[1] + up[1] * .38 + right[1] * .19, position[2] + up[2] * .38 + right[2] * .19], right, up, [-look[0], -look[1], -look[2]], [.10, .10, .22]), 'stone', 0);
+      }
+    }
+    function drawPlayer(mvp, camera, daylight, time, player) {
+      if (!player || !Number.isFinite(player.x) || !Number.isFinite(player.y) || !Number.isFinite(player.z)) return;
+      const x = player.x, y = player.y, z = player.z, yaw = Number(player.heading) || 0, stride = player.walk ? Math.sin(player.walk * Math.PI * 2) * .42 : 0, swing = clamp(Number(player.swing) || 0, 0, 1), gaze = forward(yaw, 0), side = normalize(cross(gaze, [0, 1, 0])), up = [0, 1, 0];
+      const offset = (origin, vector, amount) => [origin[0] + vector[0] * amount, origin[1] + vector[1] * amount, origin[2] + vector[2] * amount];
+      const box = (center, right, vertical, front, scale, material) => {
+        const base = [center[0] - right[0] * scale[0] / 2 - vertical[0] * scale[1] / 2 - front[0] * scale[2] / 2, center[1] - right[1] * scale[0] / 2 - vertical[1] * scale[1] / 2 - front[1] * scale[2] / 2, center[2] - right[2] * scale[0] / 2 - vertical[2] * scale[1] / 2 - front[2] * scale[2] / 2];
+        drawCube(mvp, camera, daylight, time, modelBasis(base, right, vertical, front, scale), material, 0);
+      };
+      const limb = (pivot, angle, length, width, material) => {
+        const vertical = normalize([up[0] * Math.cos(angle) + gaze[0] * Math.sin(angle), Math.cos(angle), up[2] * Math.cos(angle) + gaze[2] * Math.sin(angle)]), front = normalize(cross(vertical, side));
+        box(offset(pivot, vertical, -length / 2), side, vertical, front, [width, length, .20], material);
+        return { hand: offset(pivot, vertical, -length - .045), vertical, front };
+      };
+      // Original field explorer: a planted contact shadow, slate boots,
+      // moss jacket and copper scarf. Limbs pivot from the actual player body.
+      drawCube(mvp, camera, daylight, time, modelBox(x - .32, y + .01, z - .32, .64, .025, .64, 0), 'shadow', 0);
+      const leftHip = offset([x, y + .50, z], side, -.10), rightHip = offset([x, y + .50, z], side, .10);
+      limb(leftHip, stride, .50, .18, 'basalt'); limb(rightHip, -stride, .50, .18, 'basalt');
+      box([x, y + .77, z], side, up, gaze, [.54, .54, .40], 'moss');
+      const leftArm = limb(offset([x, y + 1.00, z], side, -.34), -stride * .72, .47, .14, 'moss');
+      const rightArm = limb(offset([x, y + 1.00, z], side, .34), stride * .72 - swing * 1.10, .47, .14, 'moss');
+      const head = [x, y + 1.28, z], headGaze = forward(yaw, clamp(Number(player.look) || 0, -.55, .55) * .45), headUp = normalize(cross(side, headGaze));
+      box(head, side, headUp, headGaze, [.44, .43, .36], 'sand');
+      const face = offset(head, headGaze, .205);
+      box(offset(face, side, .10), side, headUp, headGaze, [.07, .07, .04], 'crystal'); box(offset(face, side, -.10), side, headUp, headGaze, [.07, .07, .04], 'crystal');
+      box(offset(head, headUp, .22), side, headUp, headGaze, [.46, .13, .40], 'wood');
+      const glove = rightArm.hand;
+      box(glove, side, up, gaze, [.16, .16, .16], 'sand');
+      if (player.held === 'tool') {
+        const shaftCenter = offset(glove, rightArm.vertical, .22);
+        box(shaftCenter, side, rightArm.vertical, rightArm.front, [.10, .54, .10], 'wood');
+        box(offset(glove, rightArm.vertical, .48), side, rightArm.vertical, rightArm.front, [.30, .14, .18], 'stone');
+      } else if (player.held) box(offset(glove, gaze, .14), side, up, gaze, [.27, .27, .27], player.held);
+    }
+    function drawEffects(mvp, camera, daylight, time, effects) {
+      for (const effect of effects || []) {
+        if (!effect || !Number.isFinite(effect.x) || !Number.isFinite(effect.age)) continue;
+        const age = clamp(effect.age, 0, 1), count = effect.kind === 'place' ? 3 : 5;
+        for (let i = 0; i < count; i++) {
+          const angle = i * 2.399 + (effect.x + effect.z) * .31;
+          const rise = age * (effect.kind === 'place' ? .34 : .70);
+          const radius = age * (.15 + i * .045);
+          drawCube(mvp, camera, daylight, time, modelBox(effect.x + Math.cos(angle) * radius - .055, effect.y + rise + Math.sin(angle * 1.7) * .07 - .055, effect.z + Math.sin(angle) * radius - .055, .11, .11, .11, 0), effect.material || 'stone', age * .4);
+        }
+      }
     }
     function render(frame) {
       if (destroyed || contextLost) return false;
       const input = frame || {}, cameraInput = input.camera || {}, camera = Array.isArray(cameraInput.position) ? cameraInput.position : [0, 2, 0];
       const position = [Number(camera[0]) || 0, Number(camera[1]) || 2, Number(camera[2]) || 0], yaw = Number(cameraInput.yaw) || 0, pitch = clamp(Number(cameraInput.pitch) || 0, -1.53, 1.53), fov = clamp(Number(cameraInput.fov) || 70, 45, 95) * Math.PI / 180, daylight = clamp(Number.isFinite(input.daylight) ? input.daylight : .78, 0, 1), time = (Number(input.time) || 0) * .001;
       if (!dimensions.width || !dimensions.height) resize(canvas.clientWidth || 1, canvas.clientHeight || 1, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
-      const aspect = Math.max(.1, dimensions.width / dimensions.height), look = forward(yaw, pitch), right = normalize(cross(look, [0, 1, 0])), up = normalize(cross(right, look)), mvp = multiply(perspective(fov, aspect, .05, 74), cameraView(position, yaw, pitch));
-      stats.drawCalls = 0; gl.viewport(0, 0, canvas.width, canvas.height); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.useProgram(programs.sky); gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer); gl.enableVertexAttribArray(locations.sky.position); gl.vertexAttribPointer(locations.sky.position, 2, gl.FLOAT, false, 0, 0); gl.uniform1f(locations.sky.daylight, daylight); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); stats.drawCalls++;
+      const aspect = Math.max(.1, dimensions.width / dimensions.height), look = forward(yaw, pitch), right = normalize(cross(look, [0, 1, 0])), up = normalize(cross(right, look)), mvp = multiply(perspective(fov, aspect, .05, 108), cameraView(position, yaw, pitch));
+      stats.drawCalls = 0; gl.viewport(0, 0, canvas.width, canvas.height); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.useProgram(programs.sky); gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer); gl.enableVertexAttribArray(locations.sky.position); gl.vertexAttribPointer(locations.sky.position, 2, gl.FLOAT, false, 0, 0); gl.uniform1f(locations.sky.daylight, daylight); gl.uniform1f(locations.sky.time, time); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); stats.drawCalls++;
       gl.enable(gl.DEPTH_TEST); useWorld(mvp, position, daylight, time); const location = locations.world; gl.uniformMatrix4fv(location.model, false, identity()); gl.uniform1f(location.materialOverride, -1); gl.uniform1f(location.overlay, 0); if (stats.vertices) { gl.drawArrays(gl.TRIANGLES, 0, stats.vertices); stats.drawCalls++; }
       for (const entity of Array.isArray(input.entities) ? input.entities : []) drawEntity(mvp, position, daylight, time, entity);
+      drawPlayer(mvp, position, daylight, time, input.player);
+      drawEffects(mvp, position, daylight, time, Array.isArray(input.effects) ? input.effects : []);
       if (input.target && Array.isArray(input.target.block)) {
         const block = input.target.block, progress = clamp(Number(input.target.progress) || 0, 0, 1), scale = 1.008, model = modelBox(block[0] - (scale - 1) / 2, block[1] - (scale - 1) / 2, block[2] - (scale - 1) / 2, scale, scale, scale, 0), material = blockMap.get(cellKey(block[0], block[1], block[2]))?.material || 'stone';
         // A resting crosshair gets a thin outline.  Tint the whole cube only
@@ -325,5 +429,5 @@
     return { setWorld, resize, render, destroy, getStats };
   }
 
-  return Object.freeze({ createRenderer, forward, raycast, MATERIALS: MATERIALS.slice(), MAX_RENDER_PIXELS });
+  return Object.freeze({ createRenderer, forward, raycast, retractCamera, MATERIALS: MATERIALS.slice(), MAX_RENDER_PIXELS });
 }));

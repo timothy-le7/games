@@ -9,7 +9,9 @@
   const SAVE_FORMAT = 'tower-duel-save';
   const SAVE_VERSION = 1;
   const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','pause-button','game-canvas','canvas-shell','tutorial-tip','toast','energy-track','energy-number','next-card','next-card-art','hand','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
-  const ctx = els['game-canvas'].getContext('2d', { alpha: false });
+  if (!window.TowerDuelRenderer3D) throw new Error('Tower Duel 3D renderer did not load');
+  const renderer3d = new window.TowerDuelRenderer3D(els['game-canvas'], E);
+  const ctx = null;
   let storageLoadKnown = true;
   let storageConflict = false;
   let profile = loadProfile();
@@ -256,7 +258,7 @@
     if (els['next-card'].dataset.card !== nextId) { els['next-card'].dataset.card=nextId; els['next-card-art'].innerHTML=cardPortrait(E.cardMap[nextId]); els['next-card'].setAttribute('aria-label','Next card: '+E.cardMap[nextId].name); }
   }
   function selectCard(id) { if (!match || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id; renderHand(true); if (selectedCard && !profile.tutorialDone) showTutorial(E.cardMap[id].kind === 'spell' ? 'Spells can land anywhere. Tap a useful target area.' : 'Now tap your blue half. Units enter through the nearest lane.'); }
-  function canvasPoint(clientX, clientY) { const rect=els['game-canvas'].getBoundingClientRect(); return { x:(clientX-rect.left)/rect.width*E.WIDTH, y:(clientY-rect.top)/rect.height*E.HEIGHT }; }
+  function canvasPoint(clientX, clientY) { return renderer3d.screenToWorld(clientX,clientY); }
   function previewAt(clientX,clientY,id){const rect=els['game-canvas'].getBoundingClientRect(),inside=clientX>=rect.left&&clientX<=rect.right&&clientY>=rect.top&&clientY<=rect.bottom;dragPreview={id,inside,world:canvasPoint(clientX,clientY)};}
   function cancelDrag(pointerId){if(pointerDrag&&(pointerId==null||pointerDrag.pointerId===pointerId)){pointerDrag=null;dragPreview=null;renderHand(false);}}
   function deployAt(point) {
@@ -314,17 +316,7 @@
     const scale=portrait?0:Math.min(shell.width/E.WIDTH,shell.height/E.HEIGHT);
     const cssWidth=Math.max(1,Math.floor(portrait?shell.width:E.WIDTH*scale)),cssHeight=Math.max(1,Math.floor(portrait?shell.height:E.HEIGHT*scale));
     if(canvas.style.width!==cssWidth+'px'||canvas.style.height!==cssHeight+'px'){canvas.style.width=cssWidth+'px';canvas.style.height=cssHeight+'px';}
-    const pixelBudget=12000000;
-    const dpr=Math.min(devicePixelRatio||1,Math.sqrt(pixelBudget/Math.max(1,displayArea(shell.width,shell.height))));
-    const display=canvas.getBoundingClientRect(); const width=Math.max(1,Math.round(display.width*dpr)); const height=Math.max(1,Math.round(display.height*dpr));
-    if (canvas.width!==width||canvas.height!==height) { canvas.width=width;canvas.height=height; }
-    ctx.setTransform(width/E.WIDTH,0,0,height/E.HEIGHT,0,0);
-    drawArena(); drawPlacement();
-    match.towers.filter(t=>t.alive).forEach(drawTower);
-    match.units.slice().sort((a,b)=>a.y-b.y).forEach(drawUnit);
-    match.towers.filter(t=>!t.alive).forEach(drawTower);
-    match.projectiles.forEach(drawProjectile); if (!prefs.reducedEffects) match.effects.forEach(drawEffect);
-    if(dragPreview&&dragPreview.inside)drawDragGhost();
+    renderer3d.render(match,{selectedCard,dragPreview,reducedEffects:prefs.reducedEffects});
   }
   function displayArea(width,height){return Math.max(1,width*height);}
   function drawArena() {
@@ -409,6 +401,9 @@
   document.querySelector('[data-install-game]').addEventListener('click',()=>{if(!document.querySelector('link[rel="manifest"]'))showModal('INSTALL','Add to Home Screen','<p>In Safari, use <b>Share → Add to Home Screen → Add</b>. Offline installation status is available on the published site.</p>',[{label:'Got it',primary:true,action:closeModal}]);});
 
   window.GameApp={save:saveNow,exportSave,importSave,getSummary};
+  window.TowerDuelRenderDebug=()=>renderer3d.debug();
+  window.TowerDuelScreenToWorld=(x,y)=>renderer3d.screenToWorld(x,y);
+  window.TowerDuelWorldToScreen=(x,y)=>renderer3d.worldToScreen(x,y);
   window.dispatchEvent(new Event('game-ready'));
   showHome();
   requestAnimationFrame(frame);

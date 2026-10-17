@@ -13,8 +13,8 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 </head>
 <body>
-  <main id="app" aria-label="Block Islands first-person island adventure">
-    <canvas id="world" aria-label="First-person voxel island. Look with the right side of the screen, move with the left joystick, then hold Mine or tap Place."></canvas>
+  <main id="app" aria-label="Block Islands voxel island adventure">
+    <canvas id="world" aria-label="Voxel island. Look with the right side of the screen, move with the left joystick, then hold Mine or tap Place."></canvas>
     <header class="top-hud hud">
       <button id="menuButton" class="round" aria-label="Open pause and save menu">☰</button>
       <div class="island-readout"><span id="stageNumber">ISLAND 1 / 12</span><strong id="stageName">Mosslight Camp</strong></div>
@@ -31,6 +31,7 @@
       <div id="moveZone" class="move-zone" aria-label="Move with this joystick"><span id="joyBase"></span><span id="joyKnob"></span></div>
       <div id="lookZone" class="look-zone" aria-label="Drag to look around"></div>
       <div class="action-cluster" aria-label="Actions">
+        <button id="cameraButton" class="round action-button camera" aria-label="Switch to first-person view">◉</button>
         <button id="jumpButton" class="round action-button jump" aria-label="Jump">↑</button>
         <button id="mineButton" class="action-button mine" aria-label="Hold to mine">Mine</button>
         <button id="placeButton" class="action-button place" aria-label="Place selected block">Place</button>

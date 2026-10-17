@@ -2,6 +2,8 @@
 @media (max-width:540px) and (orientation:portrait){.island-readout strong{font-size:16px}.objective{top:68px}.status{top:110px}.hotbar{max-width:calc(100vw - 178px)}.held-readout{bottom:174px}.panel{padding:19px;border-radius:20px}}
 @media (max-width:340px){.top-hud{gap:6px}.round{width:44px;height:44px}.vitals{min-width:56px;min-height:44px}.island-readout strong{font-size:14px}.objective{max-width:218px}.status{max-width:74vw}.move-zone{transform:scale(.83);transform-origin:bottom left}.action-cluster{transform:scale(.84);transform-origin:bottom right}.hotbar{max-width:calc(100vw - 154px)}.slot{flex-basis:46px;min-height:46px}}
 @media (max-height:500px) and (orientation:landscape){.top-hud{top:6px}.objective{top:58px;max-width:235px}.objective[aria-expanded="false"]{max-height:35px}.status{top:63px;left:54%;max-width:43vw}.move-zone{transform:scale(.78);transform-origin:bottom left}.action-cluster{transform:scale(.77);transform-origin:bottom right}.held-readout{bottom:126px}.hotbar{bottom:5px;max-width:48vw}.slot{flex-basis:43px;min-height:43px}.panel{max-width:600px;padding:17px}.panel h1,.panel h2{font-size:23px}}
+
+.camera{left:50px;bottom:125px;background:#497596;font-size:18px}.craft{transform:translateX(-52px)}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
 
 /* Give inventory its own row above the look surface; keep thumb controls clear. */

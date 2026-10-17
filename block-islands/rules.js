@@ -6,13 +6,17 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const SIZE = 18;
+  // v3 expands new expeditions into a continuous landscape. v1/v2 saves keep
+  // their exact 18×18 rule world, so an existing camp is never regenerated
+  // under a player or silently given a new objective route.
+  const LEGACY_SIZE = 18;
+  const SIZE = 48;
   // Keep the public save envelope at v1.  The phone renderer adds optional,
   // bounded fields below, so existing v1 exports remain valid rather than
   // forcing players to abandon a campaign or Creative profile.
   const SAVE_VERSION = 1;
   const DEFAULT_SEED = 861733;
-  const WORLD_VERSION = 2;
+  const WORLD_VERSION = 3;
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const key = (x, y) => x + ',' + y;
   const hash = (seed, x, y) => {
@@ -21,6 +25,7 @@
     return (n ^ (n >>> 16)) >>> 0;
   };
   const distance = (a, b, x, y) => Math.hypot(a - x, b - y);
+  const sizeForWorldVersion = version => version >= 3 ? SIZE : LEGACY_SIZE;
 
   const STAGES = [
     { name: 'Mosslight Camp', biome: 'forest', seed: 1147, goal: 'craft-campfire', goalText: 'Gather wood and stone, then craft a campfire.', hint: 'Mine the marked logs and pale rocks. Open Craft when you have 3 wood and 2 stone.', enemies: 0 },
@@ -85,7 +90,7 @@
     // first-person journeys a navigable camp and sparse elevation.  Missing
     // version fields are deliberately v1 so released saves never regenerate
     // beneath their existing edits.
-    if (worldVersion >= 2) {
+    if (worldVersion >= 2 && worldVersion < 3) {
       h = 1 + ((n >>> 4) % 11 === 0 ? 1 : 0);
       if (stageIndex === 0 && x <= 7 && y <= 7) h = 1;
       if (stageIndex >= 5 && n % 13 === 0) h = Math.min(3, h + 1);
@@ -107,13 +112,44 @@
       else if (roll === 3 && stageIndex >= 5) resource = stageIndex >= 11 ? 'crystal' : 'berry';
     }
     if (stage.biome === 'settlement' && x > 11 && y > 11) resource = null;
+    if (worldVersion >= 3) {
+      // Wide, coherent terrain uses deterministic low-frequency ridges plus
+      // small local variation. The authored sites above remain the campaign's
+      // legal starting and goal resources.
+      const ridge = Math.sin((x + (stage.seed & 15)) * .19) * 1.05 + Math.cos((y - (stage.seed & 11)) * .16) * .85 + Math.sin((x + y) * .095) * .7;
+      const coarse = ((hash(stage.seed ^ seedOffset, Math.floor(x / 3), Math.floor(y / 3)) >>> 6) % 5 - 2) * .42;
+      h = clamp(3 + Math.round(ridge + coarse), 1, 7);
+      surface = stage.biome === 'desert' ? 'sand' : stage.biome === 'frost' ? 'ice' : stage.biome === 'ember' ? 'basalt' : 'grass';
+      // The opening frames real harvestable trees and stone beyond an open
+      // clearing, instead of a camera pointed at a wall of foliage.
+      if (stageIndex === 0 && x <= 9 && y <= 9) h = 2;
+      // A quiet pond gives Mosslight its first visible water landmark; it is
+      // beyond the starter objectives so it never replaces a required block.
+      if (stage.biome === 'forest' && ((x - 28) * (x - 28) + (y - 17) * (y - 17) < 16 || (x > 27 && x < 34 && y === 17))) { h = 0; water = true; }
+      if (stage.biome === 'quarry' && (x === 9 || x === 28) && y > 1 && y < 46) { h = 0; water = true; }
+      if (stage.biome === 'flood' && ((x >= 8 && x <= 11) || (x >= 27 && x <= 31)) && y > 0 && y < 47) { h = 0; water = true; }
+      if (stage.biome === 'ember' && ((x >= 9 && x <= 11 && y >= 6 && y <= 14) || (x >= 29 && x <= 33 && y >= 9 && y <= 39))) { h = 0; lava = true; }
+      if (stage.biome === 'sky' && ((x < 4 || y > 42) && n % 3 === 0)) { h = 0; water = true; }
+      if (water || lava) resource = null;
+      if (stage.biome === 'forest' || stage.biome === 'meadow' || stage.biome === 'settlement') {
+        const grove = hash(stage.seed ^ seedOffset ^ 0x7f4a7c15, x, y) % 23;
+        if (!water && !lava && !resource && grove === 0) resource = 'wood';
+        else if (!water && !lava && !resource && grove === 1) resource = 'berry';
+      }
+      if (!water && !lava && !resource && stageIndex >= 2 && hash(stage.seed ^ 0x9e3779b9, x, y) % 97 === 0) resource = 'ore';
+      if (stage.biome === 'settlement' && x > 34 && y > 34) resource = null;
+      // Mosslight's first clearing deliberately contains only the authored
+      // starter nodes. This prevents a seeded stray log from occluding the
+      // short tutorial route while the surrounding wide forest stays varied.
+      if (stageIndex === 0 && x < 12 && y < 10 && !fixed) resource = null;
+    }
     return { x, y, h, surface, resource, water, lava, bridge: false, extra: [] };
   }
 
   function makeWorld(stageIndex, edits, chosenSeed, worldVersion) {
-    const cells = new Array(SIZE * SIZE);
-    for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-      const cell = terrainFor(stageIndex, x, y, chosenSeed, worldVersion || 1);
+    const version = worldVersion || 1, size = sizeForWorldVersion(version), cells = new Array(size * size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const cell = terrainFor(stageIndex, x, y, chosenSeed, version);
       const edit = edits && edits[key(x, y)];
       if (edit) {
         if (Number.isInteger(edit.h)) cell.h = clamp(edit.h, 0, 12);
@@ -121,11 +157,11 @@
         if (Array.isArray(edit.extra)) cell.extra = edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12);
         cell.bridge = !!edit.bridge;
       }
-      cells[y * SIZE + x] = cell;
+      cells[y * size + x] = cell;
     }
-    return { stageIndex, cells };
+    return { stageIndex, size, worldVersion: version, cells };
   }
-  function getCell(world, x, y) { return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < SIZE && y < SIZE ? world.cells[y * SIZE + x] : null; }
+  function getCell(world, x, y) { const size = world && Number.isInteger(world.size) ? world.size : LEGACY_SIZE; return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < size && y < size ? world.cells[y * size + x] : null; }
   function topHeight(cell) { return cell.h + cell.extra.length + (cell.bridge ? 1 : 0); }
   function cellMaterial(cell) {
     if (cell.resource) return cell.resource;
@@ -175,7 +211,10 @@
   function toolLevel(state) { return state.creative || state.inventory.ironPick > 0 ? 2 : state.inventory.stonePick > 0 ? 1 : 0; }
   function has(state, item, count) { return state.creative || (state.inventory[item] || 0) >= count; }
   function change(state, item, amount) { state.inventory[item] = Math.max(0, (state.inventory[item] || 0) + amount); }
-  function inReach(state, x, y, reach) { return distance(state.player.x, state.player.y, x + .5, y + .5) <= (reach || 3.9); }
+  // The first-person ray is bounded at five blocks. Keep rule reach aligned
+  // with that visible target range so a player never holds Mine on a valid
+  // crosshair block only to be told it is out of reach.
+  function inReach(state, x, y, reach) { return distance(state.player.x, state.player.y, x + .5, y + .5) <= (reach || 4.8); }
 
   function mine(state, world, x, y) {
     state.minedSites = state.minedSites && typeof state.minedSites === 'object' ? state.minedSites : {};
@@ -262,8 +301,9 @@
     return { ok: true, recipe: recipeName };
   }
   function move(state, world, dx, dy) {
-    const nextX = clamp(state.player.x + dx, .15, SIZE - .15);
-    const nextY = clamp(state.player.y + dy, .15, SIZE - .15);
+    const size = world && Number.isInteger(world.size) ? world.size : sizeForWorldVersion(state.worldVersion);
+    const nextX = clamp(state.player.x + dx, .15, size - .15);
+    const nextY = clamp(state.player.y + dy, .15, size - .15);
     const here = getCell(world, Math.floor(state.player.x), Math.floor(state.player.y));
     const next = getCell(world, Math.floor(nextX), Math.floor(nextY));
     if (!next) return { ok: false, reason: 'Island edge.' };
@@ -335,13 +375,14 @@
     return true;
   }
   function voxelKey(x, y, z) { return x + ',' + y + ',' + z; }
-  function validVoxel(value) {
+  function validVoxel(value, size) {
     if (!value || typeof value !== 'object') return false;
-    return Number.isInteger(value.x) && Number.isInteger(value.y) && Number.isInteger(value.z) && value.x >= 0 && value.x < SIZE && value.z >= 0 && value.z < SIZE && value.y >= 0 && value.y <= 24 && (value.material === null || ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(value.material));
+    const limit = Number.isInteger(size) ? size : SIZE;
+    return Number.isInteger(value.x) && Number.isInteger(value.y) && Number.isInteger(value.z) && value.x >= 0 && value.x < limit && value.z >= 0 && value.z < limit && value.y >= 0 && value.y <= 24 && (value.material === null || ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(value.material));
   }
   function setVoxelEdit(state, x, y, z, material) {
     const value = { x, y, z, material };
-    if (!validVoxel(value)) return false;
+    if (!validVoxel(value, sizeForWorldVersion(state && state.worldVersion))) return false;
     state.voxelEdits = state.voxelEdits && typeof state.voxelEdits === 'object' ? state.voxelEdits : {};
     const keys = Object.keys(state.voxelEdits);
     const name = voxelKey(x, y, z);
@@ -352,25 +393,26 @@
   function sanitizeState(value) {
     if (!isValidState(value)) return null;
     const state = JSON.parse(JSON.stringify(value));
+    state.worldVersion = [1, 2, WORLD_VERSION].includes(state.worldVersion) ? state.worldVersion : 1;
+    const size = sizeForWorldVersion(state.worldVersion);
     state.stage = clamp(state.stage, 0, STAGES.length - 1);
     state.unlocked = clamp(Number.isInteger(state.unlocked) ? state.unlocked : 0, 0, STAGES.length - 1);
     state.completed = Array.isArray(state.completed) ? [...new Set(state.completed.filter(n => Number.isInteger(n) && n >= 0 && n < STAGES.length))] : [];
-    state.enemies = Array.isArray(state.enemies) ? state.enemies.slice(0, 10).filter(e => e && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.health)).map(e => ({ id: String(e.id || 'enemy').slice(0, 30), x: clamp(e.x, 0, SIZE), y: clamp(e.y, 0, SIZE), health: clamp(e.health, 0, 20), cooldown: clamp(Number(e.cooldown) || 0, 0, 10), alive: e.alive !== false })) : [];
-    state.player.x = clamp(state.player.x, .15, SIZE - .15); state.player.y = clamp(state.player.y, .15, SIZE - .15); state.player.health = clamp(state.player.health, 0, 20); state.player.maxHealth = clamp(Number(state.player.maxHealth) || 8, 1, 20);
+    state.enemies = Array.isArray(state.enemies) ? state.enemies.slice(0, 10).filter(e => e && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.health)).map(e => ({ id: String(e.id || 'enemy').slice(0, 30), x: clamp(e.x, 0, size), y: clamp(e.y, 0, size), health: clamp(e.health, 0, 20), cooldown: clamp(Number(e.cooldown) || 0, 0, 10), alive: e.alive !== false })) : [];
+    state.player.x = clamp(state.player.x, .15, size - .15); state.player.y = clamp(state.player.y, .15, size - .15); state.player.health = clamp(state.player.health, 0, 20); state.player.maxHealth = clamp(Number(state.player.maxHealth) || 8, 1, 20);
     state.time = clamp(Number(state.time) || 0, 0, 10000000);
     state.seed = Number.isInteger(state.seed) ? state.seed : DEFAULT_SEED;
-    state.worldVersion = state.worldVersion === WORLD_VERSION ? WORLD_VERSION : 1;
     state.creative = state.creative === true;
     state.stageComplete = state.stageComplete === true;
-    state.bridgeBuilt = clamp(Math.floor(Number(state.bridgeBuilt) || 0), 0, SIZE * SIZE);
+    state.bridgeBuilt = clamp(Math.floor(Number(state.bridgeBuilt) || 0), 0, size * size);
     state.tallest = clamp(Math.floor(Number(state.tallest) || 0), 0, 24);
     state.enemiesDefeated = clamp(Math.floor(Number(state.enemiesDefeated) || 0), 0, 99);
     state.message = typeof state.message === 'string' ? state.message.slice(0, 240) : STAGES[state.stage].hint;
     for (const item of INVENTORY_KEYS) state.inventory[item] = clamp(Math.floor(Number(state.inventory[item]) || 0), 0, 9999);
     const cleanedEdits = {};
-    for (const k of Object.keys(state.edits).slice(0, SIZE * SIZE)) if (/^\d+,\d+$/.test(k)) {
+    for (const k of Object.keys(state.edits).slice(0, size * size)) if (/^\d+,\d+$/.test(k)) {
       const [x, y] = k.split(',').map(Number); const edit = state.edits[k];
-      if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && edit && typeof edit === 'object') cleanedEdits[k] = { h: clamp(Math.floor(Number(edit.h) || 0), 0, 12), resource: typeof edit.resource === 'string' && MATERIALS[edit.resource] ? edit.resource : null, bridge: !!edit.bridge, extra: Array.isArray(edit.extra) ? edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12) : [] };
+      if (x >= 0 && x < size && y >= 0 && y < size && edit && typeof edit === 'object') cleanedEdits[k] = { h: clamp(Math.floor(Number(edit.h) || 0), 0, 12), resource: typeof edit.resource === 'string' && MATERIALS[edit.resource] ? edit.resource : null, bridge: !!edit.bridge, extra: Array.isArray(edit.extra) ? edit.extra.filter(v => ['dirt', 'plank', 'stone', 'basalt', 'beacon'].includes(v)).slice(0, 12) : [] };
     }
     state.edits = cleanedEdits;
     const cleanVoxelEdits = {};
@@ -378,12 +420,12 @@
       for (const name of Object.keys(state.voxelEdits).slice(0, 768)) {
         const parts = name.split(',').map(Number);
         const value = { x: parts[0], y: parts[1], z: parts[2], material: state.voxelEdits[name] };
-        if (parts.length === 3 && validVoxel(value)) cleanVoxelEdits[voxelKey(value.x, value.y, value.z)] = value.material;
+        if (parts.length === 3 && validVoxel(value, size)) cleanVoxelEdits[voxelKey(value.x, value.y, value.z)] = value.material;
       }
     }
     state.voxelEdits = cleanVoxelEdits;
     if (state.pose && typeof state.pose === 'object' && Number.isFinite(state.pose.x) && Number.isFinite(state.pose.y) && Number.isFinite(state.pose.z) && Number.isFinite(state.pose.yaw) && Number.isFinite(state.pose.pitch)) {
-      state.pose = { x: clamp(Number(state.pose.x), .2, SIZE - .2), y: clamp(Number(state.pose.y), .2, 28), z: clamp(Number(state.pose.z), .2, SIZE - .2), yaw: clamp(Number(state.pose.yaw), -Math.PI * 8, Math.PI * 8), pitch: clamp(Number(state.pose.pitch), -1.48, 1.48) };
+      state.pose = { x: clamp(Number(state.pose.x), .2, size - .2), y: clamp(Number(state.pose.y), .2, 28), z: clamp(Number(state.pose.z), .2, size - .2), yaw: clamp(Number(state.pose.yaw), -Math.PI * 8, Math.PI * 8), pitch: clamp(Number(state.pose.pitch), -1.48, 1.48) };
     } else state.pose = null;
     const cleanCounts = (source, allowed) => {
       const result = {};
@@ -394,17 +436,17 @@
     state.crafted = cleanCounts(state.crafted, Object.keys(RECIPES));
     state.placed = cleanCounts(state.placed, ['dirt', 'plank', 'stone', 'basalt', 'beacon']);
     state.mined = cleanCounts(state.mined, INVENTORY_KEYS);
-    const validSite = site => /^\d+,\d+$/.test(site) && site.split(',').map(Number).every(n => n >= 0 && n < SIZE);
+    const validSite = site => /^\d+,\d+$/.test(site) && site.split(',').map(Number).every(n => n >= 0 && n < size);
     const minedSites = {};
-    if (state.minedSites && typeof state.minedSites === 'object') for (const site of Object.keys(state.minedSites).slice(0, SIZE * SIZE)) if (validSite(site) && MATERIALS[state.minedSites[site]]) minedSites[site] = state.minedSites[site];
+    if (state.minedSites && typeof state.minedSites === 'object') for (const site of Object.keys(state.minedSites).slice(0, size * size)) if (validSite(site) && MATERIALS[state.minedSites[site]]) minedSites[site] = state.minedSites[site];
     state.minedSites = minedSites;
     const siteStacks = {};
-    if (state.siteStacks && typeof state.siteStacks === 'object') for (const site of Object.keys(state.siteStacks).slice(0, SIZE * SIZE)) if (validSite(site) && Number.isFinite(state.siteStacks[site])) siteStacks[site] = clamp(Math.floor(state.siteStacks[site]), 0, 12);
+    if (state.siteStacks && typeof state.siteStacks === 'object') for (const site of Object.keys(state.siteStacks).slice(0, size * size)) if (validSite(site) && Number.isFinite(state.siteStacks[site])) siteStacks[site] = clamp(Math.floor(state.siteStacks[site]), 0, 12);
     state.siteStacks = siteStacks;
     state.placedSites = state.placedSites && validSite(state.placedSites.beacon) ? { beacon: state.placedSites.beacon } : {};
     return state;
   }
   function summary(state) { return { stage: state.stage, stageName: STAGES[state.stage].name, unlocked: state.unlocked, complete: !!state.stageComplete, health: Math.ceil(state.player.health), inventory: Object.assign({}, state.inventory), enemies: state.enemies.filter(e => e.alive).length }; }
 
-  return { SIZE, SAVE_VERSION, WORLD_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, setVoxelEdit, validVoxel, voxelKey, summary, hash };
+  return { SIZE, LEGACY_SIZE, SAVE_VERSION, WORLD_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, setVoxelEdit, validVoxel, voxelKey, summary, hash, sizeForWorldVersion };
 });

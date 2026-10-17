@@ -2,9 +2,9 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:tower-duel:";
-const RELEASE = "b7d016a76fe9d79fca7f";
+const RELEASE = "26a75806d13ad678586c";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
-const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./style.css"];
+const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./style.css","./tower-renderer.js"];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
