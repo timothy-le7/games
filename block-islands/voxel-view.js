@@ -132,6 +132,17 @@
       -dot(right, position), -dot(up, position), dot(look, position), 1
     ]);
   }
+  /** Projects a world point into normalized device coordinates for camera tests. */
+  function projectPoint(camera, point, aspect = 1) {
+    if (!camera || !Array.isArray(camera.position) || !Array.isArray(point)) return null;
+    const position = camera.position.map(Number), world = point.map(Number);
+    if (position.length !== 3 || world.length !== 3 || !position.every(Number.isFinite) || !world.every(Number.isFinite)) return null;
+    const look = forward(Number(camera.yaw) || 0, Number(camera.pitch) || 0), right = normalize(cross(look, [0, 1, 0])), up = normalize(cross(right, look));
+    const relative = world.map((value, axis) => value - position[axis]), depth = dot(relative, look);
+    if (depth <= EPSILON) return null;
+    const fov = clamp(Number(camera.fov) || 70, 45, 95) * Math.PI / 180, focal = 1 / Math.tan(fov / 2), safeAspect = Math.max(.1, Number(aspect) || 1);
+    return { x: dot(relative, right) * focal / safeAspect / depth, y: dot(relative, up) * focal / depth, depth };
+  }
   function modelBox(x, y, z, width, height, depth, yaw) {
     const angle = Number.isFinite(yaw) ? yaw : 0, cosine = Math.cos(angle), sine = Math.sin(angle);
     return new Float32Array([
@@ -447,5 +458,5 @@
     return { setWorld, resize, render, destroy, getStats };
   }
 
-  return Object.freeze({ createRenderer, forward, raycast, retractCamera, MATERIALS: MATERIALS.slice(), MAX_RENDER_PIXELS });
+  return Object.freeze({ createRenderer, forward, raycast, retractCamera, projectPoint, MATERIALS: MATERIALS.slice(), MAX_RENDER_PIXELS });
 }));

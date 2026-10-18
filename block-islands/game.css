@@ -22,5 +22,18 @@
 .held-readout{display:none}.status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The compact, collapsed quest is intentionally complete in one line; a tap
    still expands later objectives. This leaves the opening meadow visible. */
-.objective{top:max(53px,calc(env(safe-area-inset-top) + 46px));max-width:min(238px,70vw);padding:5px 8px}.objective span{font-size:9px;white-space:nowrap}.objective[aria-expanded="false"] span{-webkit-line-clamp:1}.status{top:max(87px,calc(env(safe-area-inset-top) + 78px));font-size:9px}
+.objective{top:max(53px,calc(env(safe-area-inset-top) + 46px));display:flex;flex-direction:column;justify-content:center;min-height:44px;max-width:min(238px,70vw);padding:5px 8px}.objective span{font-size:9px;white-space:nowrap}.objective[aria-expanded="false"] span{-webkit-line-clamp:1}.status{top:max(101px,calc(env(safe-area-inset-top) + 92px));font-size:9px}
 @media (max-width:340px){.objective{max-width:222px}.objective span{font-size:8px}}
+
+/* Phone play polish: the old craft offset overlapped the camera control.
+   Every action now owns a separate 48px-or-larger region in this six-control grid. */
+.action-cluster{width:126px;height:160px;transform:scale(var(--action-scale,1));transform-origin:bottom right}
+.place{left:0;bottom:0;width:56px;height:54px}
+.mine{right:0;bottom:0;width:58px;height:54px}
+.strike{left:0;bottom:62px}
+.jump{right:0;bottom:62px}
+.craft{left:0;bottom:112px;transform:none}
+.camera{right:0;left:auto;bottom:112px}
+.move-zone,.action-cluster{z-index:2}
+@media (max-width:340px){.action-cluster{transform:scale(var(--action-scale,1))}}
+@media (max-height:500px) and (orientation:landscape){.action-cluster{bottom:8px;transform:scale(var(--action-scale,1))}}

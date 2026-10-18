@@ -25,15 +25,17 @@
   function readPrefs() {
     try {
       const raw = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
-      return { sound: raw.sound !== false, motion: raw.motion !== false, sensitivity: clamp(Number(raw.sensitivity) || 1, .45, 2.1), buttonSize: clamp(Number(raw.buttonSize) || 1, .8, 1.28), handedness: raw.handedness === 'left' ? 'left' : 'right', camera: raw.camera === 'first' ? 'first' : 'third' };
+      return { sound: raw.sound !== false, motion: raw.motion !== false, sensitivity: clamp(Number(raw.sensitivity) || 1, .45, 2.1), buttonSize: clamp(Number(raw.buttonSize) || 1, .92, 1.28), handedness: raw.handedness === 'left' ? 'left' : 'right', camera: raw.camera === 'first' ? 'first' : 'third' };
     } catch (_) { return { sound: true, motion: true, sensitivity: 1, buttonSize: 1, handedness: 'right', camera: 'third' }; }
   }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (_) {} }
   function applyPrefs() {
-    document.documentElement.style.setProperty('--action-scale', String(prefs.buttonSize));
+    // Keep the base 48px round actions at the 44px phone target minimum.
+    // Older .8 preferences migrate up instead of shrinking their own controls.
+    document.documentElement.style.setProperty('--action-scale', String(Math.max(44 / 48, prefs.buttonSize)));
     const actions = document.querySelector('.action-cluster'), move = document.querySelector('.move-zone');
     actions.style.right = prefs.handedness === 'left' ? 'auto' : ''; actions.style.left = prefs.handedness === 'left' ? 'max(12px, env(safe-area-inset-left))' : '';
-    actions.style.transform = 'scale(' + prefs.buttonSize + ')'; actions.style.transformOrigin = prefs.handedness === 'left' ? 'bottom left' : 'bottom right';
+    actions.style.transformOrigin = prefs.handedness === 'left' ? 'bottom left' : 'bottom right';
     move.style.left = prefs.handedness === 'left' ? 'auto' : ''; move.style.right = prefs.handedness === 'left' ? 'max(12px, env(safe-area-inset-right))' : '';
     const cameraButton = $('cameraButton');
     if (cameraButton) {
@@ -111,7 +113,7 @@
   }
   function getSummary() {
     const render = renderer && renderer.getStats ? renderer.getStats() : null;
-    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, cameraCollision: lastRenderCamera.collision, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget } }, R.summary(state));
+    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget } }, R.summary(state));
   }
 
   const loaded = loadGame();
@@ -163,7 +165,7 @@
     open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">These controls are kept only in this game’s preferences.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'));
     bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
     bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
-    bind('sizeButton', () => { prefs.buttonSize = prefs.buttonSize >= 1.2 ? .9 : +(prefs.buttonSize + .1).toFixed(2); savePrefs(); settings(); });
+    bind('sizeButton', () => { const sizes = [.92, 1, 1.1, 1.2, 1.28], index = sizes.indexOf(prefs.buttonSize); prefs.buttonSize = sizes[index < 0 || index === sizes.length - 1 ? 0 : index + 1]; savePrefs(); applyPrefs(); settings(); });
     bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); settings(); }); bind('backMenu', menu);
   }
   function stages() {
@@ -425,12 +427,19 @@
     return { x: vector[0], y: vector[1], z: vector[2] };
   }
   function renderCamera() {
-    if (prefs.camera === 'first') return { position: [pose.x, pose.y, pose.z], yaw: pose.yaw, pitch: pose.pitch, fov: 86, third: false, distance: 0, collision: false };
-    const look = direction(), feet = pose.y - EYE, targetPoint = [pose.x, feet + 1.03, pose.z], desired = [pose.x - look.x * 4.8, feet + 2.18 - look.y * 4.8, pose.z - look.z * 4.8];
-    let follow = { position: desired, distance: Math.hypot(desired[0] - targetPoint[0], desired[1] - targetPoint[1], desired[2] - targetPoint[2]), collision: false };
-    try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => rayBlock(x, y, z), targetPoint, desired, .20) || follow; } catch (_) {}
-    const dx = targetPoint[0] - follow.position[0], dy = targetPoint[1] - follow.position[1], dz = targetPoint[2] - follow.position[2], length = Math.hypot(dx, dy, dz) || 1;
-    return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov: 82, third: true, distance: follow.distance, collision: follow.collision };
+    const look = direction(), eye = [pose.x, pose.y, pose.z], targetDistance = clamp(Number(target && target.distance) || 5, .12, 5);
+    const aimPoint = [eye[0] + look.x * targetDistance, eye[1] + look.y * targetDistance, eye[2] + look.z * targetDistance];
+    if (prefs.camera === 'first') return { position: eye, yaw: pose.yaw, pitch: pose.pitch, fov: 86, third: false, distance: 0, collision: false, aimPoint, targetDistance };
+    const feet = pose.y - EYE, right = { x: -Math.cos(pose.yaw), z: Math.sin(pose.yaw) };
+    // Retract a padded shoulder camera against the body anchor, while aiming
+    // through the exact eye ray. The selected face—not the explorer's head—
+    // therefore sits at the reticle in ordinary third-person play.
+    const anchor = [pose.x, feet + 1.10, pose.z];
+    const desired = [pose.x - look.x * 4.55 + right.x * .86, feet + 2.50 - look.y * 4.55, pose.z - look.z * 4.55 + right.z * .86];
+    let follow = { position: desired, distance: Math.hypot(desired[0] - anchor[0], desired[1] - anchor[1], desired[2] - anchor[2]), collision: false };
+    try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => rayBlock(x, y, z), anchor, desired, .20) || follow; } catch (_) {}
+    const dx = aimPoint[0] - follow.position[0], dy = aimPoint[1] - follow.position[1], dz = aimPoint[2] - follow.position[2], length = Math.hypot(dx, dy, dz) || 1;
+    return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov: 82, third: true, distance: follow.distance, collision: follow.collision, aimPoint, targetDistance };
   }
   function normalizeRay(ray) {
     if (!ray) return null;
@@ -439,7 +448,7 @@
     const block = getBlock(x, y, z) || (!Array.isArray(ray.block) && ray.block);
     const sourceNormal = ray.normal || ray.face || [0, 0, 0];
     const normal = Array.isArray(sourceNormal) ? { x: sourceNormal[0], y: sourceNormal[1], z: sourceNormal[2] } : sourceNormal;
-    return Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z) && block ? { x, y, z, normal, block, material: block.material || ray.material || block } : null;
+    return Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z) && block ? { x, y, z, normal, distance: Number.isFinite(ray.distance) ? Math.max(0, ray.distance) : null, block, material: block.material || ray.material || block } : null;
   }
   function updateTarget() {
     const now = performance.now(); if (now - lastTargetAt < 20) return; lastTargetAt = now;
@@ -598,7 +607,14 @@
     while (effects.length && now - effects[0].at > 680) effects.shift();
     if (ensureRenderer()) {
       try {
-        const camera = renderCamera(); lastRenderCamera = { mode: camera.third ? 'third' : 'first', distance: camera.distance, collision: !!camera.collision };
+        const camera = renderCamera(), aspect = Math.max(.1, canvas.clientWidth / Math.max(1, canvas.clientHeight));
+        const projectedAvatarHead = camera.third && V && typeof V.projectPoint === 'function' ? V.projectPoint(camera, [pose.x, pose.y - EYE + 1.30, pose.z], aspect) : null;
+        // A retracted camera can end up inside the explorer's personal space.
+        // Do not let the avatar cover the centered, authoritative interaction ray.
+        const avatarVisible = !!camera.third && (!projectedAvatarHead || Math.hypot(projectedAvatarHead.x, projectedAvatarHead.y) >= .12) && camera.distance >= 1.5;
+        const avatarHead = avatarVisible ? projectedAvatarHead : null;
+        const projectedAim = V && typeof V.projectPoint === 'function' ? V.projectPoint(camera, camera.aimPoint, aspect) : null;
+        lastRenderCamera = { mode: camera.third ? 'third' : 'first', distance: camera.distance, collision: !!camera.collision, position: camera.position.slice(), yaw: camera.yaw, pitch: camera.pitch, fov: camera.fov, aimPoint: camera.aimPoint.slice(), targetDistance: camera.targetDistance, avatarHead, avatarVisible, projectedAim };
         renderer.render({
           camera, time: state.time,
           daylight: clamp(.7 + Math.sin(state.time / 18 * Math.PI) * .24, .34, .94),
@@ -608,7 +624,7 @@
           // retracted camera can be close to the player, but silently
           // switching the rendering to an empty first-person-looking frame
           // makes the mobile camera control misleading.
-          player: camera.third ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
+          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
           held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) }
         });
       } catch (_) {}
