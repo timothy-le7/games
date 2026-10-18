@@ -118,7 +118,7 @@
   }
   function updateMenu() {
     addMenuEntry();
-    // Keep the attribution readable without sending children to another website.
+    // Keep the attribution readable without interrupting play with another website.
     document.querySelectorAll('#modal .credit a').forEach(link => link.replaceWith(document.createTextNode(link.textContent)));
   }
   new MutationObserver(updateMenu).observe(document.getElementById('modal'), { childList: true, subtree: true });
