@@ -8,9 +8,10 @@
   const PREFS_KEY = SAVE_KEY + ':prefs';
   const SAVE_FORMAT = 'tower-duel-save';
   const SAVE_VERSION = 1;
-  const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','pause-button','game-canvas','canvas-shell','tutorial-tip','toast','energy-track','energy-number','next-card','next-card-art','hand','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
+  const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','battle-score','pause-button','game-canvas','battle-overlay','canvas-shell','tutorial-tip','toast','energy-track','energy-number','next-card','next-card-art','hand','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
   if (!window.TowerDuelRenderer3D) throw new Error('Pennant Duel 3D renderer did not load');
   const renderer3d = new window.TowerDuelRenderer3D(els['game-canvas'], E);
+  const overlayContext = els['battle-overlay'].getContext('2d');
   const ctx = null;
   let storageLoadKnown = true;
   let storageConflict = false;
@@ -30,6 +31,7 @@
   let dragPreview = null;
   let audioContext = null;
   let impactSeen = 0;
+  let lastOverlayPaint = 0;
   els['energy-track'].innerHTML = Array.from({length:E.MAX_ENERGY},()=>'<i></i>').join('');
 
   function defaultProfile() {
@@ -282,6 +284,10 @@
   }
   function updateBattleUI() {
     const seconds=Math.max(0,Math.ceil(match.time)); els['battle-clock'].textContent=(match.overtime?'OT ':'')+Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
+    const playerCrowns=match.towers.filter((tower)=>tower.side==='enemy'&&!tower.alive).reduce((total,tower)=>total+(tower.type==='base'?3:1),0);
+    const enemyCrowns=match.towers.filter((tower)=>tower.side==='player'&&!tower.alive).reduce((total,tower)=>total+(tower.type==='base'?3:1),0);
+    els['battle-score'].textContent='◆ '+playerCrowns+' · '+enemyCrowns+' ◆';
+    els['battle-score'].setAttribute('aria-label','Tower score: you '+playerCrowns+', rival '+enemyCrowns);
     const energy=match.energy.player; els['energy-number'].textContent=Math.floor(energy); els['energy-track'].setAttribute('aria-label','Energy: '+energy.toFixed(1)+' of '+E.MAX_ENERGY);
     Array.from(els['energy-track'].children).forEach((segment,index)=>{segment.classList.toggle('full',energy>=index+1);segment.classList.toggle('partial',energy>index&&energy<index+1);segment.style.setProperty('--fill',Math.max(0,Math.min(1,energy-index))*100+'%');});
     renderHand(false);
@@ -317,6 +323,28 @@
     const cssWidth=Math.max(1,Math.floor(portrait?shell.width:E.WIDTH*scale)),cssHeight=Math.max(1,Math.floor(portrait?shell.height:E.HEIGHT*scale));
     if(canvas.style.width!==cssWidth+'px'||canvas.style.height!==cssHeight+'px'){canvas.style.width=cssWidth+'px';canvas.style.height=cssHeight+'px';}
     renderer3d.render(match,{selectedCard,dragPreview,reducedEffects:prefs.reducedEffects});
+    drawBattleOverlay();
+  }
+  function drawBattleOverlay() {
+    const canvas=els['battle-overlay'],rect=els['game-canvas'].getBoundingClientRect(),shell=els['canvas-shell'].getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,3),width=Math.max(1,Math.round(rect.width*dpr)),height=Math.max(1,Math.round(rect.height*dpr));
+    const left=(rect.left-shell.left)+'px',top=(rect.top-shell.top)+'px',cssWidth=rect.width+'px',cssHeight=rect.height+'px';
+    if(canvas.style.left!==left)canvas.style.left=left;if(canvas.style.top!==top)canvas.style.top=top;if(canvas.style.width!==cssWidth)canvas.style.width=cssWidth;if(canvas.style.height!==cssHeight)canvas.style.height=cssHeight;
+    const resized=canvas.width!==width||canvas.height!==height;if(resized){canvas.width=width;canvas.height=height;}
+    const now=performance.now();if(!resized&&now-lastOverlayPaint<80)return;lastOverlayPaint=now;
+    const context=overlayContext;context.setTransform(dpr,0,0,dpr,0,0);context.clearRect(0,0,rect.width,rect.height);
+    const label=(item,worldHeight,force)=>{
+      if(!item.alive)return;
+      const ratio=item.hp/item.maxHp;
+      if(!force&&ratio>.995&&!(item.hit>0))return;
+      const point=renderer3d.worldToScreen(item.x,item.y,worldHeight),x=point.x-rect.left,y=point.y-rect.top;
+      if(x<-28||x>rect.width+28||y<-12||y>rect.height+12)return;
+      const text=Math.max(0,Math.ceil(item.hp))+'',team=item.side==='player'?'#59e8df':'#ff7681';
+      context.font='800 10px system-ui, sans-serif';context.textAlign='center';context.textBaseline='middle';
+      const pillWidth=Math.max(28,context.measureText(text).width+10);context.fillStyle='#081426e8';context.strokeStyle=team;context.lineWidth=1.5;
+      context.beginPath();context.roundRect(x-pillWidth/2,y-7,pillWidth,14,7);context.fill();context.stroke();context.fillStyle='#ffffff';context.fillText(text,x,y+.3);
+    };
+    match.towers.forEach((tower)=>label(tower,tower.type==='base'?2.08:1.91,true));
+    match.units.forEach((unit)=>label(unit,unit.flying?1.75:1.35,false));
   }
   function displayArea(width,height){return Math.max(1,width*height);}
   function drawArena() {

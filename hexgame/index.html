@@ -67,6 +67,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.s
 .army-name i{width:17px;height:17px;line-height:15px;text-align:center;font-style:normal;font-weight:800;font-size:10px;color:var(--army-ink);border:1px solid #fff;border-radius:4px;vertical-align:middle}
 .tribe-title:after{content:none}.team-identity{font-size:9px!important;letter-spacing:.4px!important;white-space:nowrap}
 .stats-team{display:inline-grid;place-items:center;width:21px;height:21px;border:1px solid #fff;border-radius:5px;font-size:11px;font-weight:800;margin-right:5px;vertical-align:middle}
+
+/* Keep the atlas primary at phone size; every action remains a full touch target. */
+.topbar{height:60px;padding:7px 12px;gap:8px;background:#183b50}.tribe-mark{width:29px;height:34px}.tribe-title strong{font-size:12px}.tribe-title .team-identity{margin-top:2px;font-size:8px!important}.stat-value{font-size:19px}.stat-label{font-size:9px}.stat{min-width:46px}.turn-stat{min-width:34px}.stat-value svg{width:15px;height:15px}
+.nav{height:68px;padding:5px 12px 7px;background:#15374b}.nav-button{min-height:52px;gap:3px;font-size:9px;letter-spacing:.1px}.nav-disc{width:36px;height:36px;border-radius:10px;box-shadow:none}.nav-disc svg{width:21px;height:21px}.end-button .nav-disc{width:41px;height:41px;border-radius:11px;box-shadow:0 2px #375a32}.end-button .nav-disc svg{width:27px;height:27px}
+.selection{bottom:8px;left:8px;right:8px;padding:10px;border-radius:12px;background:#173b50f5;backdrop-filter:none;box-shadow:0 2px 9px #102d3730,0 1px #ffffff20 inset}.selection-header{gap:8px}.selection-icon{width:36px;height:38px}.selection-copy strong{font-size:15px}.selection-copy p{font-size:10px;line-height:1.35;margin-top:3px}.selection .close-mini{width:44px;height:44px;flex:none}.selection .hp{font-size:11px;white-space:nowrap}.selection-actions{margin-top:7px;gap:6px}.selection-actions .action{min-height:44px;padding:6px 9px;border-radius:8px;font-size:10px}.turn-state{gap:5px;margin-top:6px}.turn-state span{padding:3px 6px;font-size:9px}.unit-traits:empty{display:none}.unit-stats{margin-top:7px}.unit-detail-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.unit-detail-stats span{padding:12px;background:#e1e8dc;border-radius:9px;font-size:12px}.unit-detail-stats b{display:block;font-size:23px;color:#244d5e}#unit-details-done{min-height:44px}.unit-detail-traits{font-size:12px;line-height:1.6;color:#526e78}
+.map-tools{right:8px;top:8px;gap:5px}.map-tools button{width:44px;height:44px;border-radius:8px;background:#f4f7efed;box-shadow:0 1px 3px #12384d40}.map-tools svg{width:19px;height:19px}.ready-pill{min-height:44px;left:10px;top:50px;padding:5px 10px;border-radius:10px;font-size:10px;gap:6px}.guided .ready-pill{top:91px}.tutorial{top:8px;left:8px;right:62px;max-width:none;gap:4px;padding:6px 7px;border-radius:10px;box-shadow:0 1px 4px #244b5730}.hint-copy strong{font-size:11px}.hint-copy>span{font-size:9px;line-height:1.3;margin-top:3px}.tutorial #hint-go{border-radius:7px}.tutorial #dismiss-tutorial{width:44px;min-width:44px}.growth-preview{margin-top:7px;padding:7px 9px;border-radius:8px}.tile-status{margin-top:7px}.army-name{margin-bottom:2px}
+@media(max-width:520px){.topbar{height:calc(60px + env(safe-area-inset-top));padding-top:calc(7px + env(safe-area-inset-top))}.nav{height:calc(68px + env(safe-area-inset-bottom));padding-bottom:calc(7px + env(safe-area-inset-bottom))}}
+@media(max-width:360px){.topbar{padding-left:8px;padding-right:8px;gap:5px}.tribe-title strong{font-size:10px}.tribe-mark{width:24px}.stat{min-width:38px}.stat-value{font-size:17px}.selection{padding:8px}.selection-copy strong{font-size:14px}.selection-icon{width:31px}.selection .hp{font-size:10px}.tutorial{gap:2px;padding:5px}.hint-copy>span{font-size:8px}.guided .ready-pill{top:99px}}
+@media(min-width:521px) and (max-height:620px){.topbar{height:48px;padding:5px 12px}.nav{height:57px;padding:4px 10px}.nav-button{min-height:44px;gap:7px}.nav-disc{width:32px;height:32px}.end-button .nav-disc{width:37px;height:37px}.selection{left:auto;right:8px;width:300px;max-width:42%;padding:9px}.ready-pill{top:53px}.map-tools{flex-direction:row}.tutorial{display:none!important}}
 </style>
 <!-- data-poly-top-package -->
 <meta name="apple-mobile-web-app-title" content="Hexgame">
@@ -656,7 +665,7 @@ function newGame(options={}){
  game={version:1,generatorVersion:4,rulesVersion:5,presentationVersion:3,ruleEvents:0,rivalSelection:options.mirror?'mirror':requested.length===count&&requested.every(k=>k===requested[0])?requested[0]:'random',seed,size,sizeAuto,mapType,opponentsAuto:false,mode,difficulty:['easy','normal','hard','crazy'].includes(options.difficulty)?options.difficulty:'normal',turn:0,nextId:1,kills:0,losses:0,bonus:0,over:false,winner:null,contactQueue:[],factions:keys.map((k,id)=>({id,tribe:k,stars:TRIBES[k].stars,tech:TRIBES[k].start?[TRIBES[k].start]:[],eliminated:false,contacts:[]})),tiles:[],cities:[],units:[],seen:Array(size*size).fill(false)};
  assignFactionColors(game);initializeRuleState();
  const starts=generateWorld(keys,rng(seed^0x193ac451),mapType);for(const c of game.cities){c.connected=false;c.connectionPopulation=0;c.connectionRewardedBy=[]}
- resetRuntime();selected={...starts[0]};selectCity=false;upgradeQueue=[];closeModal(true);$('tech-layer').classList.remove('open');view.zoom=view.w<450?1.07:1.12;focusOn(starts[0].x+.8,starts[0].y-.8);updateUI();save();render();scheduleContactPresentation(80);
+ resetRuntime();selected={...starts[0]};selectCity=false;upgradeQueue=[];closeModal(true);$('tech-layer').classList.remove('open');view.zoom=view.w<450?1.07:1.12;updateUI();focusOn(starts[0].x,starts[0].y);save();render();scheduleContactPresentation(80);
 }
 function createUnit(owner,type,x,y,sleeping=true){const c=cityAt(x,y);return{id:game.nextId++,owner,scoreOwner:owner,homeCity:c?.owner===owner?c.id:null,type,x,y,hp:TYPES[type].hp,moved:sleeping,attacked:sleeping,kills:0,veteran:false,poisoned:false,boosted:false,frozen:false,stunned:false,attacksMade:0,...(TYPES[type].growsInto?{growthTurns:0}:{})}}
 function supportedUnits(c){return game.units.filter(u=>u.owner===c.owner&&u.homeCity===c.id&&!u.independent)}
@@ -1290,11 +1299,17 @@ async function resumeTurn(){
 // An isometric canvas renderer keeps the file portable and the map freely pannable.
 function iso(x,y){return{x:(x-y)*TW/2,y:(x+y)*TH/2}}
 function screenPoint(x,y){const p=iso(x,y);return{x:view.w/2+view.x+p.x*view.zoom,y:view.h/2+view.y+p.y*view.zoom}}
+function mapFocusRegion(){
+ const stage=canvas.getBoundingClientRect(),panel=$('selection'),landscape=view.w>view.h*1.3;
+ let left=0,right=view.w,top=12,bottom=view.h-12;
+ if(!panel.classList.contains('hidden')){if(landscape)right=Math.max(view.w*.45,panel.offsetLeft-12);else bottom=Math.min(bottom,panel.offsetTop-12)}
+ for(const id of ['tutorial','next-unit']){const el=$(id),r=el.getBoundingClientRect();if(r.width&&r.height&&getComputedStyle(el).display!=='none'&&r.left<stage.left+right*.5+TW*view.zoom*.5&&r.right>stage.left+right*.5-TW*view.zoom*.5)top=Math.max(top,r.bottom-stage.top+12)}
+ if(bottom-top<80)top=Math.max(12,bottom-80);
+ return{left,right,top,bottom};
+}
 function focusOn(x,y,animate=false){
- const p=iso(x,y),landscape=view.w>view.h*1.3,panel=$('selection'),panelHeight=panel.classList.contains('hidden')?170:panel.offsetHeight;
- const top=Math.min($('stage').classList.contains('battle-planning')?60:prefs.hint?210:160,view.h*.5),bottom=view.h-Math.min(panelHeight+24,view.h*.43),anchorY=landscape?view.h*.53:(top+bottom)/2;
- const target={x:-p.x*view.zoom-(landscape?view.w*.17:0),y:-p.y*view.zoom+anchorY-view.h/2};
- cameraMotion=panMotion=null;if(animate&&!reducedMotion.matches)cameraMotion={from:{x:view.x,y:view.y},to:target,start:performance.now(),duration:230};else{view.x=target.x;view.y=target.y}requestRender();saveViewSoon();
+ resize();const p=iso(x,y),r=mapFocusRegion(),target={x:-p.x*view.zoom+(r.left+r.right-view.w)/2,y:-p.y*view.zoom+(r.top+r.bottom-view.h)/2+12};
+ cameraMotion=panMotion=null;if(animate&&!reducedMotion.matches)cameraMotion={from:{x:view.x,y:view.y},to:target,start:performance.now(),duration:200};else{view.x=target.x;view.y=target.y}requestRender();saveViewSoon();
 }
 function clampPan(){
  const span=(game.size-1)*TW/2*view.zoom,depth=(game.size-1)*TH*view.zoom,margin=60;
@@ -1359,7 +1374,7 @@ function leafyTree(x,y,size,biome){
 }
 function mushroom(x,y,size,color){line([[x,y],[x,y-size*.55]],'#dedbc1',size*.14);polygon([[x-size*.48,y-size*.45],[x-size*.28,y-size*.78],[x,y-size*.9],[x+size*.38,y-size*.72],[x+size*.48,y-size*.44],[x,y-size*.33]],color);polygon([[x-size*.48,y-size*.45],[x,y-size*.33],[x+size*.48,y-size*.44],[x+size*.31,y-size*.3],[x-size*.3,y-size*.3]],'#a37865');ellipse(x-size*.13,y-size*.62,size*.08,size*.045,'#f3dec1');ellipse(x+size*.2,y-size*.52,size*.06,size*.045,'#ebd5b8')}
 function mountain(x,y,variant,biome){
- const h=variant%2?46:40,w=29;ellipse(x+2,y+4,27,10,'#3c56462b');polygon([[x-w,y+3],[x-4,y-h],[x+4,y+10]],'#a0aba8');polygon([[x-4,y-h],[x+w,y+1],[x+4,y+10]],'#bbc4bf');polygon([[x-w,y+3],[x-18,y-7],[x-14,y+8],[x+4,y+10]],'#939e9e');polygon([[x-4,y-h],[x+10,y-h+21],[x+2,y-h+16],[x-5,y-h+23],[x-13,y-h+17]],biome==='dune'?'#e0d2b0':'#f5f4e9');if(biome==='ridge')polygon([[x+15,y-17],[x+w,y+1],[x+4,y+10]],'#c1b3a5');
+ const h=variant%2?37:33,w=27;ellipse(x+2,y+4,27,10,'#3c56462b');polygon([[x-w,y+3],[x-4,y-h],[x+4,y+10]],'#a0aba8');polygon([[x-4,y-h],[x+w,y+1],[x+4,y+10]],'#bbc4bf');polygon([[x-w,y+3],[x-18,y-7],[x-14,y+8],[x+4,y+10]],'#939e9e');polygon([[x-4,y-h],[x+10,y-h+21],[x+2,y-h+16],[x-5,y-h+23],[x-13,y-h+17]],biome==='dune'?'#e0d2b0':'#f5f4e9');if(biome==='ridge')polygon([[x+15,y-17],[x+w,y+1],[x+4,y+10]],'#c1b3a5');
 }
 function fruit(x,y,biome){
  ellipse(x,y+3,9,3,'#4f7b382a');const color=biome==='dune'?'#dd9250':biome==='ridge'?'#e8788b':'#ef8160';polygon([[x-8,y],[x-6,y-7],[x-1,y-9],[x+3,y-4],[x+2,y+2],[x-4,y+3]],color);polygon([[x,y+2],[x+1,y-6],[x+5,y-9],[x+10,y-5],[x+10,y+1],[x+6,y+4]],'#f1a365');line([[x-1,y-9],[x,y-12]],'#668e44',1.8);polygon([[x,y-10],[x+6,y-12],[x+4,y-8]],'#709e49')
@@ -1375,7 +1390,7 @@ function drawCity(c){
  ellipse(1,10,33,11,'#1f3b3b38');polygon([[-32,1],[0,-16],[32,1],[0,18]],'#b7ab87','#4d6258',1.2);polygon([[-27,0],[0,-13],[27,0],[0,14]],'#e1d4ad',b.dark,1.2);
  if(c.owner<0){hut(-11,-3,'#a5ac87','#9a9778',.75);hut(12,1,'#b1b392','#aa9c75',.8);ctx.restore();return}
  if(c.walls){box(0,-5,29,25,9,'#d4d2c4','#8e9b94','#b3b9ad');for(const x of [-23,-8,8,23])box(x,-10,4,5,8,'#dedacb','#8e9b94','#b8beb1')}
- if(c.level>=2)hut(-18,0,b.dark,b.color,.66);if(c.level>=3)hut(18,0,b.dark,b.color,.66);
+ hut(-21,3,b.dark,b.color,c.level>=2?.62:.48);hut(20,5,b.dark,b.color,c.level>=3?.62:.46);
  const h=18+Math.min(5,c.level)*2.5;box(0,-7,12,15,h,'#e4dfca','#9eaaa2','#c8cdc0');
  polygon([[-15,-h-7],[0,-h-20],[16,-h-7],[0,-h+1]],b.color,'#4c5c58',1.1);polygon([[-15,-h-7],[0,-h-20],[0,-h+1]],b.dark);
  polygon([[-4,9],[-4,-5],[2,-9],[7,-5],[7,10]],'#526e70');ctx.fillStyle='#f5e5b4';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
@@ -1443,7 +1458,7 @@ function drawCityLabel(c){
    for(let i=0;i<count;i++){const filled=i<p.population,negative=p.population<0&&i<-p.population,fill=negative?'#df6f61':filled?'#45bdd5':'#d8ded4',left=-barW/2+i*slot;
     roundedRect(left,y+21,slot-gap,height,1.5,fill);if(i<p.supported)ellipse(left+(slot-gap)/2,y+23.5,1.25,1.25,filled||negative?'#fff':'#243c43');
    }
-   ctx.font='650 8px "Avenir Next", sans-serif';ctx.textAlign='center';const stage='Level '+c.level+' · '+p.population+'/'+p.capacity+' population';ctx.strokeStyle='#18303bc9';ctx.lineWidth=2;ctx.strokeText(stage,0,y+35);ctx.fillStyle=p.population<0?'#ffb4a7':'#f0f3e7';ctx.fillText(stage,0,y+35);
+   ctx.font='650 8px "Avenir Next", sans-serif';ctx.textAlign='center';const stage='Lv '+c.level+' · '+p.population+'/'+p.capacity;ctx.strokeStyle='#18303bc9';ctx.lineWidth=2;ctx.strokeText(stage,0,y+35);ctx.fillStyle=p.population<0?'#ffb4a7':'#f0f3e7';ctx.fillText(stage,0,y+35);
   }
  }
  ctx.restore();
@@ -1464,16 +1479,20 @@ function drawUnitLabel(u,preview=null){
 // destinations visible along the cloud boundary, including during a reveal.
 function fogEdgeMask(t){return [[0,-1],[1,0],[0,1],[-1,0]].reduce((mask,[dx,dy],i)=>{const n=tileAt(t.x+dx,t.y+dy);return mask|(n&&seen(n)?1<<i:0)},0)}
 function fogFacetVariant(t){return(Math.imul(t.x+17,73856093)^Math.imul(t.y+31,19349663)^Math.imul((t.variant||0)+1,83492791))>>>0}
+function fogBoundaryEdges(t){
+ const p=iso(t.x,t.y),north=[p.x,p.y-TH/2],east=[p.x+TW/2,p.y],south=[p.x,p.y+TH/2],west=[p.x-TW/2,p.y];
+ // Bits follow map neighbors: y-1, x+1, y+1, x-1.
+ return[[north,east],[east,south],[south,west],[west,north]];
+}
 function drawFog(t,opacity=1){
- const p=iso(t.x,t.y),mask=fogEdgeMask(t),variant=fogFacetVariant(t),north=[p.x,p.y-TH/2],east=[p.x+TW/2,p.y],south=[p.x,p.y+TH/2],west=[p.x-TW/2,p.y],center=[p.x+((variant&3)-1.5)*1.3,p.y+(((variant>>2)&3)-1.5)],palettes=[['#f4f2e8','#e7ece6','#dce7e5','#ece8df'],['#edf1e9','#f6f3e9','#e3e7e2','#dbe7e6'],['#f5f3ea','#e8ece7','#dee8e7','#eee9e1'],['#f0f1e8','#e2eae6','#e9ebe4','#dce6e5']][variant%4];ctx.save();ctx.globalAlpha*=opacity;
- polygon([north,east,south,west],palettes[0]);ctx.clip();
+ const p=iso(t.x,t.y),mask=fogEdgeMask(t),variant=fogFacetVariant(t),edges=fogBoundaryEdges(t),[north,east,south,west]=edges.map(e=>e[0]),center=[p.x+((variant&3)-1.5)*2,p.y+(((variant>>2)&3)-1.5)],palette=['#fafbf6','#f2f6f2','#ffffff','#eaf1ed'];
+ ctx.save();ctx.globalAlpha*=opacity;polygon([north,east,south,west],'#f6f8f3');ctx.clip();
  const facets=[[north,east,center],[east,south,center],[south,west,center],[west,north,center]];
- facets.forEach((points,index)=>polygon(points,palettes[(index+1+(variant>>4))%palettes.length]));
- const inset=[[p.x,p.y-TH*.27],[p.x+TW*.27,p.y],[p.x,p.y+TH*.27],[p.x-TW*.27,p.y]];
- for(let index=0;index<4;index++)polygon([center,inset[index],inset[(index+1)%4]],index%2?'#ffffff36':'#bdd2ea24');
- const edgeFaces=[[[north,west,center],'#b8cce138'],[[north,east,center],'#ffffff7a'],[[east,south,center],'#c7d9ed3b'],[[south,west,center],'#aebfd73a']];
- edgeFaces.forEach(([points,color],index)=>{if(mask&(1<<index))polygon(points,color)});
- if(mask){ctx.setLineDash([7,5]);ctx.strokeStyle='#9fb7b5aa';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(west[0],west[1]);ctx.quadraticCurveTo(center[0],center[1]-4,east[0],east[1]);ctx.stroke();ctx.setLineDash([])}
+ facets.forEach((points,index)=>polygon(points,palette[(index+(variant>>4))%4]));
+ const inset=[[p.x,p.y-TH*.25],[p.x+TW*.24,p.y],[p.x,p.y+TH*.25],[p.x-TW*.24,p.y]];
+ for(let i=0;i<4;i++)polygon([center,inset[i],inset[(i+1)%4]],i%2?'#ffffff30':'#e4eee918');
+ // Interior clouds meet without seams. Only revealed neighbors create a lip.
+ edges.forEach(([a,b],index)=>{if(mask&(1<<index)){const aa=[p.x+(a[0]-p.x)*.86,p.y+(a[1]-p.y)*.86],bb=[p.x+(b[0]-p.x)*.86,p.y+(b[1]-p.y)*.86];polygon([a,b,bb,aa],index===1||index===2?'#b8cfce':'#dae7df');line([aa,bb],'#ffffff',1.2)}});
  if(!seen(t)&&faction(0).tribe==='wildwood'&&t.building==='ruin'){polygon([[p.x,p.y-18],[p.x+6,p.y-12],[p.x,p.y-7],[p.x-6,p.y-12]],'#c5afd9');line([[p.x-7,p.y-12],[p.x+7,p.y-12]],'#fff6d8',1.5)}ctx.restore();
 }
 function drawForest(t,p){
@@ -1508,6 +1527,11 @@ function drawScenery(t,c){
 function drawTileCue(t,color,selectedTile=false){
  if(!seen(t))return;const p=iso(t.x,t.y),inset=selectedTile ? .96 : .82,points=[[p.x,p.y-TH/2*inset],[p.x+TW/2*inset,p.y],[p.x,p.y+TH/2*inset],[p.x-TW/2*inset,p.y]];
  const attack=color===ACTION_COLORS.attack;ctx.save();
+ if(!selectedTile&&!attack){
+  // A small destination ring leaves the terrain and territory edge readable.
+  const rx=9/view.zoom,ry=5/view.zoom;ctx.beginPath();ctx.ellipse(p.x,p.y,rx,ry,0,0,Math.PI*2);ctx.fillStyle='#112e3b';ctx.fill();ctx.lineWidth=2/view.zoom;ctx.strokeStyle=color;ctx.stroke();ellipse(p.x,p.y,2.2/view.zoom,1.5/view.zoom,'#c2f1ff');ctx.restore();return;
+ }
+
  polygon(points,null,'#0d2434',4.5/view.zoom);if(!selectedTile&&!attack)ctx.setLineDash([5/view.zoom,3/view.zoom]);polygon(points,null,color,2.5/view.zoom);ctx.setLineDash([]);
  if(attack){const x=p.x+TW*.29,y=p.y+TH*.2;line([[x-3/view.zoom,y-3/view.zoom],[x+3/view.zoom,y+3/view.zoom]],'#102331',4/view.zoom);line([[x-3/view.zoom,y+3/view.zoom],[x+3/view.zoom,y-3/view.zoom]],'#102331',4/view.zoom);line([[x-3/view.zoom,y-3/view.zoom],[x+3/view.zoom,y+3/view.zoom]],color,2/view.zoom);line([[x-3/view.zoom,y+3/view.zoom],[x+3/view.zoom,y-3/view.zoom]],color,2/view.zoom)}
  else if(!selectedTile){ellipse(p.x,p.y,4/view.zoom,2.5/view.zoom,'#173b53');ellipse(p.x,p.y,2.5/view.zoom,1.5/view.zoom,color)}ctx.restore();
@@ -1535,7 +1559,7 @@ function render(time=performance.now()){
  ctx.save();ctx.translate(view.w/2+view.x,view.h/2+view.y);ctx.scale(view.zoom,view.zoom);
  if(liveWater)ambientWater=sorted.some(t=>seen(t)&&!t.frozen&&['water','ocean'].includes(t.terrain));else{const water=sorted.filter(t=>seen(t)&&!t.frozen&&['water','ocean'].includes(t.terrain));for(const t of water){drawWater(t);if(t.road){const p=iso(t.x,t.y);line([[p.x-35,p.y],[p.x-15,p.y-2],[p.x+7,p.y+2],[p.x+35,p.y]],'#c8be8c',7);line([[p.x-35,p.y],[p.x-15,p.y-2],[p.x+7,p.y+2],[p.x+35,p.y]],'#f0e5b8',4)}}ambientWater=water.length>0}
  const ownUnit=selected&&!selectCity?unitAt(selected.x,selected.y):null,{moves,attacks}=selectionPreview(ownUnit);
- for(const m of moves.values()){const t=tileAt(m.x,m.y);if(!seen(t))continue;const p=iso(m.x,m.y);polygon([[p.x,p.y-TH/2],[p.x+TW/2,p.y],[p.x,p.y+TH/2],[p.x-TW/2,p.y]],'#6ce0ff28')}
+ // Legal destinations are marked after scenery without recoloring the terrain.
  const objects=sorted.map(t=>({kind:'tile',t,depth:iso(t.x,t.y).y}));
  for(const u of game.units)if(visualSeen(tileAt(u.x,u.y),time)){const p=unitPose(u);if(inViewport({x:p.px,y:p.py}))objects.push({kind:'unit',u,depth:p.groundY+3})}
  effects=effects.filter(e=>time<e.start+e.duration);for(const e of effects)if(e.kind==='death'&&time>=e.appear&&seen(tileAt(e.unit.x,e.unit.y)))objects.push({kind:'death',e,depth:iso(e.unit.x,e.unit.y).y+3});
@@ -1651,7 +1675,7 @@ function updateSelection(){
  if(u&&!selectCity){
   const def=unitDef(u),own=u.owner===0;image=portrait(faction(u.owner).tribe,u.type,u.owner);title=(u.veteran?'Veteran ':'')+def.name;status=`<span class="hp">${icon('heart')}${u.hp}/${maxHP(u)}</span>`;
   const verb=def.convert?'convert':!def.attack&&def.freeze?'freeze':'attack';subtitle=own?u.frozen||u.stunned?'Frozen · This unit will miss one turn.':u.moved?(u.attacked?'This unit has finished its turn.':attackable(u).length?'Tap a red target to '+verb+'.':'Moved · No enemies in range.'):'Tap a blue tile to move'+(attackable(u).length?' or a red target to '+verb+'.':'.'):factionName(u.owner)+' · Attack '+def.attack+' · Defense '+def.defense;if(def.doubleAttack&&!u.attacked&&!u.frozen&&!u.stunned)subtitle+=' · '+(2-(u.attacksMade||0))+' attack'+(u.attacksMade===1?'':'s')+' left';if(u.poisoned)subtitle+=' · Poisoned: half defense, slower movement';if(u.boosted)subtitle+=' · Swarm +1 move';if(TYPES[u.type].growsInto)subtitle+=' · '+TYPES[TYPES[u.type].growsInto].name+' in '+Math.max(0,TYPES[u.type].growthTime-(u.growthTurns||0))+' turns'+(u.boat?' (land to hatch)':'');
-  if(own){if(t.building==='ruin')actions+=actionButton('examine-ruins','Examine','eye',true,!canExamine(u));if(canPromote(u))actions+=actionButton('promote-unit','Promote veteran','trophy',true);if(u.boat==='raft'&&t.owner===0)for(const k of ['scout','rammer','bomber']){const ship=NAVAL[k];if(ownsTech(0,ship.tech))actions+=actionButton('upgrade-'+k,ship.name,'boat',true,faction(0).stars<ship.cost,ship.cost)}if(t.resource==='starfish')actions+=actionButton('collect-starfish',ownsTech(0,'navigation')?'Collect stars':'Research Navigation','star',true,false,ownsTech(0,'navigation')?0:null);if(def.freezeArea||def.swarm||def.healer)actions+=actionButton('unit-power',def.freezeArea?'Freeze':def.swarm?'Swarm':'Heal allies',def.freezeArea?'waves':def.swarm?'flag':'heal',true,!canUsePower(u));if(c&&c.owner!==0&&(c.owner<0||hostile(c.owner,0)))actions+=actionButton('capture-city',c.owner<0?'Capture village':'Capture city','flag',true,u.moved||u.attacked||u.frozen||u.stunned);if(c&&c.owner===0)actions+=actionButton('select-city','City','city');if(!c&&(tileActions(t).length||t.terrain==='mountain'))actions+=actionButton('select-terrain',t.terrain==='mountain'?'Mountain':'Terrain',t.terrain==='mountain'?'mountain':'tree');if(u.hp<maxHP(u)||u.poisoned)actions+=actionButton('recover-unit','Recover','heal',false,u.moved||u.attacked||u.frozen||u.stunned);if(ownsTech(0,'freespirit')&&u.type!=='giant'&&!def.super)actions+=actionButton('disband-unit','Disband','trash');if(!actions)actions=actionButton('next-ready','Next unit','chevron')}detail='<div class="unit-stats"><span>Attack <b>'+def.attack+'</b></span><span>Defense <b>'+def.defense+'</b></span><span>Movement <b>'+def.move+'</b></span><span>Range <b>'+def.range+'</b></span></div>'+`<p class="unit-traits">${[!def.attack&&!def.convert&&!def.freeze?'Cannot attack':def.noDash?'Cannot attack after moving':null,def.doubleAttack?'Double attack':null,def.surprise?'No counterattack':null,def.poisonSplash?'Poisons nearby enemies':def.poison?'Poison':null].filter(Boolean).join(' · ')}</p>`;if(isAnimating())subtitle=u.anim?.kind==='attack'?'Attacking…':'Moving…';
+  if(own){if(t.building==='ruin')actions+=actionButton('examine-ruins','Examine','eye',true,!canExamine(u));if(canPromote(u))actions+=actionButton('promote-unit','Promote veteran','trophy',true);if(u.boat==='raft'&&t.owner===0)for(const k of ['scout','rammer','bomber']){const ship=NAVAL[k];if(ownsTech(0,ship.tech))actions+=actionButton('upgrade-'+k,ship.name,'boat',true,faction(0).stars<ship.cost,ship.cost)}if(t.resource==='starfish')actions+=actionButton('collect-starfish',ownsTech(0,'navigation')?'Collect stars':'Research Navigation','star',true,false,ownsTech(0,'navigation')?0:null);if(def.freezeArea||def.swarm||def.healer)actions+=actionButton('unit-power',def.freezeArea?'Freeze':def.swarm?'Swarm':'Heal allies',def.freezeArea?'waves':def.swarm?'flag':'heal',true,!canUsePower(u));if(c&&c.owner!==0&&(c.owner<0||hostile(c.owner,0)))actions+=actionButton('capture-city',c.owner<0?'Capture village':'Capture city','flag',true,u.moved||u.attacked||u.frozen||u.stunned);if(c&&c.owner===0)actions+=actionButton('select-city','City','city');if(!c&&(tileActions(t).length||t.terrain==='mountain'))actions+=actionButton('select-terrain',t.terrain==='mountain'?'Mountain':'Terrain',t.terrain==='mountain'?'mountain':'tree');if(u.hp<maxHP(u)||u.poisoned)actions+=actionButton('recover-unit','Recover','heal',false,u.moved||u.attacked||u.frozen||u.stunned);if(ownsTech(0,'freespirit')&&u.type!=='giant'&&!def.super)actions+=actionButton('disband-unit','Disband','trash');if(!actions)actions=actionButton('next-ready','Next unit','chevron')}actions+=actionButton('inspect-unit','Details','eye');detail='';if(isAnimating())subtitle=u.anim?.kind==='attack'?'Attacking…':'Moving…';
   if(own){
    const targets=attackable(u),canMove=!u.moved&&reachable(u).size>0;
    detail='<div class="turn-state"><span class="'+(canMove?'available':'spent')+'">'+(canMove?'Move ready':u.frozen||u.stunned?'Frozen':u.moved?'Moved':'No move')+'</span><span class="'+(targets.length?'available':'spent')+'">'+(targets.length?(def.convert?'Convert ready':def.freeze?'Freeze ready':'Attack ready'):u.attacked?'Attack used':'No target')+'</span></div>'+detail;
@@ -1671,13 +1695,19 @@ function updateSelection(){
  const owner=u&&!selectCity?u.owner:c?c.owner:t.owner;panel.style.setProperty('--army-color',owner>=0?tribeFor(owner).color:'#a9b1b8');panel.style.setProperty('--army-ink',owner>=0?contrastInk(tribeFor(owner).color):'#000000');if(owner>=0)subtitle='<span class="army-name"><i aria-label="Tribe '+(owner+1)+'">'+(owner+1)+'</i>'+factionName(owner)+(owner===0?' · You':'')+'</span>'+subtitle;
  panel.innerHTML=`<div class="selection-header"><div class="selection-icon">${image}</div><div class="selection-copy"><strong>${title}</strong><p>${subtitle}</p></div>${status}<button class="close-mini" id="close-selection" aria-label="Clear selection">${icon('close')}</button></div>${detail}${actions?'<div class="selection-actions">'+actions+'</div>':''}`;panel.classList.remove('hidden');
  if(isAnimating())panel.querySelectorAll('.selection-actions button').forEach(b=>b.disabled=true);if($('mountain-research'))$('mountain-research').onclick=()=>openTech(miningStatus(t).tech);if($('terrain-research'))$('terrain-research').onclick=()=>openTech(tileActions(t).find(a=>['harvest','enchant','farm','fungi'].includes(a.kind)&&a.tech&&!ownsTech(0,a.tech)).tech);
- $('close-selection').onclick=()=>{selected=null;updateSelection()};if($('select-terrain'))$('select-terrain').onclick=()=>{selectCity=true;updateSelection();sound()};if($('unit-power'))$('unit-power').onclick=()=>unitPower(u);if($('preview-attack'))$('preview-attack').onclick=()=>{const target=attackable(u).sort((a,b)=>distance(u,a)-distance(u,b)||a.id-b.id)[0];if(target)presentBattlePreview(u,target,true)};
+ $('close-selection').onclick=()=>{selected=null;updateSelection()};if($('inspect-unit'))$('inspect-unit').onclick=()=>openUnitDetails(u);if($('select-terrain'))$('select-terrain').onclick=()=>{selectCity=true;updateSelection();sound()};if($('unit-power'))$('unit-power').onclick=()=>unitPower(u);if($('preview-attack'))$('preview-attack').onclick=()=>{const target=attackable(u).sort((a,b)=>distance(u,a)-distance(u,b)||a.id-b.id)[0];if(target)presentBattlePreview(u,target,true)};
  if($('select-city'))$('select-city').onclick=()=>{selectCity=true;updateSelection();sound()};if($('select-unit'))$('select-unit').onclick=()=>{selectCity=false;updateSelection();sound()};if($('next-ready'))$('next-ready').onclick=nextUnit;
  if($('promote-unit'))$('promote-unit').onclick=()=>promote(u);for(const k of ['scout','rammer','bomber'])if($('upgrade-'+k))$('upgrade-'+k).onclick=()=>upgradeBoat(u,k);if($('collect-starfish'))$('collect-starfish').onclick=()=>{if(busy||isAnimating()||game.over||u.owner!==0||t.resource!=='starfish')return;if(!ownsTech(0,'navigation')){openTech('navigation');return}t.resource=null;faction(0).stars+=8;emit(t.x,t.y,'+8 ★','#ffeda0');sound('coin');updateTasks();updateUI();save()};
  if($('examine-ruins'))$('examine-ruins').onclick=()=>examineRuin(u);if($('capture-city'))$('capture-city').onclick=()=>capture(u,c);if($('recover-unit'))$('recover-unit').onclick=()=>recover(u);if($('disband-unit'))$('disband-unit').onclick=()=>{const refund=Math.floor(TYPES[u.type].cost/2);faction(0).stars+=refund;game.losses=(game.losses||0)+1;game.units=game.units.filter(a=>a.id!==u.id);toast('Unit disbanded. Recovered '+refund+' star'+(refund===1?'':'s')+'.');updateUI();save()};if($('train-units'))$('train-units').onclick=()=>openTraining(c);
  tileActions(t).forEach((a,i)=>{const button=$('improve-'+i);if(button)button.onclick=()=>improve(t,a)});
 }
-function nextUnit(){if(busy||game.over||isAnimating()||upgradeQueue.length)return;const units=readyUnits();if(!units.length){toast('No unit actions left. Build or research, or end your turn.');return}const index=units.findIndex(u=>selected&&u.x===selected.x&&u.y===selected.y),u=units[(index+1)%units.length];selected={x:u.x,y:u.y};selectCity=false;focusOn(u.x,u.y,true);updateSelection();sound()}
+function openUnitDetails(u){
+ if(!u||!seen(tileAt(u.x,u.y)))return;
+ const def=unitDef(u),traits=[!def.attack&&!def.convert&&!def.freeze?'Cannot attack':def.noDash?'Cannot attack after moving':'Can attack after moving',def.doubleAttack?'Two attacks per turn':null,def.surprise?'No counterattack':null,def.poisonSplash?'Poisons nearby enemies':def.poison?'Poisons its target':null,def.convert?'Converts an adjacent enemy':null,def.freeze?'Freezes its target':null,u.veteran?'Veteran':null,u.poisoned?'Poisoned: half defense':null].filter(Boolean);
+ openModal(`${modalCloseButton()}<span class="eyebrow">${factionName(u.owner)} · TEAM ${u.owner+1}</span><h2>${def.name}</h2><p class="subtitle">${u.hp}/${maxHP(u)} health · ${u.owner===0?'Your unit':'Rival unit'}</p><div class="unit-detail-stats"><span>Attack<b>${def.attack}</b></span><span>Defense<b>${def.defense}</b></span><span>Movement<b>${def.move}</b></span><span>Range<b>${def.range}</b></span></div><p class="unit-detail-traits">${traits.join('<br>')}</p><button class="large-button" id="unit-details-done">Back to map</button>`,'Unit details');
+ $('unit-details-done').onclick=()=>closeModal();
+}
+function nextUnit(){if(busy||game.over||isAnimating()||upgradeQueue.length)return;const units=readyUnits();if(!units.length){toast('No unit actions left. Build or research, or end your turn.');return}const index=units.findIndex(u=>selected&&u.x===selected.x&&u.y===selected.y),u=units[(index+1)%units.length];selected={x:u.x,y:u.y};selectCity=false;updateSelection();focusOn(u.x,u.y,true);sound()}
 function hitTile(clientX,clientY){const rect=canvas.getBoundingClientRect(),px=(clientX-rect.left-view.w/2-view.x)/view.zoom,py=(clientY-rect.top-view.h/2-view.y)/view.zoom,x=Math.round(px/TW+py/TH),y=Math.round(py/TH-px/TW);return tileAt(x,y)}
 function hitMap(clientX,clientY){
  const rect=canvas.getBoundingClientRect(),x=clientX-rect.left,y=clientY-rect.top,ground=hitTile(clientX,clientY),own=selected&&!selectCity?unitAt(selected.x,selected.y):null;
@@ -1872,7 +1902,7 @@ window.addEventListener('resize',refreshResolution);window.visualViewport?.addEv
 function watchResolution(){const query=matchMedia('(resolution: '+(window.devicePixelRatio||1)+'dppx)');query.addEventListener('change',()=>{refreshResolution();watchResolution()},{once:true})}watchResolution();
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearBattlePreview();panMotion=cameraMotion=null;save();cancelAnimationFrame(frameId);frameId=0;clearTimeout(idleFrameTimer);pointerState.clear();gesture=null;canvas.classList.remove('dragging')}else{requestRender();if(game.turnState&&!busy&&!game.over)resumeTurn()}});
 window.addEventListener('pagehide',save);
-if(load()){updateUI();if(game.over)setTimeout(showResult,150);else if(game.turnState)resumeTurn();else if(upgradeQueue.length)setTimeout(showNextUpgrade,100);else scheduleContactPresentation(100)}else newGame({seed:578201});
+if(load()){updateUI();if(game.over)setTimeout(showResult,150);else if(game.turnState)resumeTurn();else if(upgradeQueue.length)setTimeout(showNextUpgrade,100);else scheduleContactPresentation(100)}else newGame();
 if(saveNotice)setTimeout(()=>toast(saveNotice),180);
 requestRender();
 </script>

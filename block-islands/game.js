@@ -206,6 +206,7 @@
     if (world.worldVersion >= 3 && y < cell.h - 1) return y < cell.h - 3 ? 'stone' : 'dirt';
     if (y < cell.h - 1) return y === 0 ? 'stone' : 'dirt';
     if (cell.surface === 'sand' || cell.surface === 'ice' || cell.surface === 'basalt') return cell.surface;
+    if (world.worldVersion >= 4 && cell.surface === 'grass') return 'grass';
     return cell.h > 1 ? 'stone' : 'grass';
   }
   function visibleMaterial(material) {
@@ -221,8 +222,10 @@
     setBlock(cell.x, h + 2, cell.y, 'wood', 'decor');
     const turn = sceneryRoll(cell, 0x4d3); const axisX = turn % 2 === 0;
     for (const sign of [-1, 1]) setBlock(cell.x + (axisX ? sign : 0), h + 2, cell.y + (axisX ? 0 : sign), 'wood', 'decor');
+    // Compact crowns make a genuine navigable forest: silhouettes remain
+    // leafy at distance without swallowing the third-person camera frame.
     for (let level = 0; level < 2; level++) {
-      const radius = level === 0 ? 2 : 1;
+      const radius = 1;
       for (let dx = -radius; dx <= radius; dx++) for (let dz = -radius; dz <= radius; dz++) {
         if (Math.abs(dx) + Math.abs(dz) > radius + 1 || (!dx && !dz && level === 0)) continue;
         setBlock(cell.x + dx, h + 3 + level, cell.y + dz, 'leaves', 'decor');
@@ -250,10 +253,11 @@
     if (state.stage === 0) {
       // The first clearing has a small, original field shelter and fire ring:
       // an immediately readable route marker, not a menu-only objective.
-      for (const [x, z] of [[14, 10], [15, 10], [14, 11], [15, 11]]) setBlock(x, 3, z, 'plank', 'landmark');
-      setBlock(14, 4, 10, 'wood', 'landmark'); setBlock(15, 4, 11, 'wood', 'landmark');
-      setBlock(14, 5, 11, 'beacon', 'landmark');
-      const campOak = R.getCell(world, 14, 8);
+      const wide = world.worldVersion >= 4, campX = wide ? 23 : 14, campZ = wide ? 11 : 10, campY = wide ? 3 : 3;
+      for (const [x, z] of [[campX, campZ], [campX + 1, campZ], [campX, campZ + 1], [campX + 1, campZ + 1]]) setBlock(x, campY, z, 'plank', 'landmark');
+      setBlock(campX, campY + 1, campZ, 'wood', 'landmark'); setBlock(campX + 1, campY + 1, campZ + 1, 'wood', 'landmark');
+      setBlock(campX, campY + 2, campZ + 1, 'beacon', 'landmark');
+      const campOak = R.getCell(world, wide ? 30 : 14, wide ? 9 : 8);
       if (campOak && !campOak.resource) addTree(campOak, false);
     }
     if (stage.biome === 'settlement') for (let x = 12; x < 19; x++) {
@@ -271,22 +275,22 @@
       if (cell.lava) setBlock(cell.x, 0, cell.y, 'lava', 'fluid');
       const rich = world.worldVersion >= 3;
       const treeBiome = ['forest', 'meadow', 'settlement', 'frost'].includes(R.STAGES[state.stage].biome);
-      // The nearest tutorial logs remain low so an opening player is not
-      // spawned inside a trunk; the harvestable grove begins beyond the
-      // clearing, with its oak visible down the initial sightline.
-      const openingClearing = state.stage === 0 && cell.x < 12 && cell.y < 10;
+      // Tutorial logs stay low, keeping a genuine mineable route without
+      // filling the opening rear-camera frame with a wall of canopy.
+      const openingWidth = world.worldVersion >= 4 ? 22 : 12, openingDepth = world.worldVersion >= 4 ? 16 : 10;
+      const openingClearing = state.stage === 0 && cell.x < openingWidth && cell.y < openingDepth;
       const harvestableTree = cell.resource === 'wood' && !openingClearing;
       // Deterministic grove scenery fills out new worlds without changing
       // rule resources. The starter clearing stays open for first-time aim.
-      const scenicTree = rich && treeBiome && !openingClearing && !cell.resource && !cell.water && !cell.lava && cell.x + cell.y > 16 && sceneryRoll(cell, 0x1af) % 29 === 0;
+      const scenicTree = rich && treeBiome && !openingClearing && !cell.resource && !cell.water && !cell.lava && cell.x + cell.y > 16 && sceneryRoll(cell, 0x1af) % (world.worldVersion >= 4 ? 43 : 29) === 0;
       if (harvestableTree && rich) addTree(cell, true);
       else if (scenicTree) addTree(cell, false);
       else if (cell.resource) setBlock(cell.x, cell.h, cell.y, visibleMaterial(cell.resource), 'resource');
       else if (cell.bridge) setBlock(cell.x, cell.h, cell.y, 'plank', 'bridge');
       else for (let i = 0; i < cell.extra.length; i++) setBlock(cell.x, cell.h + i, cell.y, cell.extra[i], 'extra');
       if (rich && !cell.resource && !cell.water && !cell.lava && cell.surface === 'grass' && !scenicTree) {
-        const roll = sceneryRoll(cell, 0x7c9) % 47;
-        if (roll === 0) addPlant(cell, 'flower'); else if (roll < 4) addPlant(cell, 'fern');
+        const roll = sceneryRoll(cell, 0x7c9) % (world.worldVersion >= 4 ? 137 : 47);
+        if (roll === 0) addPlant(cell, 'flower'); else if (world.worldVersion < 4 && roll < 4) addPlant(cell, 'fern');
       }
     }
     addLandmarks(R.STAGES[state.stage]);
@@ -319,14 +323,13 @@
     const stored = state.pose;
     if (stored) pose = { x: stored.x, y: stored.y, z: stored.z, yaw: stored.yaw, pitch: stored.pitch, vy: 0, grounded: false };
     else {
-      // Begin in an open part of the clearing, framing the authored logs and
-      // pale rock rather than spawning the camera inside a landmark.
       const camp = state.stage === 0 && !state.creative;
-      // The southern edge of the clearing keeps every starter resource within
-      // the normal five-block reach, but faces an open grove rather than
-      // spawning the camera amid the tutorial logs.
-      const size = worldSize(), x = camp ? 1.5 : clamp(state.player.x, .5, size - .5), z = camp ? 5.8 : clamp(state.player.y, .5, size - .5);
-      pose = { x, z, y: Math.max(1, footingTopAt(Math.floor(x), Math.floor(z)) + 1) + EYE + .02, yaw: camp ? -1.70 : .15, pitch: camp ? -.14 : -.28, vy: 0, grounded: true };
+      // New wide expeditions begin in the protected meadow center, so the
+      // rear camera sees actual terrain in every direction. Legacy journeys
+      // retain their established compact-world pose.
+      const wideCamp = camp && world.worldVersion >= 4;
+      const size = worldSize(), x = camp ? (wideCamp ? 10.5 : 1.5) : clamp(state.player.x, .5, size - .5), z = camp ? (wideCamp ? 10.5 : 5.8) : clamp(state.player.y, .5, size - .5);
+      pose = { x, z, y: Math.max(1, footingTopAt(Math.floor(x), Math.floor(z)) + 1) + EYE + .02, yaw: camp ? (wideCamp ? -1.57 : 0) : .15, pitch: camp ? -.04 : -.28, vy: 0, grounded: true };
     }
     if (collides(pose.x, pose.y - EYE)) pose.y = Math.max(1, footingTopAt(Math.floor(pose.x), Math.floor(pose.z)) + 1) + EYE + .03;
   }
@@ -341,7 +344,7 @@
   }
   function resize() {
     const landscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
-    $('statusLine').style.top = landscape ? '108px' : '142px';
+    $('statusLine').style.top = landscape ? '62px' : '101px';
     if (!renderer) return;
     const rect = canvas.getBoundingClientRect(); renderer.resize(rect.width, rect.height, window.devicePixelRatio || 1);
   }
@@ -422,12 +425,12 @@
     return { x: vector[0], y: vector[1], z: vector[2] };
   }
   function renderCamera() {
-    if (prefs.camera === 'first') return { position: [pose.x, pose.y, pose.z], yaw: pose.yaw, pitch: pose.pitch, fov: 82, third: false, distance: 0, collision: false };
-    const look = direction(), feet = pose.y - EYE, targetPoint = [pose.x, feet + 1.03, pose.z], desired = [pose.x - look.x * 4.25, feet + 2.02 - look.y * 4.25, pose.z - look.z * 4.25];
+    if (prefs.camera === 'first') return { position: [pose.x, pose.y, pose.z], yaw: pose.yaw, pitch: pose.pitch, fov: 86, third: false, distance: 0, collision: false };
+    const look = direction(), feet = pose.y - EYE, targetPoint = [pose.x, feet + 1.03, pose.z], desired = [pose.x - look.x * 4.8, feet + 2.18 - look.y * 4.8, pose.z - look.z * 4.8];
     let follow = { position: desired, distance: Math.hypot(desired[0] - targetPoint[0], desired[1] - targetPoint[1], desired[2] - targetPoint[2]), collision: false };
     try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => rayBlock(x, y, z), targetPoint, desired, .20) || follow; } catch (_) {}
     const dx = targetPoint[0] - follow.position[0], dy = targetPoint[1] - follow.position[1], dz = targetPoint[2] - follow.position[2], length = Math.hypot(dx, dy, dz) || 1;
-    return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov: 78, third: true, distance: follow.distance, collision: follow.collision };
+    return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov: 82, third: true, distance: follow.distance, collision: follow.collision };
   }
   function normalizeRay(ray) {
     if (!ray) return null;
@@ -445,7 +448,7 @@
     try { if (V && typeof V.raycast === 'function') ray = V.raycast((x, y, z) => rayBlock(x, y, z), [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 5); } catch (_) {}
     target = normalizeRay(ray) || fallbackRaycast(origin, dir, 5);
     const tag = $('targetTag');
-    if (target && target.block && !fluid(target.block)) { tag.hidden = false; tag.textContent = String(target.material).replace(/^./, m => m.toUpperCase()) + ' · ' + (target.block.source === 'resource' ? 'hold Mine' : 'mine / build'); }
+    if (target && target.block && !fluid(target.block)) { const material = target.material || target.block.material || 'block'; tag.hidden = false; tag.textContent = String(material).replace(/^./, m => m.toUpperCase()) + ' · ' + (target.block.source === 'resource' ? 'hold Mine' : 'mine / build'); }
     else tag.hidden = true;
   }
   function bodyWouldOverlap(x, y, z) {
@@ -601,7 +604,11 @@
           daylight: clamp(.7 + Math.sin(state.time / 18 * Math.PI) * .24, .34, .94),
           target: target && { block: [target.x, target.y, target.z], normal: [target.normal.x || 0, target.normal.y || 0, target.normal.z || 0], progress: mining },
           entities: entities(), effects: effects.map(effect => Object.assign({}, effect, { age: clamp((now - effect.at) / 680, 0, 1) })),
-          player: camera.third && (!camera.collision || camera.distance > 2.15) ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
+          // The avatar remains visible whenever rear view is selected. A
+          // retracted camera can be close to the player, but silently
+          // switching the rendering to an empty first-person-looking frame
+          // makes the mobile camera control misleading.
+          player: camera.third ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
           held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) }
         });
       } catch (_) {}

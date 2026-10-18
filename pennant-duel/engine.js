@@ -25,7 +25,7 @@
     { id: 'ripplefox', name: 'Ripple Fox', cost: 4, kind: 'unit', role: 'splash', hp: 330, damage: 62, speed: 66, range: 170, cooldown: 1.12, target: 'both', projectile: 430, splash: 80, size: 28, color: '#57bad8', desc: 'Ranged splash attacker' },
     { id: 'ironroot', name: 'Ironroot', cost: 5, kind: 'unit', role: 'guardian', hp: 680, damage: 80, speed: 50, range: 50, cooldown: .95, target: 'ground', size: 36, color: '#9b825f', desc: 'Reliable armored defender' },
     { id: 'cloudrays', name: 'Cloud Rays', cost: 5, kind: 'unit', role: 'air-swarm', hp: 125, damage: 35, speed: 91, range: 80, cooldown: .66, target: 'both', flying: true, size: 19, count: 3, color: '#7ce4df', desc: 'Three swift flying hunters' },
-    { id: 'comet', name: 'Pocket Comet', cost: 4, kind: 'spell', role: 'damage', damage: 245, radius: 125, color: '#ff745c', desc: 'Area damage anywhere' },
+    { id: 'comet', name: 'Pocket Comet', cost: 4, kind: 'spell', role: 'damage', damage: 245, radius: 125, knockback: 58, color: '#ff745c', desc: 'Area damage and knockback' },
     { id: 'tailwind', name: 'Tailwind', cost: 3, kind: 'spell', role: 'support', radius: 150, color: '#65e6c4', desc: 'Heal and hasten allies', heal: 145, haste: 5 },
     { id: 'gluebloom', name: 'Glue Bloom', cost: 3, kind: 'spell', role: 'control', radius: 140, color: '#e69ae6', desc: 'Damage and slow enemies', damage: 85, slow: 4 },
     { id: 'lantern', name: 'Lantern Crew', cost: 4, kind: 'unit', role: 'support', hp: 310, damage: 35, speed: 58, range: 155, cooldown: .9, target: 'both', projectile: 420, aura: 1.14, size: 28, color: '#ffe88b', desc: 'Boosts nearby allies' },
@@ -63,7 +63,7 @@
   function makeTower(side, type, lane, x, y) {
     const base = type === 'base';
     const maxHp = base ? 2400 : 1500;
-    return { id: side + '-' + type + '-' + lane, side, type, lane, x, y, hp: maxHp, maxHp, radius: base ? 62 : 48, range: base ? 235 : 210, damage: base ? 72 : 58, cooldown: base ? .8 : .9, attackTimer: 0, recoil: 0, hit: 0, heading: side === 'player' ? -Math.PI / 2 : Math.PI / 2, alive: true };
+    return { id: side + '-' + type + '-' + lane, side, type, lane, x, y, hp: maxHp, maxHp, radius: base ? 62 : 48, range: base ? 235 : 210, damage: base ? 72 : 58, cooldown: base ? .8 : .9, attackTimer: 0, recoil: 0, hit: 0, active: !base, heading: side === 'player' ? -Math.PI / 2 : Math.PI / 2, alive: true };
   }
 
   function makeTowers() {
@@ -84,7 +84,7 @@
     const mode = ['classic','frenzy','draft'].includes(options.mode) ? options.mode : 'classic';
     const arena = clamp(Number.isInteger(options.arena) ? options.arena : 0, 0, arenas.length - 1);
     const state = {
-      version: VERSION, mode, arena, phase: 'playing', result: null, time: 180, overtime: false,
+      version: VERSION, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
       rng: (options.seed >>> 0) || 19870621, nextId: 1, accumulator: 0, energy: { player: 5, enemy: 5 },
       units: [], projectiles: [], effects: [], towers: makeTowers(),
       decks: { player: [], enemy: [] }, hands: { player: [], enemy: [] }, queues: { player: [], enemy: [] },
@@ -120,9 +120,12 @@
     if (state.energy[side] + 1e-6 < card.cost) return { ok: false, reason: 'Not enough spark' };
     if (x < 45 || x > WIDTH - 45 || y < 45 || y > HEIGHT - 45) return { ok: false, reason: 'Too close to the edge' };
     if (card.kind === 'unit') {
-      if (side === 'player' && y < RIVER_BOTTOM + 12) return { ok: false, reason: 'Deploy units on your side' };
-      if (side === 'enemy' && y > RIVER_TOP - 12) return { ok: false, reason: 'Enemy must deploy on its side' };
+      const lane=laneFor(x),opponent=other(side),laneTower=state.towers.find((tower)=>tower.side===opponent&&tower.type==='lane'&&tower.lane===lane);
+      const forwardPocket=laneTower&&!laneTower.alive&&(side==='player'?y>=360&&y<=RIVER_TOP-12:y<=1040&&y>=RIVER_BOTTOM+12);
+      const homeTerritory=side==='player'?y>=RIVER_BOTTOM+12:y<=RIVER_TOP-12;
+      if (!homeTerritory&&!forwardPocket) return { ok: false, reason: forwardPocket === false && laneTower && laneTower.alive ? 'Topple that lane tower to deploy ahead' : 'Deploy units on your side' };
       if (Math.abs(y - 700) < 90) return { ok: false, reason: 'Units cannot start in the current' };
+      if(state.towers.some((tower)=>tower.alive&&distance(tower,{x,y})<tower.radius+38))return{ok:false,reason:'That spot is occupied by a tower'};
     }
     return { ok: true, reason: '' };
   }
@@ -163,19 +166,33 @@
 
   function applyDamage(state, target, amount, sourceSide) {
     if (!target.alive || amount <= 0) return;
+    if (target.type === 'base') target.active = true;
     target.hp -= amount; target.hit = .18;
     state.stats[sourceSide + 'Damage'] += amount;
     if (target.hp <= 0) {
       target.hp = 0; target.alive = false;
       state.effects.push({ id: 'e' + state.nextId++, kind: target.type ? 'rubble' : 'defeat', x: target.x, y: target.y, radius: target.radius || 30, color: target.side === 'player' ? '#61e5d2' : '#ff8067', life: target.type ? 1.5 : .62, maxLife: target.type ? 1.5 : .62, cardId: target.cardId || '' });
       pushEvent(state, target.type ? 'towerDown' : 'unitDown', { side: target.side, id: target.id });
+      if (target.type === 'lane') {
+        const base=state.towers.find((tower)=>tower.side===target.side&&tower.type==='base');
+        if(base)base.active=true;
+      }
     }
   }
 
   function applySpell(state, side, card, x, y) {
     const targets = state.units.filter((u) => u.alive && distance(u, {x,y}) <= card.radius);
     if (card.damage) {
-      targets.filter((u) => u.side !== side).forEach((u) => { applyDamage(state, u, card.damage, side); if (card.slow) u.slow = Math.max(u.slow, card.slow); });
+      targets.filter((u) => u.side !== side).forEach((u) => {
+        applyDamage(state, u, card.damage, side);
+        if (card.slow) u.slow = Math.max(u.slow, card.slow);
+        if (card.knockback && u.alive) {
+          const dx=u.x-x,dy=u.y-y,length=Math.max(1,Math.hypot(dx,dy)),direction=side==='player'?-1:1;
+          u.x=clamp(u.x+dx/length*card.knockback,35,WIDTH-35);
+          u.y=clamp(u.y+(Math.abs(dy)>1?dy/length:direction)*card.knockback,35,HEIGHT-35);
+          u.lane=laneFor(u.x);
+        }
+      });
       state.towers.filter((t) => t.alive && t.side !== side && distance(t, {x,y}) <= card.radius).forEach((t) => applyDamage(state, t, card.damage * .55, side));
     }
     if (card.heal) targets.filter((u) => u.side === side).forEach((u) => { u.hp = Math.min(u.maxHp, u.hp + card.heal); u.haste = Math.max(u.haste, card.haste || 0); });
@@ -304,6 +321,7 @@
     for (const tower of state.towers) {
       if (!tower.alive) continue;
       tower.recoil = Math.max(0, (Number(tower.recoil) || 0) - dt); tower.hit = Math.max(0, (Number(tower.hit) || 0) - dt);
+      if (tower.type === 'base' && !tower.active) continue;
       tower.attackTimer = Math.max(0, tower.attackTimer - dt);
       const targets = state.units.filter((u) => u.alive && u.side !== tower.side && distance(tower,u) <= tower.range + u.radius).sort((a,b) => distance(tower,a)-distance(tower,b));
       if (targets[0]) tower.heading = Math.atan2(targets[0].y - tower.y, targets[0].x - tower.x);
@@ -344,6 +362,8 @@
     let lane = pressured ? defendLane : (random(state) < .5 ? 0 : 1);
     let x = LANES[lane] + (random(state)-.5) * 150;
     let y = pressured ? 390 + random(state)*170 : 460 + random(state)*120;
+    const pocketTower=state.towers.find((tower)=>tower.side==='player'&&tower.type==='lane'&&tower.lane===lane);
+    if(!pressured&&card.kind==='unit'&&pocketTower&&!pocketTower.alive&&random(state)<.42)y=820+random(state)*150;
     if (card.kind === 'spell') {
       const targets = state.units.filter((u) => u.alive && u.side === 'player');
       const chosen = targets.sort((a,b) => (b.maxHp+b.damage*3)-(a.maxHp+a.damage*3))[0];
@@ -382,12 +402,15 @@
     const pBase = state.towers.find((t) => t.side === 'player' && t.type === 'base');
     const eBase = state.towers.find((t) => t.side === 'enemy' && t.type === 'base');
     if (!pBase.alive || !eBase.alive) { conclude(state,'base'); return; }
+    if (state.overtime && state.overtimeCrowns) {
+      const p=scoreSide(state,'player'),e=scoreSide(state,'enemy');
+      if(p.destroyed!==state.overtimeCrowns.player||e.destroyed!==state.overtimeCrowns.enemy){conclude(state,'sudden-death');return;}
+    }
     state.time -= dt;
     if (state.time <= 0) {
       const p = scoreSide(state,'player'), e = scoreSide(state,'enemy');
-      const level = p.destroyed === e.destroyed && Math.abs(p.remaining-e.remaining) <= .001;
-      if (!state.overtime && level) { state.overtime = true; state.time = 45; pushEvent(state,'overtime'); }
-      else conclude(state, state.overtime ? 'overtime' : 'time');
+      if (!state.overtime && p.destroyed === e.destroyed) { state.overtime = true; state.time = 60; state.overtimeCrowns={player:p.destroyed,enemy:e.destroyed};pushEvent(state,'overtime'); }
+      else conclude(state, state.overtime ? 'tiebreak' : 'time');
     }
   }
 
@@ -418,6 +441,7 @@
     if (!value || typeof value !== 'object' || value.version !== VERSION) return false;
     if (!['classic','frenzy','draft'].includes(value.mode) || !Number.isInteger(value.arena) || value.arena < 0 || value.arena >= arenas.length) return false;
     if (!['playing','ended'].includes(value.phase) || !Number.isFinite(value.time) || value.time < -1 || value.time > 181) return false;
+    if (value.overtimeCrowns != null && (!value.overtimeCrowns || !['player','enemy'].every((side)=>Number.isInteger(value.overtimeCrowns[side])&&value.overtimeCrowns[side]>=0&&value.overtimeCrowns[side]<=5))) return false;
     if (!Number.isInteger(value.rng) || !Number.isInteger(value.nextId) || value.nextId < 1) return false;
     if (!value.energy || !['player','enemy'].every((side) => Number.isFinite(value.energy[side]) && value.energy[side] >= 0 && value.energy[side] <= MAX_ENERGY + .01)) return false;
     if (!value.hands || !value.decks || !value.queues || !['player','enemy'].every((side) => {
@@ -425,7 +449,7 @@
       return known(value.hands[side]) && value.hands[side].length === 4 && known(value.decks[side]) && value.decks[side].length === 8 && new Set(value.decks[side]).size === 8 && known(value.queues[side]) && value.queues[side].length === 4;
     })) return false;
     if (!Array.isArray(value.units) || value.units.length > 250 || !value.units.every((unit) => unit && typeof unit.id === 'string' && ['player','enemy'].includes(unit.side) && !!cardMap[unit.cardId] && [unit.x,unit.y,unit.hp,unit.maxHp,unit.damage,unit.speed,unit.range,unit.cooldown,unit.attackTimer,unit.radius].every(Number.isFinite) && unit.x >= -100 && unit.x <= WIDTH + 100 && unit.y >= -100 && unit.y <= HEIGHT + 100 && unit.maxHp > 0 && unit.hp >= 0 && unit.hp <= unit.maxHp * 1.01)) return false;
-    if (!Array.isArray(value.towers) || value.towers.length !== 6 || !value.towers.every((tower) => tower && typeof tower.id === 'string' && ['player','enemy'].includes(tower.side) && ['base','lane'].includes(tower.type) && [tower.x,tower.y,tower.hp,tower.maxHp,tower.range,tower.damage].every(Number.isFinite) && tower.maxHp > 0 && tower.hp >= 0 && tower.hp <= tower.maxHp)) return false;
+    if (!Array.isArray(value.towers) || value.towers.length !== 6 || !value.towers.every((tower) => tower && typeof tower.id === 'string' && ['player','enemy'].includes(tower.side) && ['base','lane'].includes(tower.type) && (tower.active == null || typeof tower.active === 'boolean') && [tower.x,tower.y,tower.hp,tower.maxHp,tower.range,tower.damage].every(Number.isFinite) && tower.maxHp > 0 && tower.hp >= 0 && tower.hp <= tower.maxHp)) return false;
     if (!Array.isArray(value.projectiles) || value.projectiles.length > 500 || !value.projectiles.every((shot) => shot && typeof shot.id === 'string' && ['player','enemy'].includes(shot.side) && [shot.x,shot.y,shot.speed,shot.damage,shot.life].every(Number.isFinite))) return false;
     if (!Array.isArray(value.effects) || value.effects.length > 100 || !Array.isArray(value.events) || value.events.length > 36) return false;
     if (!value.stats || !['playerPlayed','enemyPlayed','playerDamage','enemyDamage'].every((key) => Number.isFinite(value.stats[key]) && value.stats[key] >= 0)) return false;
@@ -441,7 +465,9 @@
       tower.recoil = Number.isFinite(tower.recoil) ? tower.recoil : 0;
       tower.hit = Number.isFinite(tower.hit) ? tower.hit : 0;
       tower.heading = Number.isFinite(tower.heading) ? tower.heading : (tower.side === 'player' ? -Math.PI / 2 : Math.PI / 2);
+      tower.active = typeof tower.active === 'boolean' ? tower.active : tower.type !== 'base' || tower.hp < tower.maxHp || state.towers.some((otherTower)=>otherTower.side===tower.side&&otherTower.type==='lane'&&!otherTower.alive);
     }
+    if(state.overtime&&!state.overtimeCrowns){const p=scoreSide(state,'player'),e=scoreSide(state,'enemy');state.overtimeCrowns={player:p.destroyed,enemy:e.destroyed};}
     for (const unit of state.units) {
       unit.deploy = Number.isFinite(unit.deploy) ? unit.deploy : 0;
       unit.heading = Number.isFinite(unit.heading) ? unit.heading : (unit.side === 'player' ? -Math.PI / 2 : Math.PI / 2);

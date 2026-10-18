@@ -6,17 +6,18 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  // v3 expands new expeditions into a continuous landscape. v1/v2 saves keep
-  // their exact 18×18 rule world, so an existing camp is never regenerated
+  // v4 gives new expeditions a broader, denser landscape. v1–v3 saves keep
+  // their exact generated terrain so an existing camp is never regenerated
   // under a player or silently given a new objective route.
   const LEGACY_SIZE = 18;
-  const SIZE = 48;
+  const V3_SIZE = 48;
+  const SIZE = 64;
   // Keep the public save envelope at v1.  The phone renderer adds optional,
   // bounded fields below, so existing v1 exports remain valid rather than
   // forcing players to abandon a campaign or Creative profile.
   const SAVE_VERSION = 1;
   const DEFAULT_SEED = 861733;
-  const WORLD_VERSION = 3;
+  const WORLD_VERSION = 4;
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const key = (x, y) => x + ',' + y;
   const hash = (seed, x, y) => {
@@ -25,10 +26,10 @@
     return (n ^ (n >>> 16)) >>> 0;
   };
   const distance = (a, b, x, y) => Math.hypot(a - x, b - y);
-  const sizeForWorldVersion = version => version >= 3 ? SIZE : LEGACY_SIZE;
+  const sizeForWorldVersion = version => version >= 4 ? SIZE : version === 3 ? V3_SIZE : LEGACY_SIZE;
 
   const STAGES = [
-    { name: 'Mosslight Camp', biome: 'forest', seed: 1147, goal: 'craft-campfire', goalText: 'Gather wood and stone, then craft a campfire.', hint: 'Mine the marked logs and pale rocks. Open Craft when you have 3 wood and 2 stone.', enemies: 0 },
+    { name: 'Mosslight Camp', biome: 'forest', seed: 1147, goal: 'craft-campfire', goalText: 'Mine wood + stone; craft campfire.', hint: 'Mine the marked logs and pale rocks. Open Craft when you have 3 wood and 2 stone.', enemies: 0 },
     { name: 'Quarry Span', biome: 'quarry', seed: 2281, goal: 'bridge', goalText: 'Build four plank bridge tiles across the quarry stream.', hint: 'Mine trees, craft Planks, aim at water beside solid ground, then Place.', enemies: 0 },
     { name: 'Echo Hollow', biome: 'cave', seed: 3413, goal: 'ore-and-pick', goalText: 'Craft a stone pick, then mine four copper ore veins.', hint: 'A stone pick breaks copper. Use the Craft shelf before entering the hollow.', enemies: 1 },
     { name: 'Hearthfield', biome: 'meadow', seed: 4579, goal: 'shelter', goalText: 'Raise six plank blocks for a storm shelter.', hint: 'Place planks one block at a time on solid ground. Keep an eye on the dusk meter.', enemies: 1 },
@@ -75,6 +76,10 @@
     10: { '7,7': 'wood', '9,8': 'wood', '12,10': 'wood' },
     11: { '5,3': 'crystal', '6,4': 'crystal', '7,4': 'crystal', '8,5': 'ore', '9,5': 'ore', '14,14': 'crystal' }
   };
+  // v4 starts further into the wide Mosslight meadow. The original authored
+  // sites above remain intact for old journeys; these extra visible logs and
+  // pale rocks provide new players a central, legal tutorial route.
+  const V4_STARTER = { '8,12': 'wood', '10,11': 'wood', '12,12': 'wood', '8,8': 'stone', '9,8': 'stone' };
   const GOAL_SITES = {
     6: { type: 'seals', cells: [[5, 3], [6, 3], [7, 3]], relic: [14, 13] },
     9: { type: 'marker', cell: [10, 10], blocks: 7 },
@@ -142,6 +147,42 @@
       // starter nodes. This prevents a seeded stray log from occluding the
       // short tutorial route while the surrounding wide forest stays varied.
       if (stageIndex === 0 && x < 12 && y < 10 && !fixed) resource = null;
+    }
+    if (worldVersion >= 4) {
+      // The fourth generator is intentionally a new world version: broad
+      // low-frequency terrain gives a real horizon and distinct landmarks,
+      // while v1–v3 worlds retain their exact terrain and sparse edits.
+      const broad = Math.sin((x + (stage.seed & 31)) * .115) * 1.45 + Math.cos((y - (stage.seed & 23)) * .10) * 1.2;
+      const rolling = Math.sin((x + y) * .052) * .85 + Math.cos((x - y) * .071) * .55;
+      const patch = ((hash(stage.seed ^ seedOffset ^ 0x5a1d43, Math.floor(x / 4), Math.floor(y / 4)) >>> 5) % 5 - 2) * .35;
+      h = clamp(3 + Math.round(broad + rolling + patch), 1, 8);
+      surface = stage.biome === 'desert' ? 'sand' : stage.biome === 'frost' ? 'ice' : stage.biome === 'ember' ? 'basalt' : 'grass';
+      water = false; lava = false;
+      // A protected opening meadow preserves the same five legal starter
+      // sites, but opens a sightline to the forest and water landmark.
+      if (stageIndex === 0 && x < 22 && y < 16) h = 2;
+      // A small distant plateau gives the first island a visible shelter
+      // landmark without putting its roof or canopy in the opening camera.
+      if (stageIndex === 0 && x >= 22 && x <= 27 && y >= 9 && y <= 14) h = 3;
+      if (stage.biome === 'forest') {
+        const pond = ((x - 31) * (x - 31)) / 54 + ((y - 19) * (y - 19)) / 22 < 1;
+        const creek = x > 33 && y > 17 && y < 21;
+        if (pond || creek) { h = 0; water = true; }
+      }
+      if (stage.biome === 'quarry' && ((x >= 10 && x <= 12) || (x >= 38 && x <= 40)) && y > 1 && y < 62) { h = 0; water = true; }
+      if (stage.biome === 'flood' && ((x >= 9 && x <= 14) || (x >= 36 && x <= 42)) && y > 0 && y < 63) { h = 0; water = true; }
+      if (stage.biome === 'ember' && ((x >= 9 && x <= 13 && y >= 5 && y <= 18) || (x >= 36 && x <= 41 && y >= 10 && y <= 52))) { h = 0; lava = true; }
+      if (stage.biome === 'sky' && ((x < 5 || y > 58) && n % 3 === 0)) { h = 0; water = true; }
+      if (water || lava) resource = null;
+      if (stage.biome === 'forest' || stage.biome === 'meadow' || stage.biome === 'settlement' || stage.biome === 'frost') {
+        const grove = hash(stage.seed ^ seedOffset ^ 0x7f4a7c15, x, y) % 19;
+        if (!water && !lava && !resource && grove === 0) resource = 'wood';
+        else if (!water && !lava && !resource && grove === 1) resource = 'berry';
+      }
+      if (!water && !lava && !resource && stageIndex >= 2 && hash(stage.seed ^ 0x9e3779b9, x, y) % 79 === 0) resource = 'ore';
+      if (stage.biome === 'settlement' && x > 46 && y > 46) resource = null;
+      if (stageIndex === 0 && x < 22 && y < 16 && !fixed) resource = V4_STARTER[key(x, y)] || null;
+      if (stageIndex === 0 && x >= 22 && x <= 27 && y >= 9 && y <= 14) resource = null;
     }
     return { x, y, h, surface, resource, water, lava, bridge: false, extra: [] };
   }
@@ -393,7 +434,7 @@
   function sanitizeState(value) {
     if (!isValidState(value)) return null;
     const state = JSON.parse(JSON.stringify(value));
-    state.worldVersion = [1, 2, WORLD_VERSION].includes(state.worldVersion) ? state.worldVersion : 1;
+    state.worldVersion = [1, 2, 3, WORLD_VERSION].includes(state.worldVersion) ? state.worldVersion : 1;
     const size = sizeForWorldVersion(state.worldVersion);
     state.stage = clamp(state.stage, 0, STAGES.length - 1);
     state.unlocked = clamp(Number.isInteger(state.unlocked) ? state.unlocked : 0, 0, STAGES.length - 1);
@@ -448,5 +489,5 @@
   }
   function summary(state) { return { stage: state.stage, stageName: STAGES[state.stage].name, unlocked: state.unlocked, complete: !!state.stageComplete, health: Math.ceil(state.player.health), inventory: Object.assign({}, state.inventory), enemies: state.enemies.filter(e => e.alive).length }; }
 
-  return { SIZE, LEGACY_SIZE, SAVE_VERSION, WORLD_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, setVoxelEdit, validVoxel, voxelKey, summary, hash, sizeForWorldVersion };
+  return { SIZE, V3_SIZE, LEGACY_SIZE, SAVE_VERSION, WORLD_VERSION, DEFAULT_SEED, STAGES, RECIPES, INVENTORY_KEYS, GOAL_SITES, createGame, startStage, makeWorld, getCell, topHeight, cellMaterial, toolLevel, mine, place, craft, move, attack, tick, retryStage, goalComplete, checkGoal, isValidState, sanitizeState, setVoxelEdit, validVoxel, voxelKey, summary, hash, sizeForWorldVersion };
 });

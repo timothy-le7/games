@@ -12,7 +12,7 @@
   // All scenery is procedural and local. These small material variants give
   // grassland, trees, and interaction feedback readable depth without an
   // external texture pack or a per-frame canvas upload.
-  const MATERIALS = ['grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'plank', 'ore', 'ice', 'crystal', 'basalt', 'beacon', 'water', 'lava', 'shadow', 'fern', 'flower', 'moss'];
+  const MATERIALS = ['grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'plank', 'ore', 'ice', 'crystal', 'basalt', 'beacon', 'water', 'lava', 'shadow', 'fern', 'flower', 'moss', 'skin', 'cloth', 'scarf', 'leather'];
   const MATERIAL_INDEX = Object.freeze(MATERIALS.reduce((all, name, index) => { all[name] = index; return all; }, Object.create(null)));
   const MAX_RENDER_PIXELS = 5_500_000;
   const EPSILON = 1e-9;
@@ -184,12 +184,12 @@
       vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
       void main(){
         float material=floor(vMaterial+.5); vec3 color=sampleMaterial(material,vUv); vec3 normal=normalize(vNormal);
-        if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); color=mix(soil,color,smoothstep(.58,.87,vUv.y)); }
-        if(abs(material-4.0)<.5 && abs(normal.y)>.5){ float rings=sin(length(vUv-vec2(.5))*38.0); color+=vec3(rings*.075); }
-        if(abs(material-5.0)<.5){ float gaps=fract(vUv.x*7.0+vUv.y*11.0); if(gaps>.89 && abs(normal.y)<.5) discard; color+=vec3(.025,.07,.015)*sin(vUv.x*24.0); }
-        if(abs(material-12.0)<.5) color+=vec3(.02,.11,.14)*sin((vUv.x+vUv.y+uTime*.45)*18.0);
-        vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)); float horizon=max(.0,normal.y)*.10; float light=.22+uDaylight*(.22+.72*diffuse+horizon);
-        color*=light; float fog=smoothstep(36.0,92.0,length(vWorld-uCamera)); color=mix(color,mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight),fog);
+        if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); color=mix(soil,color,smoothstep(.76,.98,vUv.y)); }
+        if(abs(material-4.0)<.5 && normal.y>.5){ float ring=max(abs(vUv.x-.5),abs(vUv.y-.5)); color+=vec3(mod(floor(ring*17.0),2.0)*.09-.045); }
+        if(abs(material-5.0)<.5){ float gaps=mod(floor(vUv.x*8.0)+floor(vUv.y*8.0)*3.0,9.0); if(gaps<1.0 && abs(normal.y)<.5) discard; color+=vec3(.012,.045,.006); }
+        if(abs(material-12.0)<.5) color+=vec3(.015,.09,.12)*sin((vUv.x+uTime*.34)*19.0);
+        vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)); float upward=max(.0,normal.y); float side=max(.0,normal.z)*.06+max(.0,normal.x)*.035; float light=.20+uDaylight*(.20+.70*diffuse+upward*.11+side);
+        color*=light; float fog=smoothstep(42.0,104.0,length(vWorld-uCamera)); color=mix(color,mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight),fog);
         float alpha=1.0;
         if(uOverlay>0.0){ float crack=max(step(.94,fract(vUv.x*13.0+vUv.y*5.0)),step(.96,fract(vUv.y*17.0-vUv.x*7.0))); color=mix(color,vec3(.06,.08,.10),crack*uOverlay); alpha=.12+.36*uOverlay; }
         gl_FragColor=vec4(color,alpha);
@@ -224,18 +224,34 @@
     return program;
   }
   function texturePixels() {
-    const colors = [[76, 158, 65], [126, 82, 48], [114, 125, 133], [211, 183, 115], [122, 76, 37], [53, 124, 62], [176, 120, 65], [101, 111, 118], [142, 198, 225], [137, 92, 198], [55, 60, 69], [222, 189, 76], [43, 153, 194], [205, 73, 36], [17, 25, 31], [41, 117, 59], [231, 112, 87], [72, 140, 73]];
+    // A tiny authored pixel atlas: every pattern is local, deterministic, and
+    // deliberately orthogonal so close terrain does not turn into diagonal
+    // moiré stripes on a phone display.
+    const colors = [[92, 171, 76], [126, 82, 48], [116, 126, 134], [218, 190, 121], [128, 79, 39], [57, 131, 67], [179, 121, 65], [105, 112, 117], [151, 210, 234], [143, 95, 203], [61, 65, 72], [224, 190, 75], [48, 157, 198], [208, 76, 38], [17, 25, 31], [43, 121, 62], [238, 120, 88], [75, 144, 77], [224, 177, 132], [55, 101, 137], [191, 81, 58], [83, 60, 43]];
     const side = 16, bytes = new Uint8Array(side * side * MATERIALS.length * 4);
+    const noise = (x, y, material) => ((x * 73) ^ (y * 151) ^ (material * 197)) & 15;
     for (let material = 0; material < MATERIALS.length; material++) for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
       const offset = ((y * side * MATERIALS.length) + material * side + x) * 4, base = colors[material];
-      let pattern = ((x * 19 + y * 31 + material * 17) % 11) - 5;
-      if (material === 6) pattern += y % 5 === 0 ? 17 : 0;
-      if (material === 7) pattern += (x - 7) * (x - 7) + (y - 8) * (y - 8) < 15 ? 42 : 0;
-      if (material === 5) pattern += (x + y) % 6 === 0 ? 20 : 0;
-      if (material === 10) pattern -= (x + y) % 5 === 0 ? 17 : 0;
-      if (material === 11) pattern += (x === 7 || y === 7) ? 35 : 0;
-      if (material === 15) pattern += (x + y) % 4 === 0 ? 22 : -4;
-      if (material === 16) pattern += (x === 7 || y === 7) ? 48 : -10;
+      let pattern = noise(x, y, material) < 3 ? -9 : noise(x, y, material) > 13 ? 8 : 0;
+      if (material === 0) pattern += (y < 3 && (x === 2 || x === 11) ? 15 : 0) + (y > 10 && x % 5 === 0 ? -8 : 0);
+      if (material === 1) pattern += ((x === 3 || x === 12) && y % 5 < 3 ? 13 : 0) + (y === 8 ? -6 : 0);
+      if (material === 2) pattern += ((x > 3 && x < 7 && y > 3 && y < 7) || (x > 10 && y > 9) ? 15 : 0) + ((x === 8 || y === 12) ? -8 : 0);
+      if (material === 3) pattern += (x % 6 === 1 && y % 5 === 2 ? 13 : 0);
+      if (material === 4) pattern += (x % 5 < 2 ? -18 : x % 5 === 3 ? 12 : 0);
+      if (material === 5) pattern += ((x > 2 && x < 6 && y > 2 && y < 7) || (x > 9 && y > 8) ? 13 : -4);
+      if (material === 6) pattern += (y === 3 || y === 11 ? 15 : 0) + (x === 2 || x === 13 ? -10 : 0);
+      if (material === 7) pattern += ((x - 7) * (x - 7) + (y - 7) * (y - 7) < 17 ? 49 : 0);
+      if (material === 8) pattern += (x === y || x + y === 15 ? 18 : 0);
+      if (material === 9 || material === 11) pattern += (x === 7 || y === 7 ? 31 : 0);
+      if (material === 10) pattern += ((x === 5 || x === 11) && y % 4 ? -18 : 0);
+      if (material === 12) pattern += (y === 4 || y === 11 ? 17 : -3);
+      if (material === 13) pattern += (x === 5 || x === 10 ? 25 : -4);
+      if (material === 15) pattern += (x === 7 && y < 12 ? 31 : -4);
+      if (material === 16) pattern += ((x > 4 && x < 11 && y > 4 && y < 11) ? 34 : -7);
+      if (material === 18) pattern += (y < 5 ? 12 : 0);
+      if (material === 19) pattern += (x === 2 || x === 13 ? 18 : 0);
+      if (material === 20) pattern += (x === 6 || y === 4 ? 26 : 0);
+      if (material === 21) pattern += (x % 4 === 0 ? -17 : 0);
       bytes[offset] = clamp(base[0] + pattern, 0, 255); bytes[offset + 1] = clamp(base[1] + pattern, 0, 255); bytes[offset + 2] = clamp(base[2] + pattern, 0, 255); bytes[offset + 3] = 255;
     }
     return { pixels: bytes, width: side * MATERIALS.length, height: side };
@@ -345,7 +361,7 @@
       if (held.material === 'tool') {
         // A compact explorer glove makes the tool a held object rather than
         // a floating HUD prop, while keeping the target and phone actions clear.
-        drawCube(mvp, camera, daylight, time, modelBasis([position[0] - up[0] * .10 - right[0] * .10, position[1] - up[1] * .10 - right[1] * .10, position[2] - up[2] * .10 - right[2] * .10], right, up, [-look[0], -look[1], -look[2]], [.20, .18, .20]), 'sand', 0);
+        drawCube(mvp, camera, daylight, time, modelBasis([position[0] - up[0] * .10 - right[0] * .10, position[1] - up[1] * .10 - right[1] * .10, position[2] - up[2] * .10 - right[2] * .10], right, up, [-look[0], -look[1], -look[2]], [.20, .18, .20]), 'skin', 0);
         drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .43, position[1] + up[1] * .43, position[2] + up[2] * .43], right, up, [-look[0], -look[1], -look[2]], [.30, .14, .16]), 'stone', 0);
         drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .38 + right[0] * .19, position[1] + up[1] * .38 + right[1] * .19, position[2] + up[2] * .38 + right[2] * .19], right, up, [-look[0], -look[1], -look[2]], [.10, .10, .22]), 'stone', 0);
       }
@@ -363,21 +379,23 @@
         box(offset(pivot, vertical, -length / 2), side, vertical, front, [width, length, .20], material);
         return { hand: offset(pivot, vertical, -length - .045), vertical, front };
       };
-      // Original field explorer: a planted contact shadow, slate boots,
-      // moss jacket and copper scarf. Limbs pivot from the actual player body.
+      // Original field explorer: a planted contact shadow, navy work clothes,
+      // rust scarf and leather pack. Limbs pivot from the actual player body.
       drawCube(mvp, camera, daylight, time, modelBox(x - .32, y + .01, z - .32, .64, .025, .64, 0), 'shadow', 0);
       const leftHip = offset([x, y + .50, z], side, -.10), rightHip = offset([x, y + .50, z], side, .10);
-      limb(leftHip, stride, .50, .18, 'basalt'); limb(rightHip, -stride, .50, .18, 'basalt');
-      box([x, y + .77, z], side, up, gaze, [.54, .54, .40], 'moss');
-      const leftArm = limb(offset([x, y + 1.00, z], side, -.34), -stride * .72, .47, .14, 'moss');
-      const rightArm = limb(offset([x, y + 1.00, z], side, .34), stride * .72 - swing * 1.10, .47, .14, 'moss');
+      limb(leftHip, stride, .50, .18, 'leather'); limb(rightHip, -stride, .50, .18, 'leather');
+      box([x, y + .77, z], side, up, gaze, [.54, .54, .40], 'cloth');
+      box(offset([x, y + .96, z], gaze, -.23), side, up, gaze, [.37, .34, .12], 'leather');
+      const leftArm = limb(offset([x, y + 1.00, z], side, -.34), -stride * .72, .47, .14, 'cloth');
+      const rightArm = limb(offset([x, y + 1.00, z], side, .34), stride * .72 - swing * 1.10, .47, .14, 'cloth');
       const head = [x, y + 1.28, z], headGaze = forward(yaw, clamp(Number(player.look) || 0, -.55, .55) * .45), headUp = normalize(cross(side, headGaze));
-      box(head, side, headUp, headGaze, [.44, .43, .36], 'sand');
+      box(head, side, headUp, headGaze, [.44, .43, .36], 'skin');
       const face = offset(head, headGaze, .205);
-      box(offset(face, side, .10), side, headUp, headGaze, [.07, .07, .04], 'crystal'); box(offset(face, side, -.10), side, headUp, headGaze, [.07, .07, .04], 'crystal');
-      box(offset(head, headUp, .22), side, headUp, headGaze, [.46, .13, .40], 'wood');
+      box(offset(face, side, .10), side, headUp, headGaze, [.07, .07, .04], 'leather'); box(offset(face, side, -.10), side, headUp, headGaze, [.07, .07, .04], 'leather');
+      box(offset(head, headUp, .22), side, headUp, headGaze, [.46, .13, .40], 'leather');
+      box(offset(head, headUp, -.15), side, headUp, headGaze, [.46, .08, .40], 'scarf');
       const glove = rightArm.hand;
-      box(glove, side, up, gaze, [.16, .16, .16], 'sand');
+      box(glove, side, up, gaze, [.16, .16, .16], 'skin');
       if (player.held === 'tool') {
         const shaftCenter = offset(glove, rightArm.vertical, .22);
         box(shaftCenter, side, rightArm.vertical, rightArm.front, [.10, .54, .10], 'wood');
