@@ -16,13 +16,14 @@
   const MATERIAL_INDEX = Object.freeze(MATERIALS.reduce((all, name, index) => { all[name] = index; return all; }, Object.create(null)));
   const MAX_RENDER_PIXELS = 5_500_000;
   const EPSILON = 1e-9;
+  const VERTEX_FLOATS = 10;
   const FACE_INFO = [
-    { normal: [0, 1, 0], offset: [0, 1, 0], corners: [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]] },
-    { normal: [0, -1, 0], offset: [0, -1, 0], corners: [[0, 0, 0], [0, 0, 1], [1, 0, 1], [1, 0, 0]] },
-    { normal: [1, 0, 0], offset: [1, 0, 0], corners: [[1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 0]] },
-    { normal: [-1, 0, 0], offset: [-1, 0, 0], corners: [[0, 0, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1]] },
-    { normal: [0, 0, 1], offset: [0, 0, 1], corners: [[0, 0, 1], [0, 1, 1], [1, 1, 1], [1, 0, 1]] },
-    { normal: [0, 0, -1], offset: [0, 0, -1], corners: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]] }
+    { normal: [0, 1, 0], offset: [0, 1, 0], tangentAxes: [0, 2], corners: [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]] },
+    { normal: [0, -1, 0], offset: [0, -1, 0], tangentAxes: [0, 2], corners: [[0, 0, 0], [0, 0, 1], [1, 0, 1], [1, 0, 0]] },
+    { normal: [1, 0, 0], offset: [1, 0, 0], tangentAxes: [1, 2], corners: [[1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 0]] },
+    { normal: [-1, 0, 0], offset: [-1, 0, 0], tangentAxes: [1, 2], corners: [[0, 0, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1]] },
+    { normal: [0, 0, 1], offset: [0, 0, 1], tangentAxes: [0, 1], corners: [[0, 0, 1], [0, 1, 1], [1, 1, 1], [1, 0, 1]] },
+    { normal: [0, 0, -1], offset: [0, 0, -1], tangentAxes: [0, 1], corners: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]] }
   ];
   const QUAD_ORDER = [0, 1, 2, 0, 2, 3];
 
@@ -162,11 +163,31 @@
   }
   function materialIndex(material) { return Object.hasOwn(MATERIAL_INDEX, material) ? MATERIAL_INDEX[material] : MATERIAL_INDEX.stone; }
 
-  function appendFace(target, x, y, z, face, material) {
+  function faceAxes(face) {
+    return face.tangentAxes;
+  }
+  // Sample the three blocks outside each exposed face corner. This classic
+  // voxel ambient-occlusion term is baked while the sparse mesh changes, so
+  // it gives terraces, canopies and crevices depth without per-frame queries.
+  function cornerOcclusion(blockMap, x, y, z, face, corner) {
+    const [firstAxis, secondAxis] = faceAxes(face);
+    const firstDirection = corner[firstAxis] ? 1 : -1, secondDirection = corner[secondAxis] ? 1 : -1;
+    const at = (first, second) => {
+      const point = [x + face.offset[0], y + face.offset[1], z + face.offset[2]];
+      point[firstAxis] += first * firstDirection; point[secondAxis] += second * secondDirection;
+      return blockMap.has(cellKey(point[0], point[1], point[2]));
+    };
+    const firstSide = at(1, 0), secondSide = at(0, 1);
+    if (firstSide && secondSide) return 0;
+    return 3 - Number(firstSide) - Number(secondSide) - Number(at(1, 1));
+  }
+  function appendFace(target, x, y, z, face, material, getOcclusion, histogram) {
     const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
     for (const index of QUAD_ORDER) {
       const corner = face.corners[index];
-      target.push(x + corner[0], y + corner[1], z + corner[2], face.normal[0], face.normal[1], face.normal[2], material, uv[index][0], uv[index][1]);
+      const occlusion = getOcclusion ? getOcclusion(corner) : 3;
+      if (histogram) histogram[occlusion]++;
+      target.push(x + corner[0], y + corner[1], z + corner[2], face.normal[0], face.normal[1], face.normal[2], material, uv[index][0], uv[index][1], occlusion);
     }
   }
   function cubeVertices() {
@@ -179,28 +200,62 @@
     const edges = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
     return new Float32Array(edges.flatMap(([a, b]) => [...corners[a], ...corners[b]]));
   }
+  function discVertices(segments = 12) {
+    const vertices = [];
+    for (let index = 0; index < segments; index++) {
+      const first = index / segments * Math.PI * 2, second = (index + 1) / segments * Math.PI * 2;
+      const append = (x, z) => vertices.push(x, 0, z, 0, 1, 0, 0, x * .5 + .5, z * .5 + .5, 3);
+      append(0, 0); append(Math.cos(first), Math.sin(first)); append(Math.cos(second), Math.sin(second));
+    }
+    return new Float32Array(vertices);
+  }
+  function meshData(blockMap) {
+    const vertices = [], values = [...blockMap.values()], occlusion = [0, 0, 0, 0];
+    let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (const block of values) {
+      minX = Math.min(minX, block.x); minY = Math.min(minY, block.y); minZ = Math.min(minZ, block.z); maxX = Math.max(maxX, block.x + 1); maxY = Math.max(maxY, block.y + 1); maxZ = Math.max(maxZ, block.z + 1);
+      for (const face of FACE_INFO) if (!blockMap.has(cellKey(block.x + face.offset[0], block.y + face.offset[1], block.z + face.offset[2]))) appendFace(vertices, block.x, block.y, block.z, face, materialIndex(block.material), corner => cornerOcclusion(blockMap, block.x, block.y, block.z, face, corner), occlusion);
+    }
+    return { vertices, blocks: values.length, faces: vertices.length / (VERTEX_FLOATS * 6), bounds: values.length ? { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] } : null, occlusion };
+  }
+  function inspectWorld(blocks) {
+    if (!Array.isArray(blocks)) throw new TypeError('Block Islands mesh inspection expects a flat array of unit blocks.');
+    const blockMap = new Map();
+    for (const source of blocks) if (source && Number.isInteger(source.x) && Number.isInteger(source.y) && Number.isInteger(source.z) && typeof source.material === 'string') blockMap.set(cellKey(source.x, source.y, source.z), { x: source.x, y: source.y, z: source.z, material: source.material });
+    const mesh = meshData(blockMap), litVertices = mesh.occlusion[3], totalVertices = mesh.occlusion.reduce((sum, count) => sum + count, 0);
+    return Object.freeze({ blocks: mesh.blocks, faces: mesh.faces, vertices: mesh.faces * 6, bounds: mesh.bounds, occlusion: Object.freeze({ darkest: mesh.occlusion[0], shaded: mesh.occlusion[1] + mesh.occlusion[2], lit: litVertices, total: totalVertices }) });
+  }
 
   function shaderSources() {
     const atlasColumns = MATERIALS.length + '.0';
     const vertex = `
-      attribute vec3 aPosition; attribute vec3 aNormal; attribute float aMaterial; attribute vec2 aUv;
+      attribute vec3 aPosition; attribute vec3 aNormal; attribute float aMaterial; attribute vec2 aUv; attribute float aOcclusion;
       uniform mat4 uMvp; uniform mat4 uModel; uniform float uMaterialOverride;
-      varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial;
-      void main(){ vec4 world=uModel*vec4(aPosition,1.0); vWorld=world.xyz; vNormal=normalize(mat3(uModel)*aNormal); vUv=aUv; vMaterial=uMaterialOverride>=0.0?uMaterialOverride:aMaterial; gl_Position=uMvp*world; }
+      varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial; varying float vOcclusion;
+      void main(){ vec4 world=uModel*vec4(aPosition,1.0); vWorld=world.xyz; vNormal=normalize(mat3(uModel)*aNormal); vUv=aUv; vMaterial=uMaterialOverride>=0.0?uMaterialOverride:aMaterial; vOcclusion=aOcclusion; gl_Position=uMvp*world; }
     `;
     const fragment = `
       precision mediump float;
       uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay;
-      varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial;
+      varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial; varying float vOcclusion;
       vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
       void main(){
-        float material=floor(vMaterial+.5); vec3 color=sampleMaterial(material,vUv); vec3 normal=normalize(vNormal);
+        float material=floor(vMaterial+.5); vec3 normal=normalize(vNormal); float distanceToCamera=length(vWorld-uCamera);
+        if(uOverlay<-.5){ float edge=length(vUv-vec2(.5))*2.0; gl_FragColor=vec4(vec3(.015,.030,.050),.38*smoothstep(1.0,.18,edge)); return; }
+        vec2 surfaceUv=vUv;
+        if(abs(material-12.0)<.5) surfaceUv+=vec2(sin((vUv.y+uTime*.21)*15.0),cos((vUv.x-uTime*.17)*13.0))*.018;
+        vec3 color=sampleMaterial(material,surfaceUv); vec3 stable=sampleMaterial(material,vec2(.5));
+        color=mix(color,stable,smoothstep(26.0,82.0,distanceToCamera)*.58);
         if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); color=mix(soil,color,smoothstep(.76,.98,vUv.y)); }
         if(abs(material-4.0)<.5 && normal.y>.5){ float ring=max(abs(vUv.x-.5),abs(vUv.y-.5)); color+=vec3(mod(floor(ring*17.0),2.0)*.09-.045); }
         if(abs(material-5.0)<.5){ float gaps=mod(floor(vUv.x*8.0)+floor(vUv.y*8.0)*3.0,9.0); if(gaps<1.0 && abs(normal.y)<.5) discard; color+=vec3(.012,.045,.006); }
-        if(abs(material-12.0)<.5) color+=vec3(.015,.09,.12)*sin((vUv.x+uTime*.34)*19.0);
-        vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)); float upward=max(.0,normal.y); float side=max(.0,normal.z)*.06+max(.0,normal.x)*.035; float light=.20+uDaylight*(.20+.70*diffuse+upward*.11+side);
-        color*=light; float fog=smoothstep(42.0,104.0,length(vWorld-uCamera)); color=mix(color,mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight),fog);
+        if(abs(material-12.0)<.5) color+=vec3(.015,.10,.15)*sin((vUv.x+uTime*.34)*19.0);
+        vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)), upward=max(.0,normal.y); float ao=mix(.58,1.0,clamp(vOcclusion/3.0,0.0,1.0));
+        vec3 coolAmbient=mix(vec3(.14,.19,.29),vec3(.31,.42,.53),uDaylight); vec3 warmKey=vec3(1.0,.77,.52)*(.15+.85*uDaylight)*diffuse; vec3 skyLift=vec3(.20,.32,.40)*upward*(.10+.18*uDaylight);
+        color*=((coolAmbient+warmKey+skyLift)*ao); float fog=smoothstep(42.0,104.0,distanceToCamera); color=mix(color,mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight),fog);
+        if(abs(material-9.0)<.5) color+=vec3(.17,.08,.31)*(.55+.45*sin(uTime*2.1+vWorld.y));
+        if(abs(material-11.0)<.5) color+=vec3(.31,.20,.04)*(.65+.35*sin(uTime*1.6));
+        if(abs(material-13.0)<.5) color+=vec3(.36,.075,.012)*(.72+.28*sin(uTime*2.4+vWorld.x));
         float alpha=1.0;
         if(uOverlay>0.0){ float crack=max(step(.94,fract(vUv.x*13.0+vUv.y*5.0)),step(.96,fract(vUv.y*17.0-vUv.x*7.0))); color=mix(color,vec3(.06,.08,.10),crack*uOverlay); alpha=.12+.36*uOverlay; }
         gl_FragColor=vec4(color,alpha);
@@ -270,9 +325,9 @@
 
   function createRenderer(canvas) {
     if (!canvas || typeof canvas.getContext !== 'function') throw new Error('Block Islands 3D renderer needs a canvas element. A compatibility view can be used instead.');
-    let gl, programs, locations, worldBuffer, cubeBuffer, edgeBuffer, skyBuffer, atlas;
+    let gl, programs, locations, worldBuffer, cubeBuffer, edgeBuffer, skyBuffer, shadowBuffer, atlas;
     let destroyed = false, contextLost = false, hasWorld = false, worldRevision = Symbol('no world'), cachedBlocks = [], blockMap = new Map(), dimensions = { width: 0, height: 0, dpr: 1 };
-    const stats = { capability: 'WebGL pending', meshRevision: null, blocks: 0, faces: 0, vertices: 0, drawCalls: 0, frames: 0, contextLost: false, width: 0, height: 0, dpr: 1, pixelBudget: MAX_RENDER_PIXELS, bounds: null };
+    const stats = { capability: 'WebGL pending', meshRevision: null, blocks: 0, faces: 0, vertices: 0, occludedVertices: 0, drawCalls: 0, frames: 0, contextLost: false, width: 0, height: 0, dpr: 1, pixelBudget: MAX_RENDER_PIXELS, bounds: null };
 
     function initialize() {
       gl = canvas.getContext('webgl', { alpha: false, antialias: true, depth: true, stencil: false, preserveDrawingBuffer: false, premultipliedAlpha: false }) || canvas.getContext('experimental-webgl');
@@ -280,35 +335,33 @@
       const source = shaderSources();
       programs = { world: makeProgram(gl, source.vertex, source.fragment, 'world'), sky: makeProgram(gl, source.skyVertex, source.skyFragment, 'sky'), line: makeProgram(gl, source.lineVertex, source.lineFragment, 'line') };
       locations = {
-        world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
+        world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), occlusion: gl.getAttribLocation(programs.world, 'aOcclusion'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
         sky: { position: gl.getAttribLocation(programs.sky, 'aPosition'), daylight: gl.getUniformLocation(programs.sky, 'uDaylight'), time: gl.getUniformLocation(programs.sky, 'uTime') },
         line: { position: gl.getAttribLocation(programs.line, 'aPosition'), mvp: gl.getUniformLocation(programs.line, 'uMvp'), model: gl.getUniformLocation(programs.line, 'uModel'), color: gl.getUniformLocation(programs.line, 'uColor') }
       };
-      worldBuffer = gl.createBuffer(); cubeBuffer = gl.createBuffer(); edgeBuffer = gl.createBuffer(); skyBuffer = gl.createBuffer(); atlas = gl.createTexture();
+      worldBuffer = gl.createBuffer(); cubeBuffer = gl.createBuffer(); edgeBuffer = gl.createBuffer(); skyBuffer = gl.createBuffer(); shadowBuffer = gl.createBuffer(); atlas = gl.createTexture();
       gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuffer); gl.bufferData(gl.ARRAY_BUFFER, cubeVertices(), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, shadowBuffer); gl.bufferData(gl.ARRAY_BUFFER, discVertices(), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, edgeBuffer); gl.bufferData(gl.ARRAY_BUFFER, edgeVertices(), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
       const pixels = texturePixels(); gl.bindTexture(gl.TEXTURE_2D, atlas); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, pixels.width, pixels.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels.pixels);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      if (gl.getError() !== gl.NO_ERROR) throw new Error('Block Islands 3D renderer could not create its local non-mipmapped material atlas. Try reloading this stage.');
       gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.CULL_FACE); gl.clearDepth(1); stats.capability = gl.getParameter(gl.VERSION) || 'WebGL';
     }
     function bindWorldAttributes(buffer) {
-      const location = locations.world, stride = 9 * 4;
+      const location = locations.world, stride = VERTEX_FLOATS * 4;
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.enableVertexAttribArray(location.position); gl.vertexAttribPointer(location.position, 3, gl.FLOAT, false, stride, 0);
       gl.enableVertexAttribArray(location.normal); gl.vertexAttribPointer(location.normal, 3, gl.FLOAT, false, stride, 3 * 4);
       gl.enableVertexAttribArray(location.material); gl.vertexAttribPointer(location.material, 1, gl.FLOAT, false, stride, 6 * 4);
       gl.enableVertexAttribArray(location.uv); gl.vertexAttribPointer(location.uv, 2, gl.FLOAT, false, stride, 7 * 4);
+      gl.enableVertexAttribArray(location.occlusion); gl.vertexAttribPointer(location.occlusion, 1, gl.FLOAT, false, stride, 9 * 4);
     }
     function rebuildMesh() {
-      const vertices = [], values = [...blockMap.values()];
-      let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-      for (const block of values) {
-        minX = Math.min(minX, block.x); minY = Math.min(minY, block.y); minZ = Math.min(minZ, block.z); maxX = Math.max(maxX, block.x + 1); maxY = Math.max(maxY, block.y + 1); maxZ = Math.max(maxZ, block.z + 1);
-        for (const face of FACE_INFO) if (!blockMap.has(cellKey(block.x + face.offset[0], block.y + face.offset[1], block.z + face.offset[2]))) appendFace(vertices, block.x, block.y, block.z, face, materialIndex(block.material));
-      }
-      gl.bindBuffer(gl.ARRAY_BUFFER, worldBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-      stats.blocks = values.length; stats.vertices = vertices.length / 9; stats.faces = stats.vertices / 6; stats.bounds = values.length ? { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] } : null;
+      const mesh = meshData(blockMap);
+      gl.bindBuffer(gl.ARRAY_BUFFER, worldBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.vertices), gl.STATIC_DRAW);
+      stats.blocks = mesh.blocks; stats.vertices = mesh.vertices.length / VERTEX_FLOATS; stats.faces = mesh.faces; stats.bounds = mesh.bounds; stats.occludedVertices = mesh.occlusion[0] + mesh.occlusion[1] + mesh.occlusion[2];
     }
     function setWorld(blocks, revision) {
       if (destroyed) throw new Error('Block Islands 3D renderer was destroyed. Create a new renderer before setting a world.');
@@ -340,14 +393,23 @@
     function useWorld(mvp, camera, daylight, time) {
       const location = locations.world; gl.useProgram(programs.world); bindWorldAttributes(worldBuffer); gl.uniformMatrix4fv(location.mvp, false, mvp); gl.uniform3fv(location.camera, camera); gl.uniform1f(location.daylight, daylight); gl.uniform1f(location.time, time); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, atlas); gl.uniform1i(location.atlas, 0);
     }
+    function drawShape(mvp, camera, daylight, time, buffer, vertices, model, material, overlay) {
+      const location = locations.world; bindWorldAttributes(buffer); gl.uniformMatrix4fv(location.model, false, model); gl.uniform1f(location.materialOverride, materialIndex(material)); gl.uniform1f(location.overlay, Number.isFinite(overlay) ? overlay : 0); gl.drawArrays(gl.TRIANGLES, 0, vertices); stats.drawCalls++;
+    }
     function drawCube(mvp, camera, daylight, time, model, material, overlay) {
-      const location = locations.world; bindWorldAttributes(cubeBuffer); gl.uniformMatrix4fv(location.model, false, model); gl.uniform1f(location.materialOverride, materialIndex(material)); gl.uniform1f(location.overlay, overlay || 0); gl.drawArrays(gl.TRIANGLES, 0, 36); stats.drawCalls++;
+      drawShape(mvp, camera, daylight, time, cubeBuffer, 36, model, material, overlay);
+    }
+    function drawGroundShadow(mvp, camera, daylight, time, x, y, z, radius) {
+      const model = new Float32Array([radius, 0, 0, 0, 0, 1, 0, 0, 0, 0, radius, 0, x, y + .018, z, 1]);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+      drawShape(mvp, camera, daylight, time, shadowBuffer, 36, model, 'shadow', -1);
+      gl.depthMask(true); gl.disable(gl.BLEND);
     }
     function drawEntity(mvp, camera, daylight, time, entity) {
       if (!entity || !Number.isFinite(entity.x) || !Number.isFinite(entity.y) || !Number.isFinite(entity.z)) return;
       const yaw = Number(entity.heading) || 0, stride = Math.sin((Number(entity.walk) || 0) * Math.PI * 2) * .08, attack = clamp(Number(entity.attack) || 0, 0, 1), team = entity.team === 'enemy' ? ['basalt', 'lava', 'crystal'] : entity.team === 'friendly' ? ['wood', 'leaves', 'beacon'] : ['plank', 'grass', 'crystal'];
       const x = entity.x, y = entity.y, z = entity.z;
-      drawCube(mvp, camera, daylight, time, modelBox(x - .35, y + .012, z - .35, .7, .025, .7, 0), 'shadow', 0);
+      drawGroundShadow(mvp, camera, daylight, time, x, y, z, .42);
       drawCube(mvp, camera, daylight, time, modelBox(x - .12, y + stride, z - .12, .24, .50, .24, yaw), team[0], 0);
       drawCube(mvp, camera, daylight, time, modelBox(x + .14, y - stride, z - .12, .24, .50, .24, yaw), team[0], 0);
       drawCube(mvp, camera, daylight, time, modelBox(x - .34, y + .45, z - .27, .68, .60, .54, yaw), team[1], 0);
@@ -392,7 +454,7 @@
       };
       // Original field explorer: a planted contact shadow, navy work clothes,
       // rust scarf and leather pack. Limbs pivot from the actual player body.
-      drawCube(mvp, camera, daylight, time, modelBox(x - .32, y + .01, z - .32, .64, .025, .64, 0), 'shadow', 0);
+      drawGroundShadow(mvp, camera, daylight, time, x, y, z, .44);
       const leftHip = offset([x, y + .50, z], side, -.10), rightHip = offset([x, y + .50, z], side, .10);
       limb(leftHip, stride, .50, .18, 'leather'); limb(rightHip, -stride, .50, .18, 'leather');
       box([x, y + .77, z], side, up, gaze, [.54, .54, .40], 'cloth');
@@ -448,7 +510,7 @@
     }
     function destroy() {
       if (destroyed) return; destroyed = true; canvas.removeEventListener('webglcontextlost', onContextLost); canvas.removeEventListener('webglcontextrestored', onContextRestored);
-      if (!gl) return; for (const buffer of [worldBuffer, cubeBuffer, edgeBuffer, skyBuffer]) if (buffer) gl.deleteBuffer(buffer); if (atlas) gl.deleteTexture(atlas); if (programs) for (const program of Object.values(programs)) gl.deleteProgram(program);
+      if (!gl) return; for (const buffer of [worldBuffer, cubeBuffer, edgeBuffer, skyBuffer, shadowBuffer]) if (buffer) gl.deleteBuffer(buffer); if (atlas) gl.deleteTexture(atlas); if (programs) for (const program of Object.values(programs)) gl.deleteProgram(program);
     }
     function getStats() { return { ...stats, bounds: stats.bounds ? { min: stats.bounds.min.slice(), max: stats.bounds.max.slice() } : null, destroyed, contextLost }; }
     function onContextLost(event) { event.preventDefault(); contextLost = true; stats.contextLost = true; }
@@ -458,5 +520,5 @@
     return { setWorld, resize, render, destroy, getStats };
   }
 
-  return Object.freeze({ createRenderer, forward, raycast, retractCamera, projectPoint, MATERIALS: MATERIALS.slice(), MAX_RENDER_PIXELS });
+  return Object.freeze({ createRenderer, forward, raycast, retractCamera, projectPoint, inspectWorld, MATERIALS: MATERIALS.slice(), MAX_RENDER_PIXELS });
 }));
