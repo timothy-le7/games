@@ -12,8 +12,12 @@
   // All scenery is procedural and local. These small material variants give
   // grassland, trees, and interaction feedback readable depth without an
   // external texture pack or a per-frame canvas upload.
-  const MATERIALS = ['grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'plank', 'ore', 'ice', 'crystal', 'basalt', 'beacon', 'water', 'lava', 'shadow', 'fern', 'flower', 'moss', 'skin', 'cloth', 'scarf', 'leather'];
+  const MATERIALS = ['grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'plank', 'ore', 'ice', 'crystal', 'basalt', 'beacon', 'water', 'lava', 'shadow', 'fern', 'flower', 'moss', 'skin', 'cloth', 'scarf', 'leather', 'iron'];
   const MATERIAL_INDEX = Object.freeze(MATERIALS.reduce((all, name, index) => { all[name] = index; return all; }, Object.create(null)));
+  // Environment is an optional presentation input.  The controller keeps the
+  // campaign's generated terrain and save version intact; this gives the same
+  // honest geometry a different atmosphere on each island.
+  const BIOME_INDEX = Object.freeze({ forest: 0, quarry: 1, cave: 2, meadow: 3, flood: 4, frost: 5, desert: 6, forge: 7, ember: 8, sky: 9, settlement: 10, aurora: 11 });
   const MAX_RENDER_PIXELS = 5_500_000;
   const EPSILON = 1e-9;
   const VERTEX_FLOATS = 10;
@@ -30,6 +34,7 @@
   const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
   const cellKey = (x, y, z) => x + ',' + y + ',' + z;
   const length = vector => Math.hypot(vector[0], vector[1], vector[2]);
+  const biomeIndex = biome => Object.hasOwn(BIOME_INDEX, biome) ? BIOME_INDEX[biome] : BIOME_INDEX.forest;
   const normalize = vector => {
     const size = length(vector);
     return size > EPSILON ? [vector[0] / size, vector[1] / size, vector[2] / size] : [0, 0, 0];
@@ -236,9 +241,10 @@
     `;
     const fragment = `
       precision mediump float;
-      uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay;
+      uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay; uniform float uBiome;
       varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial; varying float vOcclusion;
       vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
+      float biome(float id){return 1.0-step(.25,abs(uBiome-id));}
       void main(){
         float material=floor(vMaterial+.5); vec3 normal=normalize(vNormal); float distanceToCamera=length(vWorld-uCamera);
         if(uOverlay<-.5){ float edge=length(vUv-vec2(.5))*2.0; gl_FragColor=vec4(vec3(.015,.030,.050),.38*smoothstep(1.0,.18,edge)); return; }
@@ -248,11 +254,13 @@
         color=mix(color,stable,smoothstep(26.0,82.0,distanceToCamera)*.58);
         if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); color=mix(soil,color,smoothstep(.76,.98,vUv.y)); }
         if(abs(material-4.0)<.5 && normal.y>.5){ float ring=max(abs(vUv.x-.5),abs(vUv.y-.5)); color+=vec3(mod(floor(ring*17.0),2.0)*.09-.045); }
-        if(abs(material-5.0)<.5){ float gaps=mod(floor(vUv.x*8.0)+floor(vUv.y*8.0)*3.0,9.0); if(gaps<1.0 && abs(normal.y)<.5) discard; color+=vec3(.012,.045,.006); }
+        if(abs(material-5.0)<.5){ float gaps=mod(floor(vUv.x*8.0)+floor(vUv.y*8.0)*3.0,9.0); color*=mix(.66,1.0,step(1.0,gaps)); color+=vec3(.012,.045,.006); color=mix(color,vec3(.34,.67,.73),biome(5.0)*.62); }
         if(abs(material-12.0)<.5) color+=vec3(.015,.10,.15)*sin((vUv.x+uTime*.34)*19.0);
         vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)), upward=max(.0,normal.y); float ao=mix(.58,1.0,clamp(vOcclusion/3.0,0.0,1.0));
         vec3 coolAmbient=mix(vec3(.14,.19,.29),vec3(.31,.42,.53),uDaylight); vec3 warmKey=vec3(1.0,.77,.52)*(.15+.85*uDaylight)*diffuse; vec3 skyLift=vec3(.20,.32,.40)*upward*(.10+.18*uDaylight);
-        color*=((coolAmbient+warmKey+skyLift)*ao); float fog=smoothstep(42.0,104.0,distanceToCamera); color=mix(color,mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight),fog);
+        vec3 climate=vec3(1.0); climate=mix(climate,vec3(.82,.93,1.12),biome(5.0)); climate=mix(climate,vec3(1.14,.92,.66),biome(6.0)); climate=mix(climate,vec3(1.16,.62,.45),max(biome(7.0),biome(8.0))); climate=mix(climate,vec3(.73,.82,.91),biome(2.0)); climate=mix(climate,vec3(.78,.73,1.16),biome(11.0));
+        color*=((coolAmbient+warmKey+skyLift)*ao)*climate; float fog=smoothstep(42.0,104.0,distanceToCamera); vec3 fogColor=mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight);
+        fogColor=mix(fogColor,vec3(.71,.87,.98),biome(5.0)); fogColor=mix(fogColor,vec3(.87,.61,.37),biome(6.0)); fogColor=mix(fogColor,vec3(.27,.13,.18),max(biome(7.0),biome(8.0))); fogColor=mix(fogColor,vec3(.14,.22,.33),biome(2.0)); fogColor=mix(fogColor,vec3(.38,.30,.63),biome(11.0)); color=mix(color,fogColor,fog);
         if(abs(material-9.0)<.5) color+=vec3(.17,.08,.31)*(.55+.45*sin(uTime*2.1+vWorld.y));
         if(abs(material-11.0)<.5) color+=vec3(.31,.20,.04)*(.65+.35*sin(uTime*1.6));
         if(abs(material-13.0)<.5) color+=vec3(.36,.075,.012)*(.72+.28*sin(uTime*2.4+vWorld.x));
@@ -263,15 +271,22 @@
     `;
     const skyVertex = 'attribute vec2 aPosition; varying vec2 vUv; void main(){vUv=aPosition*.5+.5;gl_Position=vec4(aPosition,0.,1.);}';
     const skyFragment = `
-      precision mediump float; varying vec2 vUv; uniform float uDaylight; uniform float uTime;
+      precision mediump float; varying vec2 vUv; uniform float uDaylight; uniform float uTime; uniform float uBiome;
       float box(vec2 p,vec2 b){vec2 d=abs(p)-b;return max(d.x,d.y);}
+      float biome(float id){return 1.0-step(.25,abs(uBiome-id));}
       void main(){
         vec3 dusk=vec3(.045,.09,.17), horizon=vec3(.26,.43,.58), day=vec3(.34,.72,.88);
         vec3 color=mix(dusk,mix(horizon,day,uDaylight),smoothstep(.02,.96,vUv.y));
+        color=mix(color,mix(vec3(.09,.15,.23),vec3(.55,.78,.94),uDaylight),biome(5.0));
+        color=mix(color,mix(vec3(.20,.08,.06),vec3(.82,.50,.25),uDaylight),biome(6.0));
+        color=mix(color,mix(vec3(.10,.025,.04),vec3(.38,.10,.07),uDaylight),max(biome(7.0),biome(8.0)));
+        color=mix(color,mix(vec3(.02,.04,.09),vec3(.12,.22,.31),uDaylight),biome(2.0));
+        color=mix(color,mix(vec3(.05,.03,.16),vec3(.24,.20,.52),uDaylight),biome(11.0));
         vec2 sunPos=vec2(.78,mix(.30,.74,uDaylight)); float sun=smoothstep(.055,.035,length(vUv-sunPos));
         color=mix(color,vec3(1.0,.86,.48),sun*max(.18,uDaylight));
         vec2 cloud=vec2(fract(vUv.x+.035*uTime)-.5,vUv.y-.76); float band=step(box(cloud,vec2(.17,.018)),0.0)+step(box(cloud-vec2(.18,.035),vec2(.11,.014)),0.0);
         color=mix(color,mix(vec3(.24,.31,.40),vec3(.92,.95,.91),uDaylight),band*.42);
+        float aurora=biome(11.0)*smoothstep(.36,.82,vUv.y)*(.5+.5*sin(vUv.x*19.0+uTime*.4)); color=mix(color,vec3(.38,.92,.73),aurora*.34);
         gl_FragColor=vec4(color,1.0);
       }`;
     const lineVertex = 'attribute vec3 aPosition; uniform mat4 uMvp; uniform mat4 uModel; void main(){gl_Position=uMvp*uModel*vec4(aPosition,1.);}';
@@ -293,7 +308,7 @@
     // A tiny authored pixel atlas: every pattern is local, deterministic, and
     // deliberately orthogonal so close terrain does not turn into diagonal
     // moiré stripes on a phone display.
-    const colors = [[92, 171, 76], [126, 82, 48], [116, 126, 134], [218, 190, 121], [128, 79, 39], [57, 131, 67], [179, 121, 65], [105, 112, 117], [151, 210, 234], [143, 95, 203], [61, 65, 72], [224, 190, 75], [48, 157, 198], [208, 76, 38], [17, 25, 31], [43, 121, 62], [238, 120, 88], [75, 144, 77], [224, 177, 132], [55, 101, 137], [191, 81, 58], [83, 60, 43]];
+    const colors = [[92, 171, 76], [126, 82, 48], [116, 126, 134], [218, 190, 121], [128, 79, 39], [57, 131, 67], [179, 121, 65], [105, 112, 117], [151, 210, 234], [143, 95, 203], [61, 65, 72], [224, 190, 75], [48, 157, 198], [208, 76, 38], [17, 25, 31], [43, 121, 62], [238, 120, 88], [75, 144, 77], [224, 177, 132], [55, 101, 137], [191, 81, 58], [83, 60, 43], [118, 151, 162]];
     const side = 16, bytes = new Uint8Array(side * side * MATERIALS.length * 4);
     const noise = (x, y, material) => ((x * 73) ^ (y * 151) ^ (material * 197)) & 15;
     for (let material = 0; material < MATERIALS.length; material++) for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
@@ -318,6 +333,7 @@
       if (material === 19) pattern += (x === 2 || x === 13 ? 18 : 0);
       if (material === 20) pattern += (x === 6 || y === 4 ? 26 : 0);
       if (material === 21) pattern += (x % 4 === 0 ? -17 : 0);
+      if (material === 22) pattern += ((x === 4 || x === 11 || y === 6) ? 22 : -4);
       bytes[offset] = clamp(base[0] + pattern, 0, 255); bytes[offset + 1] = clamp(base[1] + pattern, 0, 255); bytes[offset + 2] = clamp(base[2] + pattern, 0, 255); bytes[offset + 3] = 255;
     }
     return { pixels: bytes, width: side * MATERIALS.length, height: side };
@@ -327,7 +343,7 @@
     if (!canvas || typeof canvas.getContext !== 'function') throw new Error('Block Islands 3D renderer needs a canvas element. A compatibility view can be used instead.');
     let gl, programs, locations, worldBuffer, cubeBuffer, edgeBuffer, skyBuffer, shadowBuffer, atlas;
     let destroyed = false, contextLost = false, hasWorld = false, worldRevision = Symbol('no world'), cachedBlocks = [], blockMap = new Map(), dimensions = { width: 0, height: 0, dpr: 1 };
-    const stats = { capability: 'WebGL pending', meshRevision: null, blocks: 0, faces: 0, vertices: 0, occludedVertices: 0, drawCalls: 0, frames: 0, contextLost: false, width: 0, height: 0, dpr: 1, pixelBudget: MAX_RENDER_PIXELS, bounds: null };
+    const stats = { capability: 'WebGL pending', meshRevision: null, blocks: 0, faces: 0, vertices: 0, occludedVertices: 0, drawCalls: 0, frames: 0, contextLost: false, width: 0, height: 0, dpr: 1, pixelBudget: MAX_RENDER_PIXELS, biome: 'forest', bounds: null };
 
     function initialize() {
       gl = canvas.getContext('webgl', { alpha: false, antialias: true, depth: true, stencil: false, preserveDrawingBuffer: false, premultipliedAlpha: false }) || canvas.getContext('experimental-webgl');
@@ -335,8 +351,8 @@
       const source = shaderSources();
       programs = { world: makeProgram(gl, source.vertex, source.fragment, 'world'), sky: makeProgram(gl, source.skyVertex, source.skyFragment, 'sky'), line: makeProgram(gl, source.lineVertex, source.lineFragment, 'line') };
       locations = {
-        world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), occlusion: gl.getAttribLocation(programs.world, 'aOcclusion'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
-        sky: { position: gl.getAttribLocation(programs.sky, 'aPosition'), daylight: gl.getUniformLocation(programs.sky, 'uDaylight'), time: gl.getUniformLocation(programs.sky, 'uTime') },
+        world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), occlusion: gl.getAttribLocation(programs.world, 'aOcclusion'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), biome: gl.getUniformLocation(programs.world, 'uBiome'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
+        sky: { position: gl.getAttribLocation(programs.sky, 'aPosition'), daylight: gl.getUniformLocation(programs.sky, 'uDaylight'), time: gl.getUniformLocation(programs.sky, 'uTime'), biome: gl.getUniformLocation(programs.sky, 'uBiome') },
         line: { position: gl.getAttribLocation(programs.line, 'aPosition'), mvp: gl.getUniformLocation(programs.line, 'uMvp'), model: gl.getUniformLocation(programs.line, 'uModel'), color: gl.getUniformLocation(programs.line, 'uColor') }
       };
       worldBuffer = gl.createBuffer(); cubeBuffer = gl.createBuffer(); edgeBuffer = gl.createBuffer(); skyBuffer = gl.createBuffer(); shadowBuffer = gl.createBuffer(); atlas = gl.createTexture();
@@ -390,8 +406,8 @@
       stats.width = pixelWidth; stats.height = pixelHeight; stats.dpr = capped;
       return { width: pixelWidth, height: pixelHeight, dpr: capped, capped: capped < requested };
     }
-    function useWorld(mvp, camera, daylight, time) {
-      const location = locations.world; gl.useProgram(programs.world); bindWorldAttributes(worldBuffer); gl.uniformMatrix4fv(location.mvp, false, mvp); gl.uniform3fv(location.camera, camera); gl.uniform1f(location.daylight, daylight); gl.uniform1f(location.time, time); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, atlas); gl.uniform1i(location.atlas, 0);
+    function useWorld(mvp, camera, daylight, time, biome) {
+      const location = locations.world; gl.useProgram(programs.world); bindWorldAttributes(worldBuffer); gl.uniformMatrix4fv(location.mvp, false, mvp); gl.uniform3fv(location.camera, camera); gl.uniform1f(location.daylight, daylight); gl.uniform1f(location.time, time); gl.uniform1f(location.biome, biome); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, atlas); gl.uniform1i(location.atlas, 0);
     }
     function drawShape(mvp, camera, daylight, time, buffer, vertices, model, material, overlay) {
       const location = locations.world; bindWorldAttributes(buffer); gl.uniformMatrix4fv(location.model, false, model); gl.uniform1f(location.materialOverride, materialIndex(material)); gl.uniform1f(location.overlay, Number.isFinite(overlay) ? overlay : 0); gl.drawArrays(gl.TRIANGLES, 0, vertices); stats.drawCalls++;
@@ -435,8 +451,9 @@
         // A compact explorer glove makes the tool a held object rather than
         // a floating HUD prop, while keeping the target and phone actions clear.
         drawCube(mvp, camera, daylight, time, modelBasis([position[0] - up[0] * .10 - right[0] * .10, position[1] - up[1] * .10 - right[1] * .10, position[2] - up[2] * .10 - right[2] * .10], right, up, [-look[0], -look[1], -look[2]], [.20, .18, .20]), 'skin', 0);
-        drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .43, position[1] + up[1] * .43, position[2] + up[2] * .43], right, up, [-look[0], -look[1], -look[2]], [.30, .14, .16]), 'stone', 0);
-        drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .38 + right[0] * .19, position[1] + up[1] * .38 + right[1] * .19, position[2] + up[2] * .38 + right[2] * .19], right, up, [-look[0], -look[1], -look[2]], [.10, .10, .22]), 'stone', 0);
+        const toolHead = held.tool === 'iron' ? 'iron' : held.tool === 'stone' ? 'stone' : 'wood';
+        drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .43, position[1] + up[1] * .43, position[2] + up[2] * .43], right, up, [-look[0], -look[1], -look[2]], [.30, .14, .16]), toolHead, 0);
+        drawCube(mvp, camera, daylight, time, modelBasis([position[0] + up[0] * .38 + right[0] * .19, position[1] + up[1] * .38 + right[1] * .19, position[2] + up[2] * .38 + right[2] * .19], right, up, [-look[0], -look[1], -look[2]], [.10, .10, .22]), toolHead, 0);
       }
     }
     function drawPlayer(mvp, camera, daylight, time, player) {
@@ -472,7 +489,7 @@
       if (player.held === 'tool') {
         const shaftCenter = offset(glove, rightArm.vertical, .22);
         box(shaftCenter, side, rightArm.vertical, rightArm.front, [.10, .54, .10], 'wood');
-        box(offset(glove, rightArm.vertical, .48), side, rightArm.vertical, rightArm.front, [.30, .14, .18], 'stone');
+        box(offset(glove, rightArm.vertical, .48), side, rightArm.vertical, rightArm.front, [.30, .14, .18], player.tool === 'iron' ? 'iron' : player.tool === 'stone' ? 'stone' : 'wood');
       } else if (player.held) box(offset(glove, gaze, .14), side, up, gaze, [.27, .27, .27], player.held);
     }
     function drawEffects(mvp, camera, daylight, time, effects) {
@@ -490,11 +507,13 @@
     function render(frame) {
       if (destroyed || contextLost) return false;
       const input = frame || {}, cameraInput = input.camera || {}, camera = Array.isArray(cameraInput.position) ? cameraInput.position : [0, 2, 0];
+      const environment = input.environment && typeof input.environment === 'object' ? input.environment : {};
+      const biome = biomeIndex(environment.biome), biomeName = Object.hasOwn(BIOME_INDEX, environment.biome) ? environment.biome : 'forest';
       const position = [Number(camera[0]) || 0, Number(camera[1]) || 2, Number(camera[2]) || 0], yaw = Number(cameraInput.yaw) || 0, pitch = clamp(Number(cameraInput.pitch) || 0, -1.53, 1.53), fov = clamp(Number(cameraInput.fov) || 70, 45, 95) * Math.PI / 180, daylight = clamp(Number.isFinite(input.daylight) ? input.daylight : .78, 0, 1), time = (Number(input.time) || 0) * .001;
       if (!dimensions.width || !dimensions.height) resize(canvas.clientWidth || 1, canvas.clientHeight || 1, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
       const aspect = Math.max(.1, dimensions.width / dimensions.height), look = forward(yaw, pitch), right = normalize(cross(look, [0, 1, 0])), up = normalize(cross(right, look)), mvp = multiply(perspective(fov, aspect, .05, 108), cameraView(position, yaw, pitch));
-      stats.drawCalls = 0; gl.viewport(0, 0, canvas.width, canvas.height); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.useProgram(programs.sky); gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer); gl.enableVertexAttribArray(locations.sky.position); gl.vertexAttribPointer(locations.sky.position, 2, gl.FLOAT, false, 0, 0); gl.uniform1f(locations.sky.daylight, daylight); gl.uniform1f(locations.sky.time, time); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); stats.drawCalls++;
-      gl.enable(gl.DEPTH_TEST); useWorld(mvp, position, daylight, time); const location = locations.world; gl.uniformMatrix4fv(location.model, false, identity()); gl.uniform1f(location.materialOverride, -1); gl.uniform1f(location.overlay, 0); if (stats.vertices) { gl.drawArrays(gl.TRIANGLES, 0, stats.vertices); stats.drawCalls++; }
+      stats.drawCalls = 0; stats.biome = biomeName; gl.viewport(0, 0, canvas.width, canvas.height); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.useProgram(programs.sky); gl.bindBuffer(gl.ARRAY_BUFFER, skyBuffer); gl.enableVertexAttribArray(locations.sky.position); gl.vertexAttribPointer(locations.sky.position, 2, gl.FLOAT, false, 0, 0); gl.uniform1f(locations.sky.daylight, daylight); gl.uniform1f(locations.sky.time, time); gl.uniform1f(locations.sky.biome, biome); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); stats.drawCalls++;
+      gl.enable(gl.DEPTH_TEST); useWorld(mvp, position, daylight, time, biome); const location = locations.world; gl.uniformMatrix4fv(location.model, false, identity()); gl.uniform1f(location.materialOverride, -1); gl.uniform1f(location.overlay, 0); if (stats.vertices) { gl.drawArrays(gl.TRIANGLES, 0, stats.vertices); stats.drawCalls++; }
       for (const entity of Array.isArray(input.entities) ? input.entities : []) drawEntity(mvp, position, daylight, time, entity);
       drawPlayer(mvp, position, daylight, time, input.player);
       drawEffects(mvp, position, daylight, time, Array.isArray(input.effects) ? input.effects : []);
@@ -504,7 +523,7 @@
         // while mining so a nearby ground block never hides the scene.
         if (progress > 0) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); drawCube(mvp, position, daylight, time, model, material, progress); gl.depthMask(true); gl.disable(gl.BLEND); }
         gl.useProgram(programs.line); gl.bindBuffer(gl.ARRAY_BUFFER, edgeBuffer); gl.enableVertexAttribArray(locations.line.position); gl.vertexAttribPointer(locations.line.position, 3, gl.FLOAT, false, 0, 0); gl.uniformMatrix4fv(locations.line.mvp, false, mvp); gl.uniformMatrix4fv(locations.line.model, false, model); gl.uniform4f(locations.line.color, 1, .88 - progress * .35, .38, 1); gl.drawArrays(gl.LINES, 0, 24); stats.drawCalls++;
-        useWorld(mvp, position, daylight, time);
+        useWorld(mvp, position, daylight, time, biome);
       }
       drawHeld(mvp, position, daylight, time, input, right, up, look); stats.frames++; return true;
     }

@@ -16,7 +16,7 @@
   let pose = { x: 2.5, y: 3.5, z: 3.5, yaw: 0, pitch: -.08, vy: 0, grounded: false };
   let target = null, running = true, previousStageComplete = false, completionOpen = false, lastRenderCamera = { mode: 'third', distance: 0, collision: false };
   let saveTimer = 0, lastSavedAt = performance.now(), lastTime = performance.now(), lastTargetAt = 0;
-  let mineHold = null, mining = 0, audioContext = null, lastDamage = 0, toolSwingUntil = 0;
+  let mineHold = null, mining = 0, audioContext = null, lastDamage = 0, toolSwingUntil = 0, feedbackTimer = 0;
   const effects = [];
   const input = { joy: { x: 0, y: 0, pointer: null }, look: null, keys: new Set() };
   let prefs = readPrefs();
@@ -113,7 +113,7 @@
   }
   function getSummary() {
     const render = renderer && renderer.getStats ? renderer.getStats() : null;
-    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget } }, R.summary(state));
+    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget, biome: render.biome } }, R.summary(state));
   }
 
   const loaded = loadGame();
@@ -126,6 +126,11 @@
 
   function say(text) {
     const node = $('statusLine'); node.textContent = text; node.classList.remove('toast'); void node.offsetWidth; node.classList.add('toast');
+  }
+  function flashAction(id) {
+    const node = $(id); if (!node) return;
+    node.classList.remove('action-feedback'); void node.offsetWidth; node.classList.add('action-feedback');
+    clearTimeout(feedbackTimer); feedbackTimer = setTimeout(() => node.classList.remove('action-feedback'), 360);
   }
   function buzz(kind) {
     if (!prefs.sound || !(window.AudioContext || window.webkitAudioContext)) return;
@@ -182,7 +187,7 @@
       recipes += '<button class="recipe-card" data-recipe="' + name + '"' + (recipe.requires && !state.inventory[recipe.requires] ? ' disabled' : '') + '><strong>' + escape(recipe.label) + '</strong><span>' + escape(need + (recipe.requires ? ' · needs ' + recipe.requires : '')) + '</span></button>';
     }
     open('<p class="eyebrow">FIELD CRAFTING</p><h2>Make what you need</h2><p class="lead">Recipes consume exactly the listed resources. Better tools unlock tougher materials.</p><div class="recipe-grid">' + recipes + '</div>' + button('closeCraft', 'Back to island', 'secondary'));
-    panel.querySelectorAll('[data-recipe]').forEach(node => node.addEventListener('click', () => { const result = R.craft(state, node.dataset.recipe); say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger'); if (result.ok) { durableSave(); updateUI(); handleCompletion(); } craftMenu(); }));
+    panel.querySelectorAll('[data-recipe]').forEach(node => node.addEventListener('click', () => { const result = R.craft(state, node.dataset.recipe); say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger'); if (result.ok) { flashAction('craftButton'); durableSave(); updateUI(); handleCompletion(); } craftMenu(); }));
     bind('closeCraft', close);
   }
   function completion() {
@@ -207,7 +212,15 @@
     // checkerboard of identical blocks.
     if (world.worldVersion >= 3 && y < cell.h - 1) return y < cell.h - 3 ? 'stone' : 'dirt';
     if (y < cell.h - 1) return y === 0 ? 'stone' : 'dirt';
+    const biome = R.STAGES[state.stage].biome;
     if (cell.surface === 'sand' || cell.surface === 'ice' || cell.surface === 'basalt') return cell.surface;
+    // These are material-only treatments of existing world cells.  No stage
+    // coordinate, resource site, collision boundary, or saved voxel changes.
+    // Quarry/cave paths now read as actual stone, while the late volcanic and
+    // aurora routes have a recognizable surface before their landmarks appear.
+    if (y === cell.h - 1 && (biome === 'quarry' || biome === 'cave')) return 'stone';
+    if (y === cell.h - 1 && biome === 'forge') return 'basalt';
+    if (y === cell.h - 1 && biome === 'aurora') return 'ice';
     if (world.worldVersion >= 4 && cell.surface === 'grass') return 'grass';
     return cell.h > 1 ? 'stone' : 'grass';
   }
@@ -244,11 +257,11 @@
     if (world.worldVersion < 3) return;
     // A real overhang rather than a painted horizon. It makes quarry, cave,
     // forge, and expedition routes recognisable when the player reaches them.
-    const cave = stage.biome === 'quarry' || stage.biome === 'forge' || stage.biome === 'aurora';
+    const cave = stage.biome === 'quarry' || stage.biome === 'cave' || stage.biome === 'forge' || stage.biome === 'aurora';
     if (cave) {
       const start = stage.biome === 'aurora' ? 26 : 20;
       for (let x = start; x < start + 7; x++) for (let z = 18; z < 22; z++) {
-        if ((x + z) % 3 !== 0) setBlock(x, 7 + ((x + z) % 2), z, stage.biome === 'aurora' ? 'crystal' : 'stone', 'landmark');
+        if ((x + z) % 3 !== 0) setBlock(x, 7 + ((x + z) % 2), z, stage.biome === 'aurora' ? 'crystal' : stage.biome === 'forge' ? 'basalt' : 'stone', 'landmark');
       }
       for (let x = start; x < start + 7; x += 3) { setBlock(x, 3, 18, 'stone', 'landmark'); setBlock(x, 4, 18, 'stone', 'landmark'); setBlock(x, 5, 18, 'stone', 'landmark'); }
     }
@@ -276,12 +289,16 @@
       if (cell.water) setBlock(cell.x, 0, cell.y, 'water', 'fluid');
       if (cell.lava) setBlock(cell.x, 0, cell.y, 'lava', 'fluid');
       const rich = world.worldVersion >= 3;
-      const treeBiome = ['forest', 'meadow', 'settlement', 'frost'].includes(R.STAGES[state.stage].biome);
+      const treeBiome = ['forest', 'meadow', 'settlement'].includes(R.STAGES[state.stage].biome);
       // Tutorial logs stay low, keeping a genuine mineable route without
       // filling the opening rear-camera frame with a wall of canopy.
       const openingWidth = world.worldVersion >= 4 ? 22 : 12, openingDepth = world.worldVersion >= 4 ? 16 : 10;
       const openingClearing = state.stage === 0 && cell.x < openingWidth && cell.y < openingDepth;
-      const harvestableTree = cell.resource === 'wood' && !openingClearing;
+      // A wood resource is still a legal resource everywhere, but only the
+      // vegetated islands grow it into a full tree.  Turning every distant
+      // log on a cave, forge, sky, or aurora route into a canopy made those
+      // places read like the same forest and could crowd the follow camera.
+      const harvestableTree = cell.resource === 'wood' && treeBiome && !openingClearing;
       // Deterministic grove scenery fills out new worlds without changing
       // rule resources. The starter clearing stays open for first-time aim.
       const scenicTree = rich && treeBiome && !openingClearing && !cell.resource && !cell.water && !cell.lava && cell.x + cell.y > 16 && sceneryRoll(cell, 0x1af) % (world.worldVersion >= 4 ? 43 : 29) === 0;
@@ -315,11 +332,44 @@
   // Foliage remains visible and casts body shadows, but it is not an invisible
   // interaction wall in front of a tree trunk.
   function rayBlock(x, y, z) { const block = getBlock(x, y, z); return block && !['leaves', 'fern', 'flower'].includes(block.material) ? block : null; }
+  function cameraBlock(x, y, z) {
+    const block = getBlock(x, y, z);
+    // Foliage stays non-blocking for the player's eye ray and body, but a
+    // follow camera may not occupy it. This is presentation-only collision:
+    // it prevents a leafy wall from replacing the useful third-person view.
+    return block && !fluid(block) && !['fern', 'flower'].includes(block.material) ? block : null;
+  }
   function fluid(block) { return block && (block.material === 'water' || block.material === 'lava'); }
   function rebuildWorld() {
     populateTerrain(); worldRevision++;
     if (renderer) renderer.setWorld(renderBlocks, worldRevision);
     updateTarget();
+  }
+  function findOpenArrival() {
+    // Later islands used the old board-era coordinate blindly.  In a fuller
+    // voxel landscape it can be inside a tree crown even though the terrain
+    // is valid. Pick the most open nearby *existing* cell only for a newly
+    // started stage; saved poses remain untouched and no resource is moved.
+    let best = null;
+    for (let x = 2; x <= 13; x++) for (let z = 2; z <= 13; z++) {
+      const top = footingTopAt(x, z); if (top < 0 || top > 16 || collides(x + .5, top + 1, z + .5)) continue;
+      // Reject a cell under a crown, then favor room behind the standard rear
+      // camera shoulder. The probe mirrors its back-right, elevated route;
+      // it is selection logic only, not a second movement/collision system.
+      let overhead = false;
+      for (let y = top + 1; y <= top + 4; y++) if (cameraBlock(x, y, z)) overhead = true;
+      if (overhead) continue;
+      let open = 0;
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let y = top + 1; y <= top + 4; y++) if (!cameraBlock(x + dx, y, z + dz)) open++;
+      let cameraObstructions = 0;
+      for (let step = 1; step <= 5; step++) {
+        const cx = Math.floor(x + .5 + step * .30), cz = Math.floor(z + .5 + step * .89), cy = Math.floor(top + 2.1 + step * .55);
+        for (let dy = -1; dy <= 1; dy++) if (cameraBlock(cx, cy + dy, cz)) cameraObstructions++;
+      }
+      const score = open * 10 - cameraObstructions * 50 - Math.abs(x - 3) - Math.abs(z - 4);
+      if (!best || score > best.score) best = { x: x + .5, z: z + .5, y: top + 1 + EYE + .02, score };
+    }
+    return best;
   }
   function derivePose() {
     const stored = state.pose;
@@ -330,8 +380,8 @@
       // rear camera sees actual terrain in every direction. Legacy journeys
       // retain their established compact-world pose.
       const wideCamp = camp && world.worldVersion >= 4;
-      const size = worldSize(), x = camp ? (wideCamp ? 10.5 : 1.5) : clamp(state.player.x, .5, size - .5), z = camp ? (wideCamp ? 10.5 : 5.8) : clamp(state.player.y, .5, size - .5);
-      pose = { x, z, y: Math.max(1, footingTopAt(Math.floor(x), Math.floor(z)) + 1) + EYE + .02, yaw: camp ? (wideCamp ? -1.57 : 0) : .15, pitch: camp ? -.04 : -.28, vy: 0, grounded: true };
+      const size = worldSize(), arrival = camp ? null : findOpenArrival(), x = camp ? (wideCamp ? 10.5 : 1.5) : arrival ? arrival.x : clamp(state.player.x, .5, size - .5), z = camp ? (wideCamp ? 10.5 : 5.8) : arrival ? arrival.z : clamp(state.player.y, .5, size - .5);
+      pose = { x, z, y: arrival ? arrival.y : Math.max(1, footingTopAt(Math.floor(x), Math.floor(z)) + 1) + EYE + .02, yaw: camp ? (wideCamp ? -1.57 : 0) : .15, pitch: camp ? -.04 : -.28, vy: 0, grounded: true };
     }
     if (collides(pose.x, pose.y - EYE)) pose.y = Math.max(1, footingTopAt(Math.floor(pose.x), Math.floor(pose.z)) + 1) + EYE + .03;
   }
@@ -437,7 +487,7 @@
     const anchor = [pose.x, feet + 1.10, pose.z];
     const desired = [pose.x - look.x * 4.55 + right.x * .86, feet + 2.50 - look.y * 4.55, pose.z - look.z * 4.55 + right.z * .86];
     let follow = { position: desired, distance: Math.hypot(desired[0] - anchor[0], desired[1] - anchor[1], desired[2] - anchor[2]), collision: false };
-    try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => rayBlock(x, y, z), anchor, desired, .20) || follow; } catch (_) {}
+    try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => cameraBlock(x, y, z), anchor, desired, .20) || follow; } catch (_) {}
     const dx = aimPoint[0] - follow.position[0], dy = aimPoint[1] - follow.position[1], dz = aimPoint[2] - follow.position[2], length = Math.hypot(dx, dy, dz) || 1;
     return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov: 82, third: true, distance: follow.distance, collision: follow.collision, aimPoint, targetDistance };
   }
@@ -467,6 +517,12 @@
   function emitEffect(x, y, z, material, kind) {
     effects.push({ x, y, z, material: visibleMaterial(material), kind: kind || 'chip', at: performance.now() });
     if (effects.length > 12) effects.splice(0, effects.length - 12);
+  }
+  function currentTool() {
+    // The explorer never displays a tier that the active profile has not
+    // earned.  The default field hatchet is wood; crafted picks change only
+    // presentation, never rule mining speed or permissions.
+    return state.inventory.ironPick > 0 ? 'iron' : state.inventory.stonePick > 0 ? 'stone' : 'wood';
   }
   function swingTool() { toolSwingUntil = performance.now() + 220; }
   function mineTarget(hit) {
@@ -509,7 +565,7 @@
     if (cell && y === columnTop + 1) { state.player.x = pose.x; state.player.y = pose.z; result = R.place(state, world, x, z, selectedBlock); if (result.ok) { rebuildWorld(); emitEffect(x + .5, y + .5, z + .5, selectedBlock, 'place'); swingTool(); } }
     else result = genericPlace(x, y, z, selectedBlock);
     say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger');
-    if (result.ok) { swingTool(); durableSave(); updateUI(); handleCompletion(); }
+    if (result.ok) { swingTool(); flashAction('placeButton'); durableSave(); updateUI(); handleCompletion(); }
   }
   function attack() {
     let chosen = null, best = Infinity, dir = direction();
@@ -521,7 +577,7 @@
     }
     const result = chosen ? R.attack(state, chosen.x, chosen.y) : { ok: false, reason: 'Aim at a nearby skitter to strike.' };
     say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger');
-    if (result.ok) { durableSave(); updateUI(); handleCompletion(); }
+    if (result.ok) { flashAction('strikeButton'); durableSave(); updateUI(); handleCompletion(); }
   }
   function beginMine(event) {
     event.preventDefault(); event.stopPropagation();
@@ -539,7 +595,7 @@
     mining = Math.min(1, mining + dt / duration); $('mineProgress').firstElementChild.style.width = Math.round(mining * 100) + '%';
     if (mining >= 1) {
       const result = mineTarget(target); say(result.ok ? state.message : result.reason); buzz(result.ok ? 'mine' : 'danger');
-      endMine(); if (result.ok) { durableSave(); updateUI(); handleCompletion(); }
+      endMine(); if (result.ok) { flashAction('mineButton'); durableSave(); updateUI(); handleCompletion(); }
     }
   }
   function updateUI() {
@@ -616,7 +672,7 @@
         const projectedAim = V && typeof V.projectPoint === 'function' ? V.projectPoint(camera, camera.aimPoint, aspect) : null;
         lastRenderCamera = { mode: camera.third ? 'third' : 'first', distance: camera.distance, collision: !!camera.collision, position: camera.position.slice(), yaw: camera.yaw, pitch: camera.pitch, fov: camera.fov, aimPoint: camera.aimPoint.slice(), targetDistance: camera.targetDistance, avatarHead, avatarVisible, projectedAim };
         renderer.render({
-          camera, time: state.time,
+          camera, time: state.time, environment: { biome: R.STAGES[state.stage].biome },
           daylight: clamp(.7 + Math.sin(state.time / 18 * Math.PI) * .24, .34, .94),
           target: target && { block: [target.x, target.y, target.z], normal: [target.normal.x || 0, target.normal.y || 0, target.normal.z || 0], progress: mining },
           entities: entities(), effects: effects.map(effect => Object.assign({}, effect, { age: clamp((now - effect.at) / 680, 0, 1) })),
@@ -624,8 +680,8 @@
           // retracted camera can be close to the player, but silently
           // switching the rendering to an empty first-person-looking frame
           // makes the mobile camera control misleading.
-          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
-          held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) }
+          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
+          held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) }
         });
       } catch (_) {}
     }

@@ -178,7 +178,22 @@
     else if (beast) figure='<ellipse cx="40" cy="63" rx="25" ry="5" fill="#07142666"/><path d="M20 48c0-16 11-26 27-24 13 1 20 10 19 25l-7 9H27Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><path d="M27 54v10m25-10v10" stroke="'+dark+'" stroke-width="7" stroke-linecap="round"/><path d="M24 29 15 20m39 5 10-9" stroke="'+light+'" stroke-width="6" stroke-linecap="round"/><circle cx="34" cy="35" r="3" fill="'+dark+'"/><circle cx="48" cy="35" r="3" fill="'+dark+'"/><path d="M60 43q15-2 11-14" fill="none" stroke="'+color+'" stroke-width="6" stroke-linecap="round"/>';
     else if (golem) figure='<ellipse cx="40" cy="65" rx="24" ry="5" fill="#07142666"/><path d="M25 28 32 15h17l8 13 9 8-5 25H20l-5-25Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><path d="M27 21h26v22H27Z" fill="'+(card.id==='ironroot'?'#88745c':'#406e51')+'"/><circle cx="34" cy="32" r="3" fill="'+team+'"/><circle cx="47" cy="32" r="3" fill="'+team+'"/><path d="M20 39 10 55m51-16 9 16M29 60l-3 7m26-7 3 7" stroke="'+dark+'" stroke-width="8" stroke-linecap="round"/>';
     else figure='<ellipse cx="40" cy="65" rx="22" ry="5" fill="#07142666"/><path d="M28 30c0-11 6-17 12-17s13 6 13 17v7H28Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><path d="M22 39c5-7 31-7 37 0l-4 24H26Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><circle cx="35" cy="30" r="3" fill="'+dark+'"/><circle cx="46" cy="30" r="3" fill="'+dark+'"/><path d="M24 44 13 58m43-14 11 14M32 61l-3 7m20-7 3 7" stroke="'+dark+'" stroke-width="7" stroke-linecap="round"/>'+(card.id==='sunshot'||card.id==='twinbow'?'<path d="M11 55q10-12 20 0M49 55q10-12 20 0" fill="none" stroke="'+light+'" stroke-width="3"/>':'<path d="M12 56h18v-18H12Z" fill="#47658b" stroke="'+light+'" stroke-width="3"/>');
-    return '<svg class="card-art" viewBox="0 0 80 72" aria-hidden="true"><rect width="80" height="72" rx="14" fill="#294566"/><circle cx="64" cy="12" r="20" fill="'+color+'" opacity=".2"/><path d="M0 56 80 39v33H0Z" fill="#102442"/>'+figure+'</svg>';
+    const gear={
+      dashling:'<path d="m58 16 8 8-22 25-6-6Z" fill="#eef8ee"/><path d="M42 48h13" stroke="#ffc96b" stroke-width="4"/>',
+      mossguard:'<circle cx="20" cy="18" r="7" fill="#7da95b"/><circle cx="60" cy="18" r="6" fill="#91ba68"/>',
+      sunshot:'<path d="M59 17q18 17 0 34" fill="none" stroke="#ffe0a0" stroke-width="3"/><path d="m58 17 3 34" stroke="#fff5d0" stroke-width="2"/>',
+      nibblers:'<path d="m24 25-9-11 3 19m39-8 9-11-3 19" fill="#bde65e" stroke="#27324a" stroke-width="3"/>',
+      kitewing:'<path d="m36 45 4 5 6-7" fill="none" stroke="#fff0b8" stroke-width="4"/>',
+      boltfinch:'<path d="m36 41 8 0-4 7Z" fill="#f2e3a9"/><path d="m25 19 5-9m25 9-5-9" stroke="#b99cff" stroke-width="4"/>',
+      emberox:'<path d="M24 27 12 15m44 12 12-12" stroke="#f0d9a5" stroke-width="7" stroke-linecap="round"/>',
+      ripplefox:'<path d="M57 48q17 3 9 17M53 44q20-4 20 10" fill="none" stroke="#dff7ef" stroke-width="5" stroke-linecap="round"/>',
+      ironroot:'<path d="M27 21h26M24 46h32" stroke="#c2b28d" stroke-width="4"/><circle cx="21" cy="35" r="3" fill="#61e5d2"/>',
+      cloudrays:'<circle cx="25" cy="17" r="4" fill="#dffff9"/><circle cx="40" cy="12" r="4" fill="#dffff9"/><circle cx="55" cy="17" r="4" fill="#dffff9"/>',
+      lantern:'<path d="M58 22v28" stroke="#8b673d" stroke-width="4"/><rect x="51" y="13" width="14" height="17" rx="3" fill="#ffe88b" stroke="#fff3bf" stroke-width="3"/>',
+      ramblebee:'<path d="M29 34h23M29 44h23" stroke="#4a3826" stroke-width="5"/>',
+      twinbow:'<path d="M9 52q10-14 20 0m22 0q10-14 20 0" fill="none" stroke="#ffd9f0" stroke-width="3"/>'
+    }[card.id]||'';
+    return '<svg class="card-art" viewBox="0 0 80 72" aria-hidden="true"><rect width="80" height="72" rx="14" fill="#294566"/><circle cx="64" cy="12" r="20" fill="'+color+'" opacity=".2"/><path d="M0 56 80 39v33H0Z" fill="#102442"/>'+figure+gear+'</svg>';
   }
   function renderCollection() {
     els['arena-list'].innerHTML = E.arenas.map((arena,index) => {

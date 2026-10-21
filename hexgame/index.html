@@ -690,7 +690,7 @@ function recomputeTerritory(){
 function reveal(x,y,r=1,initial=false,id=0,delay=0){
  const explored=id===0?game.seen:faction(id).explored;let changed=false;
  for(let yy=y-r;yy<=y+r;yy++)for(let xx=x-r;xx<=x+r;xx++){const t=tileAt(xx,yy);if(!t)continue;if(t.building==='lighthouse'){if(initial)continue;claimLighthouse(t,id)}const i=tileIndex(xx,yy);if(!explored[i]){changed=true;if(id===0&&!initial&&!reducedMotion.matches)fogReveals.set(i,{start:performance.now()+delay,duration:180})}explored[i]=true;discoverContactOnTile(id,t)}
- if(id===0&&changed){floorRevision++;requestRender()}
+ if(id===0&&changed){floorRevision++;requestRender()}return changed
 }
 function visualSeen(t,time=drawTime){if(!seen(t))return false;const a=fogReveals.get(tileIndex(t.x,t.y));return !a||time>=a.start+a.duration*.55||game.over||reducedMotion.matches}
 
@@ -910,6 +910,12 @@ function canUsePower(u){const d=unitDef(u);return !u.attacked&&!u.stunned&&!u.fr
 function freezeAround(u,withEnemies=true){floorRevision++;for(const t of game.tiles)if(distance(t,u)<=1){t.biome='frost';if(['water','ocean'].includes(t.terrain))t.frozen=true}if(withEnemies)for(const e of game.units)if(hostile(e.owner,u.owner)&&distance(e,u)<=1){e.frozen=true;e.boosted=false;faction(u.owner).tasks.attacked=true;faction(u.owner).tasks.peaceTurns=0;emit(e.x,e.y,'FROZEN','#c4f5ff')}}
 function unitPower(u){const d=unitDef(u);if(u.owner===0&&(busy||isAnimating()||upgradeQueue.length)||!canUsePower(u)||game.over)return false;if(d.freezeArea)freezeAround(u);for(const a of powerTargets(u)){if(d.swarm){a.boosted=true;emit(a.x,a.y,'SWARM +1','#dbf494')}if(d.healer)healUnit(a,4,true)}u.moved=u.attacked=true;if(u.owner===0){sound('research');updateUI();save()}return true}
 function emit(x,y,text,color='#fff',delay=0){const start=performance.now()+delay,stack=particles.filter(p=>p.x===x&&p.y===y&&start-p.start<p.duration).length;particles.push({x,y,text,color,start,duration:900,offset:stack*17});requestRender()}
+// Feedback belongs to the action's tile, never a blocking overlay. It uses
+// the same short-lived effect list as combat and is omitted for reduced motion.
+function actionPulse(x,y,activity,color='#fff6b7',delay=0){
+ const start=performance.now()+delay,duration=reducedMotion.matches?1:520;
+ effects.push({kind:'activity',from:{x,y},to:{x,y},activity,color,start,duration});requestRender();
+}
 function terrainPoison(u,t){if(t.building==='fungi'&&faction(u.owner).tribe!=='hive'&&!unitDef(u).flying){u.poisoned=true;u.boosted=false}}
 function finishTravel(u,wasJuggernaut=false,delay=0){
  const t=tileAt(u.x,u.y),d=unitDef(u);
@@ -923,7 +929,16 @@ function finishTravel(u,wasJuggernaut=false,delay=0){
  }
 }
 function moveUnit(u,x,y,animate=true){
- if(u.moved||u.owner===0&&(busy||game.over||isAnimating()||upgradeQueue.length))return false;const r=reachable(u).get(tileIndex(x,y));if(!r)return false;if(animate&&(u.owner===0||seen(tileAt(u.x,u.y))||r.path.some(p=>seen(tileAt(p.x,p.y)))))startMovement(u,r.path);const previous=r.path.length>1?r.path.at(-2):u;u.lastDirection={x:Math.sign(x-previous.x),y:Math.sign(y-previous.y)};const wasJuggernaut=u.boat==='juggernaut';for(const [i,p]of r.path.entries()){const t=tileAt(p.x,p.y);terrainPoison(u,t);reveal(p.x,p.y,(unitDef(u).vision||1)+(t.terrain==='mountain'&&!u.boat?1:0),false,u.owner,u.anim?u.anim.duration*(i+1)/r.path.length*.65:0)}u.x=x;u.y=y;u.moved=true;finishTravel(u,wasJuggernaut,u.anim?.duration||0);if(u.type==='catapult'||unitDef(u).noDash)u.attacked=true;if(TYPES[u.type].freezeArea)freezeAround(u);revealUnit(u);requestRender();
+ if(u.moved||u.owner===0&&(busy||game.over||isAnimating()||upgradeQueue.length))return false;
+ const r=reachable(u).get(tileIndex(x,y));if(!r)return false;
+ if(animate&&(u.owner===0||seen(tileAt(u.x,u.y))||r.path.some(p=>seen(tileAt(p.x,p.y)))))startMovement(u,r.path);
+ const previous=r.path.length>1?r.path.at(-2):u;u.lastDirection={x:Math.sign(x-previous.x),y:Math.sign(y-previous.y)};
+ const wasJuggernaut=u.boat==='juggernaut';let discovered=false;
+ for(const [i,p]of r.path.entries()){
+  const t=tileAt(p.x,p.y),vision=(unitDef(u).vision||1)+(t.terrain==='mountain'&&!u.boat?1:0),delay=u.anim?u.anim.duration*(i+1)/r.path.length*.65:0;
+  terrainPoison(u,t);discovered=reveal(p.x,p.y,vision,false,u.owner,delay)||discovered;
+ }
+ u.x=x;u.y=y;u.moved=true;finishTravel(u,wasJuggernaut,u.anim?.duration||0);if(u.type==='catapult'||unitDef(u).noDash)u.attacked=true;if(TYPES[u.type].freezeArea)freezeAround(u);revealUnit(u);if(u.owner===0&&discovered){actionPulse(x,y,'explore','#bfeeff',u.anim?.duration||0);emit(x,y,'EXPLORED','#d9f7ff',u.anim?.duration||0)}requestRender();
  const t=tileAt(x,y),delay=u.anim?.duration||0;if(t.building==='ruin'&&u.owner===0)toast('Ancient ruins. Start your next turn here, then tap Examine.');
  noticeVisibleEnemy(u);
  if(u.owner===0){selected={x,y};selectCity=false;sound('move');updateTasks();updateUI();save();scheduleUpgrades(delay+20);scheduleContactPresentation(delay+30)}return true;
@@ -1016,14 +1031,14 @@ function improve(t,action){
  if(!current){toast('This improvement is unavailable on this tile.');updateSelection();return}
  if(action.kind==='monument'){if(!action.monument){openMonuments(t);return}const task=faction(0).tasks;if(!task.unlocked.includes(action.monument)||task.built.includes(action.monument))return;current.monument=action.monument}
  action=current;if(action.tech&&!ownsTech(0,action.tech)){openTech(action.tech);return}if(faction(0).stars<action.cost){toast('You need '+action.cost+' stars.');return}
- applyImprovement(t,action);t.effect={start:performance.now(),duration:220};emit(t.x,t.y,action.kind==='enchant'?'WILDGUARD!':action.kind==='clearforest'?'+1 ★':action.kind==='decompose'?'DECOMPOSING':action.kind.startsWith('destroy')?'REMOVED':action.pop?(action.pop>0?'+':'')+action.pop+' population':action.kind==='market'?'MARKET BUILT':action.kind==='sanctuary'?'SANCTUARY':action.kind==='bridge'?'BRIDGE BUILT':action.kind==='growforest'?'FOREST GROWN':action.kind==='burnforest'?'FIELD CREATED':'ROAD BUILT','#fff6b7');sound('coin');updateUI();save();scheduleUpgrades(220);
+ applyImprovement(t,action);t.effect={start:performance.now(),duration:220};actionPulse(t.x,t.y,action.kind,'#fff6b7');emit(t.x,t.y,action.kind==='enchant'?'WILDGUARD!':action.kind==='clearforest'?'+1 ★':action.kind==='decompose'?'DECOMPOSING':action.kind.startsWith('destroy')?'REMOVED':action.pop?(action.pop>0?'+':'')+action.pop+' population':action.kind==='market'?'MARKET BUILT':action.kind==='sanctuary'?'SANCTUARY':action.kind==='bridge'?'BRIDGE BUILT':action.kind==='growforest'?'FOREST GROWN':action.kind==='burnforest'?'FIELD CREATED':'ROAD BUILT','#fff6b7');sound('coin');updateUI();save();scheduleUpgrades(220);
 }
 
 function train(c,type){
  if(busy||game.over||isAnimating()||upgradeQueue.length||!game.cities.includes(c)||c.owner!==0||!roster(0).includes(type))return;
  const def=TYPES[type];if(def.tech&&!ownsTech(0,def.tech)){toast('Research '+techInfo(def.tech).name+' in the Tech Tree first.');return}
  const blocked=trainingStatus(c);if(blocked){toast(blocked);return}if(faction(0).stars<def.cost){toast('You need '+def.cost+' stars.');return}
- faction(0).stars-=def.cost;game.units.push(createUnit(0,type,c.x,c.y));selected={x:c.x,y:c.y};selectCity=false;closeModal(true);sound('coin');emit(c.x,c.y,'NEW '+def.name.toUpperCase(),'#eef9c9');updateUI();save();
+ faction(0).stars-=def.cost;game.units.push(createUnit(0,type,c.x,c.y));selected={x:c.x,y:c.y};selectCity=false;closeModal(true);sound('coin');actionPulse(c.x,c.y,'train','#eef9c9');emit(c.x,c.y,'NEW '+def.name.toUpperCase(),'#eef9c9');updateUI();save();
 }
 function checkGameOver(){if(game.over)return;if(!playerCities().length){game.over=true;game.winner=game.factions.find(f=>!f.eliminated&&f.id!==0)?.id??1}else if(game.mode==='domination'&&game.factions.slice(1).every(f=>f.eliminated)){game.over=true;game.winner=0}else if(game.mode==='perfection'&&game.turn>=30){game.over=true;game.winner=0}if(game.over){save();if(!busy){const endedGame=game;setTimeout(()=>{if(game===endedGame)showResult()},300)}}}
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,document.hidden||reducedMotion.matches?0:ms));
@@ -1338,12 +1353,26 @@ function drawWater(t,p=iso(t.x,t.y)){
  const phase=reducedMotion.matches?0:(Math.sin(drawTime*.001+t.x*2+t.y)+1)*.5;ctx.save();ctx.globalAlpha*=.12+phase*.12;
  polygon([[p.x-16,p.y-6],[p.x-11,p.y-9],[p.x-6,p.y-6],[p.x-11,p.y-3]],'#e9fcff');if(t.variant%2)polygon([[p.x+16,p.y+5],[p.x+19,p.y+3],[p.x+22,p.y+5],[p.x+19,p.y+7]],'#d3f6ff');ctx.restore();
 }
+// A few large, deterministic material marks make a tile read at phone scale
+// without turning the map into texture noise. They live in the cached floor.
+function drawGroundMaterial(t,p,corners){
+ const family={dune:['#fff0bd','#c99956'],ridge:['#ffd3ce','#a86675'],pine:['#cce5c5','#4f8d73'],frost:['#e6f8ff','#82b9d0'],iron:['#d9d6cf','#777579'],hive:['#f3cf9c','#b87461']}[t.biome]||['#f4edc5','#8aac70'];
+ const shift=((t.variant||0)%5)-2,near=[p.x+shift*5,p.y+4],far=[p.x-shift*4,p.y-7];ctx.save();
+ if(t.frozen){ctx.globalAlpha*=.34;line([[p.x-24,p.y-3],[p.x-7,p.y+1],[p.x+4,p.y-5],[p.x+23,p.y-1]],'#f5ffff',1.35);line([[p.x-17,p.y+8],[p.x+2,p.y+3],[p.x+17,p.y+8]],'#81bcd7',1);ctx.restore();return}
+ if(t.terrain==='field'){ctx.globalAlpha*=.22;for(const dx of [-18,-6,7,19])line([[p.x+dx,p.y+7],[p.x+dx+8,p.y+2]],family[1],1.25);ctx.restore();return}
+ if(t.terrain==='land'||t.terrain==='forest'||t.terrain==='mountain'){
+  ctx.globalAlpha*=.16;polygon([corners[0],far,near,corners[3]],family[0]);ctx.globalAlpha*=.16;polygon([corners[1],near,far,corners[2]],family[1]);
+  ctx.globalAlpha*=.38;for(const [dx,dy,size] of [[-18,4,1.1],[10,-4,1.35],[21,5,.9]])ellipse(p.x+dx+shift,p.y+dy,size,size*.55,family[1]);
+ }
+ ctx.restore();
+}
 function drawTile(t,staticWater=false){
  const p=iso(t.x,t.y),x=p.x,y=p.y,known=seen(t),tribe=TRIBES[t.biome],water=['water','ocean'].includes(t.terrain),color=!known?'#d8e2e7':t.frozen?'#bfe8fa':water?(t.terrain==='ocean'?'#2865ad':'#59b5e4'):tribe.land;
  const depth=13;if(t.x===game.size-1)polygon([[x,y+TH/2],[x+TW/2,y],[x+TW/2,y+depth],[x,y+TH/2+depth]],known?(water?'#258cbe':'#a07340'):'#99b0ef');
  if(t.y===game.size-1)polygon([[x-TW/2,y],[x,y+TH/2],[x,y+TH/2+depth],[x-TW/2,y+depth]],known?(water?'#1c9bb4':'#79522e'):'#a8baf0');
  const corners=[[x,y-TH/2],[x+TW/2,y],[x,y+TH/2],[x-TW/2,y]];polygon(corners,color,known?(water?'#163f5368':'#33483d73'):null,1.25);if(!known)return;
  const center=[x+(t.variant-2)*3,y+(t.variant%3-1)*3];polygon([corners[0],corners[1],center],water?'#c9edf018':tribe.shade+'54');polygon([corners[2],corners[3],center],water?'#0e566214':'#f2eadb18');
+ drawGroundMaterial(t,p,corners);
  if(!water){ctx.fillStyle='#263f3427';for(const [dx,dy]of [[-23,-3],[18,5],[(t.variant-2)*7,8]]){ctx.beginPath();ctx.arc(x+dx,y+dy,1.2,0,Math.PI*2);ctx.fill()}}
  if(!water&&!t.frozen)for(const [dx,dy,a,b]of [[0,-1,corners[0],corners[1]],[1,0,corners[1],corners[2]],[0,1,corners[2],corners[3]],[-1,0,corners[3],corners[0]]]){const n=tileAt(t.x+dx,t.y+dy);if(n&&seen(n)&&waterTile(n)&&!n.frozen){line([a,b],'#f4f0d2',2.4);line([[a[0],a[1]+2],[b[0],b[1]+2]],'#8d704a',1.3)}}
  if(t.frozen){line([[x-24,y-2],[x-6,y+1],[x+2,y-5],[x+21,y-1]],'#9bcce68c',1)}else if(water){if(!staticWater)drawWater(t,p)}
@@ -1389,11 +1418,17 @@ function drawCity(c){
  const p=iso(c.x,c.y),b=c.owner<0?{color:'#9bac9d',dark:'#718c86',light:'#d2dfc3'}:tribeFor(c.owner),key=c.owner<0?'crown':faction(c.owner).tribe;ctx.save();ctx.translate(p.x,p.y);
  ellipse(1,10,33,11,'#1f3b3b38');polygon([[-32,1],[0,-16],[32,1],[0,18]],'#b7ab87','#4d6258',1.2);polygon([[-27,0],[0,-13],[27,0],[0,14]],'#e1d4ad',b.dark,1.2);
  if(c.owner<0){hut(-11,-3,'#a5ac87','#9a9778',.75);hut(12,1,'#b1b392','#aa9c75',.8);ctx.restore();return}
+ // Courtyard paths and paired lights give every city a lived-in center even
+ // before its larger level-specific buildings are unlocked.
+ line([[-20,3],[0,-4],[20,5]],'#a88c66',2.2);line([[0,-10],[0,11]],'#f4e6bd',1.6);
+ for(const [x,y] of [[-20,4],[20,6]]){line([[x,y],[x,y-8]],'#62736c',1.35);ellipse(x,y-9,2.15,1.7,c.level>=2?'#ffe8a0':'#e0d7af')}
+ if(c.level>=2){for(const [x,y] of [[-14,8],[13,10]]){polygon([[x-5,y],[x,y-3],[x+5,y],[x,y+3]],b.light,b.dark,.65);ellipse(x,y-1,1.35,1,'#f7e5a0')}}
  if(c.walls){box(0,-5,29,25,9,'#d4d2c4','#8e9b94','#b3b9ad');for(const x of [-23,-8,8,23])box(x,-10,4,5,8,'#dedacb','#8e9b94','#b8beb1')}
  hut(-21,3,b.dark,b.color,c.level>=2?.62:.48);hut(20,5,b.dark,b.color,c.level>=3?.62:.46);
  const h=18+Math.min(5,c.level)*2.5;box(0,-7,12,15,h,'#e4dfca','#9eaaa2','#c8cdc0');
  polygon([[-15,-h-7],[0,-h-20],[16,-h-7],[0,-h+1]],b.color,'#4c5c58',1.1);polygon([[-15,-h-7],[0,-h-20],[0,-h+1]],b.dark);
  polygon([[-4,9],[-4,-5],[2,-9],[7,-5],[7,10]],'#526e70');ctx.fillStyle='#f5e5b4';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
+ if(c.level>=3){polygon([[-27,11],[-18,7],[-9,11],[-18,15]],b.light,b.dark,.75);line([[-18,11],[-18,3]],'#72817b',1.5);polygon([[-18,3],[-8,6],[-18,10]],b.color,b.dark,.7)}
  if(c.level>=4)for(const dx of [-24,24]){box(dx,-3,5,7,h-4,b.light,b.dark,b.color);polygon([[dx-7,-h+3],[dx,-h-7],[dx+7,-h+3]],b.color)}
  const mastX=c.capital?0:23,mastTop=-h-(c.capital?40:24);line([[mastX,-h-4],[mastX,mastTop]],'#556c6b',1.8);polygon([[mastX,mastTop],[mastX+15,mastTop+4],[mastX,mastTop+12]],b.color,b.dark,1);paintFactionEmblem(key,mastX+5,mastTop+5,c.capital?8:6,contrastInk(b.color));ctx.restore();
 }
@@ -1423,7 +1458,7 @@ function drawNaval(u,x,y,b){
 function drawUnit(u){
  const pose=unitPose(u),b=tribeFor(u.owner),boat=visualBoat(u),def=TYPES[u.type],scale=unitArtScale(u,boat);if(boat){drawNaval({...u,boat},pose.px,pose.py,b);return}
  ctx.save();ctx.translate(pose.px,pose.py-2);ctx.scale(scale,scale);if(pose.lean)ctx.rotate(pose.lean);if(u.owner===0&&u.moved&&u.attacked)ctx.globalAlpha*=.65;
- ellipse(0,9+(pose.groundY-pose.py)/scale,14,5,'#1d464937');if(selected?.x===u.x&&selected?.y===u.y&&u.owner===0&&!selectCity){ctx.strokeStyle='#f2fcff';ctx.lineWidth=1.7;ctx.beginPath();ctx.ellipse(0,8,18,8,0,0,Math.PI*2);ctx.stroke()}
+ const ground=9+(pose.groundY-pose.py)/scale;ellipse(0,ground,16,5.5,'#163a4240');ellipse(0,ground-1,10,2.8,'#163a4255');if(selected?.x===u.x&&selected?.y===u.y&&u.owner===0&&!selectCity){ctx.strokeStyle='#f2fcff';ctx.lineWidth=1.7;ctx.beginPath();ctx.ellipse(0,8,18,8,0,0,Math.PI*2);ctx.stroke()}
  const creature=creatureParts(u.type,faction(u.owner).tribe,b);if(creature){paintParts(creature,-21,-39,.68);ctx.restore();return}
  if(['rider','knight','amphibian','wildguard'].includes(u.type)){polygon([[-15,3],[-11,-7],[8,-6],[13,1],[9,11],[-11,10]],'#c4ad85');polygon([[7,-5],[8,-17],[14,-18],[18,-11],[13,-7],[13,3]],'#e1cba4');line([[-10,7],[-10,15]],'#9b876d',3);line([[8,7],[8,15]],'#9b876d',3);ctx.translate(-2,-9)}
  if(u.type==='catapult'){polygon([[-18,5],[0,-4],[18,5],[0,13]],'#ae8f5c');line([[-11,7],[0,-18],[12,7]],'#d5b77d',4);line([[-4,-14],[15,-29]],'#8c724b',4);ellipse(-11,10,5,5,'#526b71');ellipse(12,10,5,5,'#526b71');polygon([[12,-32],[20,-31],[22,-25],[16,-23]],'#aeb9b6');ctx.restore();return}
@@ -1539,7 +1574,13 @@ function drawTileCue(t,color,selectedTile=false){
 
 function drawAttackEffect(e,time){
  const age=(time-e.start)/e.duration;if(age<0||age>1)return;const a=iso(e.from.x,e.from.y),b=iso(e.to.x,e.to.y);ctx.save();
- if(e.kind==='projectile'){const x=a.x+(b.x-a.x)*age,y=a.y-23+(b.y-a.y)*age-Math.sin(age*Math.PI)*10;line([[x-5,y+3],[x+5,y-3]],'#fff8d6',2);polygon([[x+6,y-4],[x+1,y-4],[x+5,y]],'#f1cf6c')}
+ if(e.kind==='activity'){
+  const x=a.x,y=a.y-4,fade=1-age,scale=.48+age*.85;ctx.globalAlpha*=fade*.9;ctx.lineWidth=1.6;
+  const diamond=[[x,y-15*scale],[x+26*scale,y],[x,y+15*scale],[x-26*scale,y]];polygon(diamond,null,e.color,1.8);
+  const rays=e.activity==='research'?6:e.activity==='explore'?5:4;for(let i=0;i<rays;i++){const angle=-Math.PI/2+i*Math.PI*2/rays+(e.activity==='harvest'?.24:0),inner=10+age*8,outer=inner+7;line([[x+Math.cos(angle)*inner,y+Math.sin(angle)*inner*.58],[x+Math.cos(angle)*outer,y+Math.sin(angle)*outer*.58]],e.color,1.4)}
+  if(e.activity==='harvest')ellipse(x,y,3.3+age*2,2.1+age,'#fff4b0');else if(e.activity==='train')polygon([[x,y-7],[x+5,y],[x,y+7],[x-5,y]],e.color);else if(e.activity==='research'){polygon([[x,y-8],[x+4,y-2],[x+8,y],[x+4,y+2],[x,y+8],[x-4,y+2],[x-8,y],[x-4,y-2]],e.color)}
+ }
+ else if(e.kind==='projectile'){const x=a.x+(b.x-a.x)*age,y=a.y-23+(b.y-a.y)*age-Math.sin(age*Math.PI)*10;line([[x-5,y+3],[x+5,y-3]],'#fff8d6',2);polygon([[x+6,y-4],[x+1,y-4],[x+5,y]],'#f1cf6c')}
  else{ctx.globalAlpha*=1-age;const x=b.x,y=b.y-20;line([[x-9+age*4,y+10-age*4],[x+9-age*4,y-10+age*4]],'#fff',3);line([[x-5,y-7],[x+5,y+7]],'#ffe07c',1.8)}ctx.restore();
 }
 function inViewport(p){const x=view.w/2+view.x+p.x*view.zoom,y=view.h/2+view.y+p.y*view.zoom,pad=100*view.zoom;return x>-pad&&x<view.w+pad&&y>-pad&&y<view.h+pad}
@@ -1867,7 +1908,7 @@ function renderTech(){
  if($('research-tech'))$('research-tech').onclick=()=>{
   // Recheck live rules and balance; an old button must never purchase twice.
   if(researchKey!==techSelected||busy||game.over||ownsTech(0,researchKey)||!canResearch(researchKey))return;const price=techCost(researchKey);if(faction(0).stars<price)return;
-  faction(0).stars-=price;faction(0).tech.push(researchKey);updateTasks();sound('research');save();updateUI();renderTech();tree.querySelector(`[data-tech="${researchKey}"]`).focus({preventScroll:true});
+  faction(0).stars-=price;faction(0).tech.push(researchKey);const capital=playerCities().find(city=>city.capital)||playerCities()[0];if(capital)actionPulse(capital.x,capital.y,'research','#d7e9ff');toast(techInfo(researchKey).name+' researched. New actions are ready.');updateTasks();sound('research');save();updateUI();renderTech();tree.querySelector(`[data-tech="${researchKey}"]`).focus({preventScroll:true});
  };
  map.scrollLeft=scroll.x;map.scrollTop=scroll.y;
  if(focused||wasResearch)tree.querySelector(`[data-tech="${focused||techSelected}"]`)?.focus({preventScroll:true});

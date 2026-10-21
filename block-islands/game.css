@@ -37,3 +37,13 @@
 .move-zone,.action-cluster{z-index:2}
 @media (max-width:340px){.action-cluster{transform:scale(var(--action-scale,1))}}
 @media (max-height:500px) and (orientation:landscape){.action-cluster{bottom:8px;transform:scale(var(--action-scale,1))}}
+
+/* The progress meter is an action-state affordance, never a permanent gray
+   artifact over the aim point.  Text labels make the two formerly glyph-only
+   tools understandable on a phone without changing their touch regions. */
+.mine-progress[aria-hidden="true"]{display:none}
+.strike,.craft{font-size:10px;letter-spacing:.15px;line-height:1}
+.action-button.action-feedback{box-shadow:0 0 0 3px #fff4a7,0 3px 0 #0615249c;filter:brightness(1.13)}
+/* Keep WebGL's frequently changing backing store below its real controls on
+   compositors that split canvas and DOM layers during a stage rebuild. */
+.touch-layer{isolation:isolate;transform:translateZ(0)}.action-cluster,.action-button{will-change:transform}

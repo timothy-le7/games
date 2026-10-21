@@ -11,12 +11,22 @@
     {grass:'#565d78',grass2:'#656d86',path:'#8e887c',stone:'#747783',wood:'#805039',water:'#345d83'},
     {grass:'#4d5c56',grass2:'#5c6a62',path:'#8d7459',stone:'#696f70',wood:'#7c4930',water:'#285873'}
   ];
+  const ARENA_THEMES=[
+    {accent:'#efc55d',metal:'#607487',dark:'#34475c',motif:'roof'},
+    {accent:'#75e6dc',metal:'#7c8f97',dark:'#345864',motif:'wind'},
+    {accent:'#e29a55',metal:'#a8633f',dark:'#594431',motif:'canopy'},
+    {accent:'#8fdded',metal:'#7393a8',dark:'#3d596e',motif:'rail'},
+    {accent:'#ff825b',metal:'#8d5742',dark:'#49382f',motif:'ember'},
+    {accent:'#ffe07a',metal:'#6e806f',dark:'#354c43',motif:'lantern'},
+    {accent:'#d6a0ff',metal:'#777592',dark:'#45465f',motif:'prism'},
+    {accent:'#ffb568',metal:'#657579',dark:'#343f43',motif:'foundry'}
+  ];
   const TEAM={player:'#39c8d3',enemy:'#d65368'},TEAM_LIGHT={player:'#b8fff4',enemy:'#ffd0c7'};
   const MODEL_GROUPS={fighter:['dashling','sunshot','lantern','twinbow'],golem:['mossguard','ironroot'],beast:['nibblers','emberox','ripplefox'],flying:['kitewing','boltfinch','cloudrays','ramblebee']};
   const LANE_X=220/115,PATH_ZS=[],PLANK_ZS=[];
   for(let z=-6.65;z<=6.65;z+=.82)PATH_ZS.push(z);
   for(let z=-.61;z<=.61;z+=.19)PLANK_ZS.push(z);
-  const SURFACE={grass:.02,path:.08,water:.085,bridge:.28};
+  const SURFACE={grass:.02,path:.08,water:.085,bridge:.30};
   const SHADOW_RECEIVERS=[{height:SURFACE.grass,clip:[-4.36,-7.5,4.36,7.5]}];
   for(const x of [-LANE_X,LANE_X])for(const z of PATH_ZS)SHADOW_RECEIVERS.push({height:SURFACE.path,clip:[x-.72,z-.39,x+.72,z+.39]});
   SHADOW_RECEIVERS.push({height:SURFACE.water,clip:[-4.36,-.55,4.36,.55]});
@@ -84,17 +94,221 @@
     }
     part(name,origin,offset,scale,color,yaw,pitch,roll,alpha,flash){const c=Math.cos(yaw||0),s=Math.sin(yaw||0),ox=offset[0]*c+offset[2]*s,oz=-offset[0]*s+offset[2]*c;this.drawMesh(name,origin[0]+ox,origin[1]+offset[1],origin[2]+oz,scale[0],scale[1],scale[2],color,yaw,pitch,roll,alpha,flash);}
     render(match,options){if(this.lost||!this.gl||!match)return;this.resize();const gl=this.gl;this.stats.drawCalls=0;this.stats.triangles=0;this.stats.units=match.units.length;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);gl.uniformMatrix4fv(this.locations.viewProjection,false,this.viewProjection);this.drawArena(match);this.drawPlacement(match,options);match.towers.filter(t=>t.alive).forEach(t=>this.drawTower(t));match.units.slice().sort((a,b)=>a.y-b.y).forEach(u=>this.drawUnit(u,match));match.towers.filter(t=>!t.alive).forEach(t=>this.drawTower(t));match.projectiles.forEach(p=>this.drawProjectile(p));if(!options.reducedEffects)match.effects.forEach(e=>this.drawEffect(e));if(options.dragPreview&&options.dragPreview.inside)this.drawGhost(options.dragPreview,match);}
-    drawArena(match){const p=PALETTES[match.arena%PALETTES.length],half=4.36,lane=LANE_X;this.drawMesh('box',0,SURFACE.grass-.3,0,half,.3,7.5,p.grass);for(let z=-6.75,row=0;z<=6.75;z+=.75,row++)this.drawMesh('box',0,SURFACE.grass-.025,z,4.31,.025,.37,row%2?p.grass:mix(p.grass2,'#ffffff',.025));for(const x of [-lane,lane])for(const z of PATH_ZS)this.drawMesh('box',x,SURFACE.path-.045,z,.72,.045,.39,(Math.round(z*10)&1)?mix(p.path,'#ffffff',.11):hex(p.path));this.drawMesh('box',0,SURFACE.water-.07,0,half,.07,.55,p.water);for(let x=-4.05;x<=4.05;x+=.58)this.drawMesh('box',x,.09,Math.sin(match.time*1.7+x)*.08,.23,.018,.018,'#9ae8e2',0,0,0,.48);for(const x of [-lane,lane])this.drawBridge(x,p);for(const side of [-1,1]){const z=side*7.25;this.drawMesh('box',0,.35,z,half,.38,.18,p.stone);for(let x=-4.05;x<=4.05;x+=.62)this.drawMesh('box',x,.82,z,.19,.32,.22,(Math.round(x*4)&1)?p.stone:mix(p.stone,'#ffffff',.14));}for(const side of [-1,1])for(let x=-3.95;x<=3.95;x+=.98){const z=side*6.65;this.drawMesh('cylinder',x,.38,z,.08,.42,.08,'#654326');this.drawMesh('sphere',x,.88,z,.32,.35,.32,(Math.round(x*3)&1)?'#346e43':'#52854b');}}
-    drawBridge(x,p){this.shadow(x,0,1.05,.34);for(const z of PLANK_ZS)this.drawMesh('box',x,SURFACE.bridge-.08,z,.83,.08,.085,p.wood);for(const side of [-1,1]){this.drawMesh('cylinder',x+side*.92,.38,0,.055,.5,.055,'#5b3825');for(let z=-.55;z<=.55;z+=.28)this.drawMesh('sphere',x+side*.92,.68,z,.09,.09,.09,'#c2a66c');}}
+    drawArena(match){
+      const index=match.arena%PALETTES.length,p=PALETTES[index],theme=ARENA_THEMES[index],half=4.36,lane=LANE_X;
+      // The structural slab ends below one coherent turf surface, leaving a
+      // real gap instead of the former coplanar top faces and their banding.
+      this.drawMesh('box',0,-.32,0,half,.30,7.5,mix(p.grass,'#172e29',.16));
+      this.drawMesh('box',0,.003,0,4.31,.017,7.02,mix(p.grass,p.grass2,.12));
+      for(let z=-5.8;z<=5.8;z+=1.65)this.drawMesh('box',0,.021,z,4.27,.003,.018,mix(p.grass2,'#d9f2b4',.12),0,0,0,.24);
+      // Inlaid lane stones use bevel-like edge slabs and varied centers.
+      for(const x of [-lane,lane]){
+        this.drawMesh('box',x,SURFACE.path-.06,0,.76,.025,6.98,mix(p.stone,'#243238',.28));
+        this.drawMesh('box',x,SURFACE.path-.032,0,.70,.032,6.94,p.path);
+        for(let z=-5.75;z<=5.75;z+=1.15)this.drawMesh('box',x,SURFACE.path+.003,z,.68,.003,.018,mix(p.path,'#263136',.35),0,0,0,.48);
+      }
+      this.drawMesh('box',0,SURFACE.water-.07,0,half,.07,.55,mix(p.water,'#061d39',.14));
+      for(let x=-4.05;x<=4.05;x+=.58)this.drawMesh('box',x,.092,Math.sin(match.time*1.7+x)*.08,.23,.012,.014,theme.accent,0,0,0,.36);
+      for(const x of [-lane,lane])this.drawBridge(x,p,theme);
+      this.drawRamparts(p,theme);
+      this.drawArenaLandmarks(index,p,theme,match.time);
+    }
+    drawBridge(x,p,theme){
+      this.shadow(x,0,1.08,.34);
+      this.drawMesh('box',x,.17,0,.91,.10,.68,mix(theme.dark,'#111820',.18));
+      for(const z of PLANK_ZS)this.drawMesh('box',x,SURFACE.bridge-.075,z,.83,.075,.078,(Math.round(z*100)&1)?p.wood:mix(p.wood,'#ffe0a0',.10));
+      for(const side of [-1,1]){
+        this.drawMesh('cylinder',x+side*.92,.38,0,.055,.5,.055,theme.dark);
+        this.drawMesh('cylinder',x+side*.90,.61,0,.025,.48,.025,theme.accent,0,0,Math.PI/2);
+        for(let z=-.55;z<=.55;z+=.28)this.drawMesh('sphere',x+side*.92,.68,z,.09,.09,.09,mix(theme.accent,'#ffffff',.28));
+      }
+    }
+    drawRamparts(p,theme){
+      for(const side of [-1,1]){
+        const z=side*7.25;
+        this.drawMesh('box',0,.28,z,4.36,.30,.20,mix(p.stone,theme.dark,.24));
+        this.drawMesh('box',0,.59,z,4.30,.055,.23,mix(p.stone,'#ffffff',.12));
+        for(let x=-3.9;x<=3.9;x+=1.3)this.drawMesh('box',x,.85,z,.30,.24,.24,(Math.round(x*3)&1)?p.stone:mix(p.stone,'#ffffff',.16));
+        for(const x of [-3.65,3.65])this.drawPennant(x,1.24,z-side*.10,side,theme.accent,theme.dark,.72);
+      }
+    }
+    drawPennant(x,y,z,facing,color,dark,size){
+      this.drawMesh('cylinder',x,y,z,.025,size,.025,dark);
+      this.drawMesh('box',x+.16,y+size*.55,z-facing*.015,.16,.16,.025,color,0,0,-.18*facing);
+      this.drawMesh('cone',x+.34,y+size*.55,z-facing*.015,.16,.18,.025,color,0,0,-Math.PI/2);
+    }
+    drawArenaLandmarks(index,p,theme,time){
+      const motif=theme.motif;
+      for(const side of [-1,1])for(const x of [-3.45,3.45]){
+        const z=side*5.65;
+        if(motif==='roof'){
+          this.drawMesh('box',x,.16,z,.35,.15,.30,theme.dark);
+          this.drawMesh('box',x,.38,z,.22,.08,.18,theme.accent);
+          this.drawMesh('cylinder',x+.18,.62,z,.08,.28,.08,theme.metal);
+        }else if(motif==='wind'){
+          this.drawMesh('cylinder',x,.42,z,.035,.42,.035,theme.metal);
+          this.drawMesh('cone',x+.22+Math.sin(time)*.03,.72,z,.16,.34,.16,theme.accent,0,0,Math.PI/2);
+        }else if(motif==='canopy'){
+          this.drawMesh('cylinder',x,.34,z,.24,.34,.24,theme.metal);
+          this.drawMesh('sphere',x,.72,z,.48,.20,.48,theme.accent);
+          this.drawMesh('ring',x,.75,z,.56,1,.56,mix(theme.accent,'#ffffff',.25),0,0,0,.8);
+        }else if(motif==='rail'){
+          this.drawMesh('box',x,.18,z,.42,.12,.20,theme.dark);
+          this.drawMesh('cylinder',x,.62,z,.055,.46,.055,theme.metal);
+          this.drawMesh('box',x,.94,z,.30,.06,.08,theme.accent,0,0,Math.sin(time*.7)*.08);
+        }else if(motif==='ember'){
+          this.drawMesh('box',x,.23,z,.38,.22,.34,theme.dark);
+          this.drawMesh('box',x,.48,z-.25*side,.24,.16,.08,theme.metal);
+          this.drawMesh('sphere',x,.49,z-.35*side,.12,.12,.12,theme.accent,0,0,0,.9);
+          this.drawMesh('cylinder',x+.24,.78,z,.09,.38,.09,theme.metal);
+        }else if(motif==='lantern'){
+          this.drawMesh('cylinder',x,.48,z,.04,.48,.04,theme.dark);
+          this.drawMesh('box',x,.83,z,.19,.24,.19,theme.accent);
+          this.drawMesh('sphere',x,.84,z,.21,.23,.21,mix(theme.accent,'#ffffff',.24),0,0,0,.58);
+        }else if(motif==='prism'){
+          this.drawMesh('cone',x,.42,z,.30,.42,.30,theme.accent,Math.PI/4,0,0,.92);
+          this.drawMesh('ring',x,.13,z,.42,1,.42,theme.metal,0,0,0,.75);
+        }else{
+          this.drawMesh('cylinder',x,.28,z,.32,.26,.32,theme.dark);
+          this.drawMesh('ring',x,.56,z,.39,1,.39,theme.accent,0,0,time*.18,.9);
+          this.drawMesh('cylinder',x+.27,.86,z,.10,.40,.10,theme.metal);
+        }
+      }
+    }
     drawPlacement(match,options){const id=options.dragPreview?options.dragPreview.id:options.selectedCard;if(!id)return;const card=this.engine.cardMap[id],z=card.kind==='spell'?0:3.75;this.drawMesh('box',0,.065,z,4.32,.018,card.kind==='spell'?7:3.2,card.kind==='spell'?'#f6d36d':'#55e1bf',0,0,0,.17);if(card.kind==='unit')for(const lane of [0,1]){const tower=match.towers.find(item=>item.side==='enemy'&&item.type==='lane'&&item.lane===lane);if(tower&&!tower.alive)this.drawMesh('box',lane===0?-2.05:2.05,.07,-2.02,1.72,.02,1.37,'#55e1bf',0,0,0,.19);}if(options.dragPreview&&options.dragPreview.inside){const point=options.dragPreview.world,x=(point.x-500)/115,wz=(point.y-700)/100,legal=this.engine.legalPlacement(match,'player',card,point.x,point.y),radius=Math.max(.38,(card.radius||card.size*1.8)/108);this.drawMesh('ring',x,.11,wz,radius,1,radius,legal.ok?'#c2ffea':'#ff8e83',0,0,0,.92);}}
-    drawTower(t){const x=(t.x-500)/115,z=(t.y-700)/100,side=t.side,team=TEAM[side],base=t.type==='base',s=base?1.12:.88,flash=Math.min(1,(t.hit||0)*6);this.shadow(x+.12,z+.15,s*.9,.4);if(!t.alive){for(let i=0;i<9;i++){const a=i*2.29,r=.12+(i%3)*.22;this.drawMesh('box',x+Math.cos(a)*r,.12+(i%2)*.09,z+Math.sin(a)*r,.18,.12,.15,i%2?'#737671':'#989077',a,.2*i,.4*i);}return;}this.drawMesh('box',x,.22,z,s*.68,.22,s*.62,'#5d6565',0,0,0,1,flash);this.drawMesh('box',x,.62,z,s*.57,.42,s*.52,base&&!t.active?'#697276':'#929993',0,0,0,1,flash);for(const [ox,oz]of [[-.46,-.41],[.46,-.41],[-.46,.41],[.46,.41]])this.drawMesh('box',x+ox*s,.96,z+oz*s,s*.16,.2,s*.16,'#ddd6bc',0,0,0,1,flash);this.drawMesh('box',x,.78,z-s*.535,s*.6,.09,s*.08,team);this.drawMesh('box',x,.98,z,s*.43,.08,s*.4,'#624a35');for(let k=-1;k<=1;k++)this.drawMesh('box',x+k*s*.32,1.13,z-s*.38,s*.12,.16,s*.13,'#e1d9c0');this.drawDefender([x,1.2,z],side,s*(base?1:.82),t.heading||0,t.recoil||0,flash);this.hpBar(x,base?1.78:1.62,z,t.hp/t.maxHp,side,base?.82:.63);}
+    drawTower(t){
+      const x=(t.x-500)/115,z=(t.y-700)/100,side=t.side,team=TEAM[side],light=TEAM_LIGHT[side],base=t.type==='base',s=base?1.12:.88,flash=Math.min(1,(t.hit||0)*6),face=side==='player'?-1:1;
+      this.shadow(x+.12,z+.15,s*.95,.42);
+      if(!t.alive){
+        for(let i=0;i<12;i++){const a=i*2.29,r=.12+(i%4)*.18;this.drawMesh(i%3?'box':'cylinder',x+Math.cos(a)*r,.10+(i%3)*.07,z+Math.sin(a)*r,.13+(i%2)*.07,.10+(i%3)*.04,.13,i%2?'#606967':'#a39a7e',a,.2*i,.4*i);}
+        this.drawMesh('ring',x,.045,z,s*.72,1,s*.72,team,0,0,0,.42);
+        return;
+      }
+      // Layered footings, corner columns, inset team gate and a timber deck.
+      this.drawMesh('box',x,.13,z,s*.76,.13,s*.70,'#424d50',0,0,0,1,flash);
+      this.drawMesh('box',x,.34,z,s*.69,.10,s*.64,'#747c77',0,0,0,1,flash);
+      this.drawMesh('box',x,.66,z,s*.57,.32,s*.53,base&&!t.active?'#59666b':'#969d94',0,0,0,1,flash);
+      this.drawMesh('box',x,.64,z+face*s*.545,s*.34,.22,s*.035,mix(team,'#172336',.22),0,0,0,1,flash);
+      this.drawMesh('cone',x,.69,z+face*s*.595,s*.19,s*.20,s*.04,team,0,0,Math.PI/2*face,1,flash);
+      for(const [ox,oz]of [[-.49,-.44],[.49,-.44],[-.49,.44],[.49,.44]])this.drawMesh('cylinder',x+ox*s,.82,z+oz*s,s*.17,.40,s*.17,'#929891',0,0,0,1,flash);
+      this.drawMesh('box',x,.99,z,s*.48,.08,s*.43,'#5f402c');
+      this.drawMesh('box',x,1.09,z,s*.44,.035,s*.39,mix('#5f402c','#f4ca7d',.20));
+      this.drawMesh('box',x,1.20,z+face*s*.39,s*.44,.10,s*.13,'#ded6bb');
+      if(base){
+        this.drawMesh('cylinder',x,1.38,z-face*s*.15,s*.13,.42,s*.13,'#4d5558');
+        this.drawMesh('cone',x,1.70,z-face*s*.15,s*.17,.22,s*.17,light);
+        this.drawPennant(x+.47*s,1.42,z-face*.05,face,team,'#283647',.52);
+      }
+      this.drawDefender([x,1.30,z],side,s*(base?1:.82),t.heading||0,t.recoil||0,flash);
+      this.hpBar(x,base?1.91:1.70,z,t.hp/t.maxHp,side,base?.84:.66);
+    }
     drawDefender(o,side,s,heading,recoil,flash){const team=TEAM[side],yaw=heading+Math.PI/2;this.part('sphere',o,[0,.08,0],[.2*s,.23*s,.2*s],'#d7a979',yaw,0,0,1,flash);this.part('cylinder',o,[0,-.17,0],[.24*s,.24*s,.24*s],team,yaw,0,0,1,flash);this.part('box',o,[0,.24,0],[.24*s,.06*s,.23*s],'#213047',yaw);this.part('cylinder',o,[0,.02,-.35-recoil*.1],[.07*s,.34*s,.07*s],'#4f5555',yaw,Math.PI/2);this.part('cylinder',o,[0,.02,-.62-recoil*.1],[.11*s,.12*s,.11*s],'#2e3639',yaw,Math.PI/2);}
     hpBar(x,y,z,ratio,side,width){this.drawMesh('box',x,y,z,.5*width,.035,.045,'#172233');this.drawMesh('box',x-(1-ratio)*.5*width,y+.008,z-.003,.48*width*ratio,.045,.055,TEAM[side]);}
-    drawUnit(u,match,ghostAlpha){const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,yaw=(u.heading||-Math.PI/2)+Math.PI/2,s=Math.max(.74,card.size/34),fly=u.flying?.58+Math.sin(match.time*5+String(u.id).length)*.08:0,bob=Math.sin(u.walk||0)*.035,o=[x,.22+fly+bob,z],a=ghostAlpha==null?(u.deploy>0?.64:1):ghostAlpha,flash=Math.min(1,(u.hit||0)*6),attack=(u.attackAnim||0)>0?Math.sin((1-u.attackAnim/.24)*Math.PI):0;this.shadow(x,z,.28+s*.22,u.flying?.18:.32);if(MODEL_GROUPS.golem.includes(card.id))this.drawGolem(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.beast.includes(card.id))this.drawBeast(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.flying.includes(card.id))this.drawFlying(card,u,o,yaw,s,attack,a,flash);else this.drawFighter(card,u,o,yaw,s,attack,a,flash);if(ghostAlpha==null){this.hpBar(x,o[1]+.95*s,z,u.hp/u.maxHp,u.side,.46+s*.16);if(u.slow>0)this.drawMesh('ring',x,.06,z,.34+s*.16,1,.34+s*.16,'#ef9de9',0,0,0,.7);}}
-    drawFighter(card,u,o,yaw,s,attack,a,flash){const team=TEAM[u.side],dark='#243048',stride=Math.sin(u.walk||0)*.28;this.part('cylinder',o,[0,.28,0],[.31*s,.38*s,.27*s],card.color,yaw,0,0,a,flash);this.part('sphere',o,[0,.76,0],[.25*s,.27*s,.25*s],'#d9ad7b',yaw,0,0,a,flash);this.part('sphere',o,[0,.88,.01],[.28*s,.13*s,.27*s],dark,yaw,0,0,a,flash);this.part('box',o,[0,.39,-.25],[.32*s,.08*s,.07*s],team,yaw,0,0,a);this.part('cylinder',o,[-.15,-.09+stride*.07,.03],[.09*s,.3*s,.09*s],dark,yaw,stride,0,a);this.part('cylinder',o,[.15,-.09-stride*.07,.03],[.09*s,.3*s,.09*s],dark,yaw,-stride,0,a);this.part('cylinder',o,[-.35,.3,-.02],[.075*s,.27*s,.075*s],'#d9ad7b',yaw,-.15,0,a);this.part('cylinder',o,[.35,.32,-.08-attack*.15],[.075*s,.31*s,.075*s],'#d9ad7b',yaw,-.35-attack*.7,0,a);if(card.id==='sunshot'||card.id==='twinbow'){this.part('cylinder',o,[.52,.34,-.22],[.035*s,.38*s,.035*s],'#e7c07b',yaw,Math.PI/2,0,a);this.part('cone',o,[.5,.34,-.55],[.055*s,.18*s,.055*s],'#f3e4bd',yaw,Math.PI/2,0,a);if(card.id==='twinbow')this.part('cylinder',o,[-.47,.33,-.22],[.035*s,.34*s,.035*s],'#e7c07b',yaw,Math.PI/2,0,a);}else if(card.id==='lantern'){this.part('cylinder',o,[.45,.42,0],[.035*s,.55*s,.035*s],'#8c673e',yaw);this.part('sphere',o,[.45,.83,0],[.15*s,.2*s,.15*s],'#ffe284',yaw,0,0,a);}else{this.part('box',o,[-.47,.32,-.08],[.25*s,.29*s,.07*s],'#45647d',yaw,0,0,a);this.part('box',o,[.45,.31,-.42-attack*.17],[.055*s,.08*s,.38*s],'#d9e5e1',yaw,-attack*.6,0,a);}}
-    drawGolem(card,u,o,yaw,s,attack,a,flash){const team=TEAM[u.side],stone=card.id==='ironroot'?'#746a59':'#487154';this.part('box',o,[0,.38,0],[.5*s,.48*s,.4*s],stone,yaw,0,0,a,flash);this.part('box',o,[0,.88,-.02],[.35*s,.26*s,.32*s],card.color,yaw,0,0,a,flash);this.part('box',o,[-.55,.35,-attack*.18],[.2*s,.38*s,.2*s],stone,yaw,-attack*.6,0,a);this.part('box',o,[.55,.35,-attack*.18],[.2*s,.38*s,.2*s],stone,yaw,-attack*.6,0,a);this.part('box',o,[-.25,-.16,.02],[.22*s,.28*s,.25*s],'#313b3e',yaw);this.part('box',o,[.25,-.16,.02],[.22*s,.28*s,.25*s],'#313b3e',yaw);this.part('box',o,[-.14,.9,-.31],[.055*s,.045*s,.03*s],team,yaw,0,0,a);this.part('box',o,[.14,.9,-.31],[.055*s,.045*s,.03*s],team,yaw,0,0,a);if(card.id==='mossguard')for(const q of [[-.35,.83,.1],[.34,.61,.21],[.1,1.12,.08]])this.part('sphere',o,q,[.13*s,.16*s,.13*s],'#6d9d5a',yaw,0,0,a);}
-    drawBeast(card,u,o,yaw,s,attack,a,flash){const team=TEAM[u.side],body=card.color,dark='#34313b',large=card.id==='emberox'?1.28:card.id==='nibblers'?.62:1;this.part('sphere',o,[0,.32,0],[.52*s*large,.4*s*large,.65*s*large],body,yaw,0,0,a,flash);this.part('sphere',o,[0,.5,-.52*s*large],[.38*s*large,.34*s*large,.38*s*large],dark,yaw,0,0,a,flash);for(const x of [-.3,.3])for(const z of [-.25,.25])this.part('cylinder',o,[x*s*large,-.1,z*s*large],[.07*s*large,.27*s*large,.07*s*large],dark,yaw,0,0,a);this.part('sphere',o,[-.13*s*large,.58,-.82*s*large],[.045*s,.045*s,.035*s],team,yaw,0,0,a);this.part('sphere',o,[.13*s*large,.58,-.82*s*large],[.045*s,.045*s,.035*s],team,yaw,0,0,a);if(card.id==='emberox'){this.part('cone',o,[-.32*s,.72,-.62*s],[.12*s,.34*s,.12*s],'#ead59b',yaw,0,.65,a);this.part('cone',o,[.32*s,.72,-.62*s],[.12*s,.34*s,.12*s],'#ead59b',yaw,0,-.65,a);}if(card.id==='ripplefox')for(let k=0;k<3;k++)this.part('sphere',o,[.45*s,.26,.35*s+k*.23],[.18*s,.16*s,.3*s],k===2?'#e5f0e5':body,yaw,.35,0,a);}
-    drawFlying(card,u,o,yaw,s,attack,a,flash){const team=TEAM[u.side],body=card.color,dark='#28334b',flap=Math.sin((u.walk||0)+performance.now()*.012)*.45;this.part('sphere',o,[0,.35,0],[.34*s,.42*s,.42*s],body,yaw,0,0,a,flash);this.part('sphere',o,[0,.64,-.2],[.25*s,.25*s,.25*s],dark,yaw,0,0,a,flash);this.part('sphere',o,[-.09,.69,-.43],[.04*s,.04*s,.035*s],team,yaw,0,0,a);this.part('sphere',o,[.09,.69,-.43],[.04*s,.04*s,.035*s],team,yaw,0,0,a);this.part('box',o,[-.48,.35,.02],[.43*s,.055*s,.28*s],body,yaw,0,flap,a);this.part('box',o,[.48,.35,.02],[.43*s,.055*s,.28*s],body,yaw,0,-flap,a);if(card.id==='ramblebee'){this.part('box',o,[0,.35,-.12],[.36*s,.07*s,.44*s],'#4a3826',yaw);this.part('box',o,[0,.35,.15],[.36*s,.07*s,.13*s],'#f3c64d',yaw);}if(card.id==='boltfinch')this.part('cone',o,[0,.64,-.48],[.12*s,.22*s,.12*s],'#ebe1ad',yaw,Math.PI/2);if(card.id==='cloudrays')this.part('cone',o,[0,.35,.52],[.25*s,.35*s,.25*s],body,yaw,Math.PI/2);}
+    drawUnit(u,match,ghostAlpha){const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,yaw=(u.heading||-Math.PI/2)+Math.PI/2,s=Math.max(.74,card.size/34),fly=u.flying?.58+Math.sin(match.time*5+String(u.id).length)*.08:0,bob=Math.sin(u.walk||0)*.035,o=[x,.22+fly+bob,z],a=ghostAlpha==null?(u.deploy>0?.64:1):ghostAlpha,flash=Math.min(1,(u.hit||0)*6),attack=(u.attackAnim||0)>0?Math.sin((1-u.attackAnim/.24)*Math.PI):0;this.shadow(x,z,.28+s*.22,u.flying?.18:.32);if(MODEL_GROUPS.golem.includes(card.id))this.drawGolem(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.beast.includes(card.id))this.drawBeast(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.flying.includes(card.id))this.drawFlying(card,u,o,yaw,s,attack,a,flash);else this.drawFighter(card,u,o,yaw,s,attack,a,flash);this.drawTeamMark(o,yaw,s,u.side,a,!!u.flying);if(ghostAlpha==null){this.hpBar(x,o[1]+1.02*s,z,u.hp/u.maxHp,u.side,.46+s*.16);if(u.slow>0)this.drawMesh('ring',x,.06,z,.34+s*.16,1,.34+s*.16,'#ef9de9',0,0,0,.7);}}
+    drawTeamMark(o,yaw,s,side,a,flying){
+      const team=TEAM[side],light=TEAM_LIGHT[side],height=flying?.46:.58;
+      this.part('box',o,[0,height,.31*s],[.19*s,.18*s,.035*s],team,yaw,0,Math.PI/4,a);
+      this.part('box',o,[0,height,.325*s],[.07*s,.07*s,.04*s],light,yaw,0,Math.PI/4,a);
+    }
+    drawFighter(card,u,o,yaw,s,attack,a,flash){
+      const team=TEAM[u.side],light=TEAM_LIGHT[u.side],dark='#243048',skin='#d9ad7b',stride=Math.sin(u.walk||0)*.28,lean=attack*.11;
+      this.part('cylinder',o,[0,.28,-lean],[.31*s,.38*s,.27*s],card.color,yaw,-attack*.12,0,a,flash);
+      this.part('sphere',o,[0,.76,-lean],[.25*s,.27*s,.25*s],skin,yaw,0,0,a,flash);
+      this.part('sphere',o,[0,.89,.02],[.29*s,.14*s,.28*s],dark,yaw,0,0,a,flash);
+      // Eyes and a nose remain visible in the three-quarter camera.
+      for(const x of [-.09,.09])this.part('sphere',o,[x,.78,-.235],[.035*s,.045*s,.025*s],light,yaw,0,0,a);
+      this.part('cone',o,[0,.69,-.265],[.045*s,.075*s,.045*s],skin,yaw,Math.PI/2,0,a);
+      this.part('box',o,[0,.39,-.25],[.32*s,.08*s,.07*s],team,yaw,0,0,a);
+      this.part('cylinder',o,[-.15,-.09+stride*.07,.03],[.09*s,.3*s,.09*s],dark,yaw,stride,0,a);
+      this.part('cylinder',o,[.15,-.09-stride*.07,.03],[.09*s,.3*s,.09*s],dark,yaw,-stride,0,a);
+      this.part('box',o,[-.15,-.34-stride*.05,-.10],[.14*s,.06*s,.20*s],'#392d30',yaw);
+      this.part('box',o,[.15,-.34+stride*.05,-.10],[.14*s,.06*s,.20*s],'#392d30',yaw);
+      this.part('cylinder',o,[-.35,.3,-.02],[.075*s,.27*s,.075*s],skin,yaw,-.15,0,a);
+      this.part('cylinder',o,[.35,.32,-.08-attack*.15],[.075*s,.31*s,.075*s],skin,yaw,-.35-attack*.7,0,a);
+      if(card.id==='sunshot'){
+        this.part('cone',o,[0,1.02,.08],[.24*s,.28*s,.24*s],'#e55f45',yaw,0,0,a);
+        this.part('ring',o,[.50,.38,-.20],[.30*s,.38*s,.30*s],'#e7c07b',yaw,Math.PI/2,0,a);
+        this.part('cylinder',o,[-.28,.52,.25],[.12*s,.33*s,.12*s],'#74482f',yaw,-.2,0,a);
+      }else if(card.id==='twinbow'){
+        for(const x of [-.48,.48]){this.part('ring',o,[x,.38,-.20],[.24*s,.34*s,.24*s],'#e7c07b',yaw,Math.PI/2,0,a);this.part('cone',o,[x,.36,-.56-attack*.10],[.05*s,.17*s,.05*s],'#f3e4bd',yaw,Math.PI/2,0,a);}
+        this.part('box',o,[0,.92,.05],[.32*s,.055*s,.30*s],'#f49acf',yaw,0,.12,a);
+      }else if(card.id==='lantern'){
+        this.part('cylinder',o,[.45,.42,0],[.035*s,.58*s,.035*s],'#8c673e',yaw);
+        this.part('box',o,[.45,.83,-.02],[.15*s,.20*s,.15*s],'#b87c38',yaw,0,0,a);
+        this.part('sphere',o,[.45,.83,-.02],[.12*s,.16*s,.12*s],'#ffe284',yaw,0,0,a,.78);
+        this.part('cone',o,[0,1.03,.02],[.23*s,.24*s,.23*s],'#ffe88b',yaw,0,0,a);
+      }else{
+        this.part('box',o,[-.47,.32,-.08],[.25*s,.29*s,.07*s],'#45647d',yaw,0,0,a);
+        this.part('box',o,[.45,.31,-.42-attack*.17],[.055*s,.08*s,.38*s],'#d9e5e1',yaw,-attack*.6,0,a);
+        this.part('cone',o,[0,1.08,.02],[.08*s,.25*s,.08*s],team,yaw,0,0,a);
+      }
+    }
+    drawGolem(card,u,o,yaw,s,attack,a,flash){
+      const team=TEAM[u.side],light=TEAM_LIGHT[u.side],iron=card.id==='ironroot',stone=iron?'#746a59':'#487154';
+      this.part('box',o,[0,.38,-attack*.10],[.5*s,.48*s,.4*s],stone,yaw,-attack*.10,0,a,flash);
+      this.part(iron?'box':'sphere',o,[0,.88,-.04],[.36*s,.27*s,.33*s],card.color,yaw,0,0,a,flash);
+      this.part('box',o,[-.55,.35,-attack*.24],[.2*s,.38*s,.2*s],stone,yaw,-attack*.72,0,a);
+      this.part('box',o,[.55,.35,-attack*.24],[.2*s,.38*s,.2*s],stone,yaw,-attack*.72,0,a);
+      this.part('box',o,[-.25,-.16,.02],[.22*s,.28*s,.25*s],'#313b3e',yaw);
+      this.part('box',o,[.25,-.16,.02],[.22*s,.28*s,.25*s],'#313b3e',yaw);
+      for(const x of [-.14,.14])this.part('box',o,[x,.90,-.34],[.055*s,.05*s,.03*s],light,yaw,0,0,a);
+      if(iron){
+        for(const x of [-.37,0,.37])this.part('box',o,[x,.76,.28],[.13*s,.35*s,.10*s],'#384449',yaw,0,.18*x,a);
+        this.part('cylinder',o,[0,.40,-.42],[.26*s,.06*s,.26*s],team,yaw,Math.PI/2,0,a);
+        for(const x of [-.50,.50])this.part('cone',o,[x,1.08,.04],[.14*s,.22*s,.14*s],'#9e9275',yaw,0,x,a);
+      }else{
+        for(const q of [[-.35,.83,.1],[.34,.61,.21],[.1,1.12,.08],[-.45,.35,-.12]])this.part('sphere',o,q,[.13*s,.16*s,.13*s],'#79a85d',yaw,0,0,a);
+        this.part('cone',o,[0,1.20,.04],[.16*s,.28*s,.16*s],'#596f42',yaw,0,0,a);
+      }
+    }
+    drawBeast(card,u,o,yaw,s,attack,a,flash){
+      const team=TEAM[u.side],light=TEAM_LIGHT[u.side],body=card.color,dark='#34313b',large=card.id==='emberox'?1.28:card.id==='nibblers'?.62:1,pounce=attack*.18;
+      this.part('sphere',o,[0,.32,-pounce],[.52*s*large,.4*s*large,.65*s*large],body,yaw,-attack*.10,0,a,flash);
+      this.part('sphere',o,[0,.5,-.52*s*large-pounce],[.38*s*large,.34*s*large,.38*s*large],dark,yaw,0,0,a,flash);
+      for(const x of [-.3,.3])for(const z of [-.25,.25])this.part('cylinder',o,[x*s*large,-.1,z*s*large],[.07*s*large,.27*s*large,.07*s*large],dark,yaw,attack*(z<0?-.3:.2),0,a);
+      for(const x of [-.13,.13])this.part('sphere',o,[x*s*large,.58,-.82*s*large-pounce],[.05*s,.055*s,.035*s],light,yaw,0,0,a);
+      if(card.id==='emberox'){
+        this.part('box',o,[0,.46,.06],[.54*s,.12*s,.46*s],team,yaw,0,0,a);
+        this.part('cone',o,[-.32*s,.72,-.62*s],[.12*s,.34*s,.12*s],'#ead59b',yaw,0,.65,a);
+        this.part('cone',o,[.32*s,.72,-.62*s],[.12*s,.34*s,.12*s],'#ead59b',yaw,0,-.65,a);
+        this.part('cylinder',o,[0,.51,-.85*s],[.12*s,.08*s,.12*s],'#e99961',yaw,Math.PI/2,0,a);
+      }else if(card.id==='ripplefox'){
+        this.part('cone',o,[-.22,.82,-.46],[.14*s,.25*s,.14*s],body,yaw,0,-.25,a);
+        this.part('cone',o,[.22,.82,-.46],[.14*s,.25*s,.14*s],body,yaw,0,.25,a);
+        for(let k=0;k<3;k++)this.part('sphere',o,[.45*s,.26,.35*s+k*.23],[.18*s,.16*s,.3*s],k===2?'#e5f0e5':body,yaw,.35,0,a);
+        this.part('ring',o,[0,.08,-.72],[.36*s,.36*s,.36*s],team,yaw,0,0,a,.75);
+      }else{
+        this.part('cone',o,[-.20,.82,-.42],[.14*s,.25*s,.14*s],body,yaw,0,-.35,a);
+        this.part('cone',o,[.20,.82,-.42],[.14*s,.25*s,.14*s],body,yaw,0,.35,a);
+        this.part('box',o,[0,.40,-.78],[.28*s,.08*s,.05*s],team,yaw,0,0,a);
+        this.part('cone',o,[0,.33,.58],[.18*s,.32*s,.18*s],body,yaw,Math.PI/2,0,a);
+      }
+    }
+    drawFlying(card,u,o,yaw,s,attack,a,flash){
+      const team=TEAM[u.side],light=TEAM_LIGHT[u.side],body=card.color,dark='#28334b',flap=Math.sin((u.walk||0)+performance.now()*.012)*.45,thrust=attack*.16;
+      this.part(card.id==='cloudrays'?'box':'sphere',o,[0,.35,-thrust],[.34*s,.42*s,.42*s],body,yaw,-attack*.12,0,a,flash);
+      this.part('sphere',o,[0,.64,-.20-thrust],[.25*s,.25*s,.25*s],dark,yaw,0,0,a,flash);
+      for(const x of [-.09,.09])this.part('sphere',o,[x,.69,-.43-thrust],[.045*s,.05*s,.035*s],light,yaw,0,0,a);
+      this.part('box',o,[-.48,.35,.02],[.43*s,.055*s,.28*s],body,yaw,0,flap,a);
+      this.part('box',o,[.48,.35,.02],[.43*s,.055*s,.28*s],body,yaw,0,-flap,a);
+      if(card.id==='ramblebee'){
+        for(const z of [-.24,.02,.28])this.part('box',o,[0,.35,z],[.36*s,.07*s,.10*s],z===.02?'#f3c64d':'#4a3826',yaw);
+        this.part('cone',o,[-.17,.83,-.18],[.04*s,.18*s,.04*s],dark,yaw,0,-.25,a);
+        this.part('cone',o,[.17,.83,-.18],[.04*s,.18*s,.04*s],dark,yaw,0,.25,a);
+      }else if(card.id==='boltfinch'){
+        this.part('cone',o,[0,.64,-.50-thrust],[.12*s,.24*s,.12*s],'#ebe1ad',yaw,Math.PI/2);
+        this.part('cone',o,[0,.56,.38],[.20*s,.32*s,.20*s],'#8b71df',yaw,Math.PI/2);
+        this.part('box',o,[0,.90,-.03],[.06*s,.22*s,.09*s],team,yaw,0,0,a);
+      }else if(card.id==='cloudrays'){
+        this.part('cone',o,[0,.35,.52],[.25*s,.35*s,.25*s],body,yaw,Math.PI/2);
+        this.part('box',o,[0,.42,-.38],[.44*s,.07*s,.18*s],team,yaw,0,0,a);
+        for(const x of [-.28,.28])this.part('cone',o,[x,.34,.20],[.10*s,.25*s,.10*s],light,yaw,Math.PI/2,x,a,.65);
+      }else{
+        this.part('box',o,[0,.42,-.33],[.34*s,.08*s,.18*s],team,yaw,0,0,a);
+        for(const x of [-.48,.48])this.part('cone',o,[x,.34,.12],[.12*s,.28*s,.12*s],light,yaw,Math.PI/2,0,a,.55);
+        this.part('cone',o,[0,.36,.52],[.14*s,.28*s,.14*s],body,yaw,Math.PI/2);
+      }
+    }
     drawProjectile(p){const x=(p.x-500)/115,z=(p.y-700)/100,color=p.color||'#fff0b0';for(let i=1;i<=3;i++)this.drawMesh('sphere',x,.65+i*.06,z+i*.07,.04*i,.04*i,.04*i,color,0,0,0,.18);this.drawMesh('sphere',x,.82,z,p.splash?.15:.105,p.splash?.15:.105,p.splash?.15:.105,'#fff2c7');}
     drawEffect(e){const x=(e.x-500)/115,z=(e.y-700)/100,life=Math.max(0,e.life/e.maxLife),radius=(e.radius||40)/108;if(e.kind==='rubble'||e.kind==='defeat'){for(let i=0;i<7;i++){const a=i*2.17,d=(1-life)*radius*1.8;this.drawMesh('box',x+Math.cos(a)*d,.12+(1-life)*.25,z+Math.sin(a)*d,.08+.08*life,.07+.06*life,.08+.08*life,e.color||'#7f7466',a,a*.3,a*.4,life);}}else{this.drawMesh('ring',x,.09,z,radius*(1.15-life*.25),1,radius*(1.15-life*.25),e.color||'#fff',0,0,0,life*.75);for(let i=0;i<8;i++){const a=i/8*TAU,d=radius*(1-life*.45);this.drawMesh('sphere',x+Math.cos(a)*d,.12+(1-life)*.45,z+Math.sin(a)*d,.045+.05*life,.045+.05*life,.045+.05*life,e.color||'#fff',0,0,0,life*.8);}}}
     drawGhost(preview,match){const card=this.engine.cardMap[preview.id];if(card.kind!=='unit')return;this.drawUnit({id:'ghost',cardId:card.id,side:'player',x:preview.world.x,y:preview.world.y,hp:card.hp,maxHp:card.hp,heading:-Math.PI/2,walk:match.time*5,attackAnim:0,hit:0,deploy:0,flying:!!card.flying,slow:0},match,.62);}
