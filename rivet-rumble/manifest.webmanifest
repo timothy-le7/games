@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Rivet Rumble",
+  "short_name": "Rivet Rumble",
+  "description": "A fully local 3D mechanical arena game with fair offline CPU crews.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

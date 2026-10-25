@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#132441">
+  <meta name="application-name" content="Pulse Foundry">
+  <meta name="description" content="Pulse Foundry — an original one-touch 3D rhythm platformer with optional local CPU rivals.">
+  <title>Pulse Foundry</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+</head>
+<body>
+  <main id="app">
+    <section id="home" class="screen home" aria-labelledby="title">
+      <div class="brand" aria-hidden="true"><i></i><b></b><i></i></div>
+      <p class="eyebrow">KINETIC WORKS</p>
+      <h1 id="title">Pulse Foundry</h1>
+      <p class="tagline">Jump the beat. Hold the glide. Outrun the local CPU crew.</p>
+      <div id="mode-tabs" class="mode-tabs" aria-label="Play style">
+        <button type="button" data-mode="solo" aria-pressed="true"><b>Solo</b><span>Pure course run</span></button>
+        <button type="button" data-mode="rivals"><b>CPU Race</b><span>Two local ghost rivals</span></button>
+        <button type="button" data-mode="practice"><b>Practice</b><span>Safe checkpoints</span></button>
+      </div>
+      <div id="level-grid" class="level-grid" aria-label="Foundry courses"></div>
+      <button id="start" class="primary" type="button">Start Ignition Walk</button>
+      <button id="settings" class="quiet" type="button">Sound, motion &amp; local save</button>
+      <p class="save-copy">Records stay in this browser. Export a backup before changing device or Home Screen mode.</p>
+      <div class="site-actions"><button type="button" data-install-game>Install / offline help</button><a data-all-games href="../">All games</a></div>
+      <span data-game-offline-status class="offline" role="status">Offline status checks after the published game loads.</span>
+    </section>
+
+    <section id="battle" class="screen battle hidden" aria-label="Pulse Foundry course">
+      <header class="hud"><div><b id="course-name">Ignition Walk</b><span id="run-mode">Solo run</span></div><div class="readout"><b id="percent">0%</b><span id="best">BEST 0%</span></div><button id="pause" type="button" aria-label="Pause run">Ⅱ</button></header>
+      <div id="stage-shell">
+        <canvas id="stage" tabindex="0" aria-label="One-touch foundry course. Press and hold to jump or fly."></canvas>
+        <div id="section-callout" class="callout" role="status">PRESS TO JUMP</div>
+        <div id="rival-strip" class="rivals" aria-label="Race positions"></div>
+      </div>
+      <button id="pulse" class="pulse" type="button" aria-label="Jump or hold to fly"><span>PRESS / HOLD</span><small>Space · Arrow Up · touch</small></button>
+    </section>
+
+    <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-card"><p id="modal-kicker" class="eyebrow">PAUSED</p><h2 id="modal-title">Foundry paused</h2><div id="modal-body"></div><div id="modal-actions" class="modal-actions"></div></div></div>
+    <input id="import-file" class="visually-hidden" type="file" accept="application/json,.json">
+  </main>
+  <script src="engine.js"></script>
+  <script src="renderer.js"></script>
+  <script src="game.js"></script>
+<script data-games-pwa-runtime src="./game-pwa.js"></script>
+</body>
+</html>
