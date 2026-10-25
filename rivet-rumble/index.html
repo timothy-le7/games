@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="application-name" content="Rivet Rumble">
+  <meta name="theme-color" content="#0a1424">
+  <title>Rivet Rumble — local CPU arena</title>
+  <link rel="stylesheet" href="style.css">
+<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+</head>
+<body>
+  <main id="app">
+    <canvas id="arena" aria-label="Rivet Rumble 3D arena"></canvas>
+    <section id="hud" class="hud hidden" aria-label="Match status">
+      <div class="score-strip"><div><span class="team blue"></span><strong id="blueScore">0</strong><small>BLUE</small></div><div id="matchClock">1:18</div><div><strong id="redScore">0</strong><small>RED</small><span class="team red"></span></div></div>
+      <div class="player-readout"><div class="health"><i id="healthFill"></i></div><span id="ammoReadout">4 bolts</span><span id="specialReadout">Special charging</span></div>
+      <button id="pauseButton" class="round-button" type="button" aria-label="Pause match">Ⅱ</button>
+    </section>
+    <section id="controls" class="controls hidden" aria-label="Touch controls">
+      <div id="moveStick" class="stick-zone" aria-label="Move robot"><i></i></div>
+      <div id="aimPad" class="aim-zone" aria-label="Drag to aim and release to fire"><i></i></div>
+      <button id="quickFire" class="quick-fire" type="button" aria-label="Quick fire nearest visible rival">AUTO FIRE</button>
+      <button id="specialButton" class="special-button" type="button" aria-label="Use charged special">SPECIAL</button>
+    </section>
+    <section id="menu" class="panel menu-panel" aria-labelledby="menuTitle">
+      <p class="eyebrow">LOCAL CPU SPORT</p>
+      <h1 id="menuTitle">Rivet <em>Rumble</em></h1>
+      <p class="lede">Mechanical crews compete in a pocket-sized working foundry. Every rival here is an offline CPU using the same tools, walls, ammo and damage rules as you.</p>
+      <p class="tutorial"><strong>Hands on:</strong> move with the left thumb; drag the right thumb and release to fire. AUTO FIRE only targets a visible rival. Desktop: WASD/arrows + pointer, Space for Special.</p>
+      <div class="mode-row" id="modeRow" role="group" aria-label="Mode"></div>
+      <div class="choice-label">Choose a machine</div>
+      <div class="roster" id="roster" aria-label="Fighter roster"></div>
+      <div class="choice-label">Arena <span id="arenaName"></span></div>
+      <div class="arena-row" id="arenaRow" role="group" aria-label="Arena"></div>
+      <p id="fighterNote" class="fighter-note"></p>
+      <button id="startButton" class="start-button" type="button">Start Foundry Hold</button>
+      <div class="menu-actions"><button id="settingsButton" type="button">Settings &amp; saves</button><button data-install-game type="button">Install / offline help</button><a data-all-games href="../">All games</a></div>
+      <span data-game-offline-status class="offline-status" role="status"></span>
+      <p id="menuNotice" class="notice" role="status" aria-live="polite"></p>
+    </section>
+    <section id="pausePanel" class="panel modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <p class="eyebrow">MATCH PAUSED</p><h2 id="pauseTitle">Tools down.</h2><p id="pauseDetail">No simulation runs while paused.</p>
+      <div class="modal-actions"><button id="resumeButton" class="start-button" type="button">Resume</button><button id="quitButton" type="button">Save &amp; return to hangar</button></div>
+    </section>
+    <section id="settingsPanel" class="panel modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <p class="eyebrow">LOCAL WORKBENCH</p><h2 id="settingsTitle">Settings &amp; backups</h2>
+      <label class="toggle"><input id="soundToggle" type="checkbox"> Synthesized sound feedback</label>
+      <label class="toggle"><input id="motionToggle" type="checkbox"> Reduced motion</label>
+      <p>Progress stays in this browser only. Export a backup before clearing browser data or moving between Safari and a Home Screen app.</p>
+      <div class="modal-actions"><button id="saveButton" type="button">Save now</button><button id="exportButton" type="button">Export backup</button><button id="importButton" type="button">Import backup</button><button id="closeSettings" type="button">Back</button></div>
+      <p id="settingsNotice" class="notice" role="status" aria-live="polite"></p>
+    </section>
+    <section id="resultPanel" class="panel modal hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+      <p id="resultKicker" class="eyebrow">MATCH COMPLETE</p><h2 id="resultTitle">Result</h2><p id="resultDetail"></p><div class="modal-actions"><button id="againButton" class="start-button" type="button">Run it again</button><button id="hangarButton" type="button">Back to hangar</button></div>
+    </section>
+    <input id="importFile" type="file" accept="application/json,.json" hidden>
+  </main>
+  <script src="engine.js"></script><script src="renderer.js"></script><script src="game.js"></script>
+<script data-games-pwa-runtime src="./game-pwa.js"></script>
+</body>
+</html>
