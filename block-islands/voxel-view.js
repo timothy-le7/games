@@ -241,7 +241,7 @@
     `;
     const fragment = `
       precision mediump float;
-      uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay; uniform float uBiome;
+      uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay; uniform float uBiome; uniform float uOpacity;
       varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial; varying float vOcclusion;
       vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
       float biome(float id){return 1.0-step(.25,abs(uBiome-id));}
@@ -266,7 +266,7 @@
         if(abs(material-13.0)<.5) color+=vec3(.36,.075,.012)*(.72+.28*sin(uTime*2.4+vWorld.x));
         float alpha=1.0;
         if(uOverlay>0.0){ float crack=max(step(.94,fract(vUv.x*13.0+vUv.y*5.0)),step(.96,fract(vUv.y*17.0-vUv.x*7.0))); color=mix(color,vec3(.06,.08,.10),crack*uOverlay); alpha=.12+.36*uOverlay; }
-        gl_FragColor=vec4(color,alpha);
+        gl_FragColor=vec4(color,alpha*uOpacity);
       }
     `;
     const skyVertex = 'attribute vec2 aPosition; varying vec2 vUv; void main(){vUv=aPosition*.5+.5;gl_Position=vec4(aPosition,0.,1.);}';
@@ -351,7 +351,7 @@
       const source = shaderSources();
       programs = { world: makeProgram(gl, source.vertex, source.fragment, 'world'), sky: makeProgram(gl, source.skyVertex, source.skyFragment, 'sky'), line: makeProgram(gl, source.lineVertex, source.lineFragment, 'line') };
       locations = {
-        world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), occlusion: gl.getAttribLocation(programs.world, 'aOcclusion'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), biome: gl.getUniformLocation(programs.world, 'uBiome'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
+        world: { position: gl.getAttribLocation(programs.world, 'aPosition'), normal: gl.getAttribLocation(programs.world, 'aNormal'), material: gl.getAttribLocation(programs.world, 'aMaterial'), uv: gl.getAttribLocation(programs.world, 'aUv'), occlusion: gl.getAttribLocation(programs.world, 'aOcclusion'), mvp: gl.getUniformLocation(programs.world, 'uMvp'), model: gl.getUniformLocation(programs.world, 'uModel'), materialOverride: gl.getUniformLocation(programs.world, 'uMaterialOverride'), camera: gl.getUniformLocation(programs.world, 'uCamera'), daylight: gl.getUniformLocation(programs.world, 'uDaylight'), time: gl.getUniformLocation(programs.world, 'uTime'), overlay: gl.getUniformLocation(programs.world, 'uOverlay'), opacity: gl.getUniformLocation(programs.world, 'uOpacity'), biome: gl.getUniformLocation(programs.world, 'uBiome'), atlas: gl.getUniformLocation(programs.world, 'uAtlas') },
         sky: { position: gl.getAttribLocation(programs.sky, 'aPosition'), daylight: gl.getUniformLocation(programs.sky, 'uDaylight'), time: gl.getUniformLocation(programs.sky, 'uTime'), biome: gl.getUniformLocation(programs.sky, 'uBiome') },
         line: { position: gl.getAttribLocation(programs.line, 'aPosition'), mvp: gl.getUniformLocation(programs.line, 'uMvp'), model: gl.getUniformLocation(programs.line, 'uModel'), color: gl.getUniformLocation(programs.line, 'uColor') }
       };
@@ -407,13 +407,13 @@
       return { width: pixelWidth, height: pixelHeight, dpr: capped, capped: capped < requested };
     }
     function useWorld(mvp, camera, daylight, time, biome) {
-      const location = locations.world; gl.useProgram(programs.world); bindWorldAttributes(worldBuffer); gl.uniformMatrix4fv(location.mvp, false, mvp); gl.uniform3fv(location.camera, camera); gl.uniform1f(location.daylight, daylight); gl.uniform1f(location.time, time); gl.uniform1f(location.biome, biome); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, atlas); gl.uniform1i(location.atlas, 0);
+      const location = locations.world; gl.useProgram(programs.world); bindWorldAttributes(worldBuffer); gl.uniformMatrix4fv(location.mvp, false, mvp); gl.uniform3fv(location.camera, camera); gl.uniform1f(location.daylight, daylight); gl.uniform1f(location.time, time); gl.uniform1f(location.biome, biome); gl.uniform1f(location.opacity, 1); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, atlas); gl.uniform1i(location.atlas, 0);
     }
-    function drawShape(mvp, camera, daylight, time, buffer, vertices, model, material, overlay) {
-      const location = locations.world; bindWorldAttributes(buffer); gl.uniformMatrix4fv(location.model, false, model); gl.uniform1f(location.materialOverride, materialIndex(material)); gl.uniform1f(location.overlay, Number.isFinite(overlay) ? overlay : 0); gl.drawArrays(gl.TRIANGLES, 0, vertices); stats.drawCalls++;
+    function drawShape(mvp, camera, daylight, time, buffer, vertices, model, material, overlay, opacity = 1) {
+      const location = locations.world; bindWorldAttributes(buffer); gl.uniformMatrix4fv(location.model, false, model); gl.uniform1f(location.materialOverride, materialIndex(material)); gl.uniform1f(location.overlay, Number.isFinite(overlay) ? overlay : 0); gl.uniform1f(location.opacity, opacity); gl.drawArrays(gl.TRIANGLES, 0, vertices); stats.drawCalls++;
     }
-    function drawCube(mvp, camera, daylight, time, model, material, overlay) {
-      drawShape(mvp, camera, daylight, time, cubeBuffer, 36, model, material, overlay);
+    function drawCube(mvp, camera, daylight, time, model, material, overlay, opacity = 1) {
+      drawShape(mvp, camera, daylight, time, cubeBuffer, 36, model, material, overlay, opacity);
     }
     function drawGroundShadow(mvp, camera, daylight, time, x, y, z, radius) {
       const model = new Float32Array([radius, 0, 0, 0, 0, 1, 0, 0, 0, 0, radius, 0, x, y + .018, z, 1]);
@@ -458,11 +458,12 @@
     }
     function drawPlayer(mvp, camera, daylight, time, player) {
       if (!player || !Number.isFinite(player.x) || !Number.isFinite(player.y) || !Number.isFinite(player.z)) return;
+      const opacity = clamp(Number.isFinite(player.opacity) ? player.opacity : 1, .1, 1);
       const x = player.x, y = player.y, z = player.z, yaw = Number(player.heading) || 0, stride = player.walk ? Math.sin(player.walk * Math.PI * 2) * .42 : 0, swing = clamp(Number(player.swing) || 0, 0, 1), gaze = forward(yaw, 0), side = normalize(cross(gaze, [0, 1, 0])), up = [0, 1, 0];
       const offset = (origin, vector, amount) => [origin[0] + vector[0] * amount, origin[1] + vector[1] * amount, origin[2] + vector[2] * amount];
       const box = (center, right, vertical, front, scale, material) => {
         const base = [center[0] - right[0] * scale[0] / 2 - vertical[0] * scale[1] / 2 - front[0] * scale[2] / 2, center[1] - right[1] * scale[0] / 2 - vertical[1] * scale[1] / 2 - front[1] * scale[2] / 2, center[2] - right[2] * scale[0] / 2 - vertical[2] * scale[1] / 2 - front[2] * scale[2] / 2];
-        drawCube(mvp, camera, daylight, time, modelBasis(base, right, vertical, front, scale), material, 0);
+        drawCube(mvp, camera, daylight, time, modelBasis(base, right, vertical, front, scale), material, 0, opacity);
       };
       const limb = (pivot, angle, length, width, material) => {
         const vertical = normalize([up[0] * Math.cos(angle) + gaze[0] * Math.sin(angle), Math.cos(angle), up[2] * Math.cos(angle) + gaze[2] * Math.sin(angle)]), front = normalize(cross(vertical, side));
@@ -472,6 +473,7 @@
       // Original field explorer: a planted contact shadow, navy work clothes,
       // rust scarf and leather pack. Limbs pivot from the actual player body.
       drawGroundShadow(mvp, camera, daylight, time, x, y, z, .44);
+      if (opacity < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); }
       const leftHip = offset([x, y + .50, z], side, -.10), rightHip = offset([x, y + .50, z], side, .10);
       limb(leftHip, stride, .50, .18, 'leather'); limb(rightHip, -stride, .50, .18, 'leather');
       box([x, y + .77, z], side, up, gaze, [.54, .54, .40], 'cloth');
@@ -491,6 +493,7 @@
         box(shaftCenter, side, rightArm.vertical, rightArm.front, [.10, .54, .10], 'wood');
         box(offset(glove, rightArm.vertical, .48), side, rightArm.vertical, rightArm.front, [.30, .14, .18], player.tool === 'iron' ? 'iron' : player.tool === 'stone' ? 'stone' : 'wood');
       } else if (player.held) box(offset(glove, gaze, .14), side, up, gaze, [.27, .27, .27], player.held);
+      if (opacity < 1) { gl.depthMask(true); gl.disable(gl.BLEND); }
     }
     function drawEffects(mvp, camera, daylight, time, effects) {
       for (const effect of effects || []) {

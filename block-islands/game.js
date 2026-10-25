@@ -3,13 +3,16 @@
   'use strict';
   const R = window.BlockIslandsRules;
   const V = window.BlockIslandsVoxel;
+  const P = window.BlockIslandsBody;
   const KEY = 'games:block-islands:v1';
   const PREF_KEY = KEY + ':prefs';
   const $ = id => document.getElementById(id);
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const clone = value => JSON.parse(JSON.stringify(value));
   const canvas = $('world'), overlay = $('overlay'), panel = $('panel');
-  const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+  const motionAllowed = () => prefs.motion && !reducedMotion.matches;
+  let renderNeeded = true;
   const EYE = 1.58, RADIUS = .28, BODY = 1.68;
   let state, world, profiles, activeMode = 'campaign', selectedBlock = 'plank';
   let renderer = null, blocks = new Map(), renderBlocks = [], worldRevision = 0;
@@ -17,6 +20,8 @@
   let target = null, running = true, previousStageComplete = false, completionOpen = false, lastRenderCamera = { mode: 'third', distance: 0, collision: false };
   let saveTimer = 0, lastSavedAt = performance.now(), lastTime = performance.now(), lastTargetAt = 0;
   let mineHold = null, mining = 0, audioContext = null, lastDamage = 0, toolSwingUntil = 0, feedbackTimer = 0;
+  let jumpUntil = 0, lastGroundedAt = -Infinity;
+  let followChoice = 0, followPosition = null, followTime = 0;
   const effects = [];
   const input = { joy: { x: 0, y: 0, pointer: null }, look: null, keys: new Set() };
   let prefs = readPrefs();
@@ -30,6 +35,8 @@
   }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (_) {} }
   function applyPrefs() {
+    renderNeeded = true;
+    document.documentElement.classList.toggle('motion-reduced', !motionAllowed());
     // Keep the base 48px round actions at the 44px phone target minimum.
     // Older .8 preferences migrate up instead of shrinking their own controls.
     document.documentElement.style.setProperty('--action-scale', String(Math.max(44 / 48, prefs.buttonSize)));
@@ -53,7 +60,7 @@
     return next;
   }
   function syncProfile() { if (state && profiles) profiles[activeMode] = clone(state); }
-  function packed() { syncProfile(); return { format: 'block-islands-save', version: R.SAVE_VERSION, payload: { activeMode, camera: prefs.camera, campaign: profiles.campaign, creative: profiles.creative } }; }
+  function packed() { persistPose(); syncProfile(); return { format: 'block-islands-save', version: R.SAVE_VERSION, payload: { activeMode, camera: prefs.camera, campaign: profiles.campaign, creative: profiles.creative } }; }
   function validPacked(value) {
     if (!value || value.format !== 'block-islands-save' || value.version !== R.SAVE_VERSION) return null;
     const source = value.payload;
@@ -84,7 +91,7 @@
     catch (_) { try { if (old === null) localStorage.removeItem(name); else localStorage.setItem(name, old); } catch (_) {} return false; }
   }
   function durableSave() {
-    clearTimeout(saveTimer); saveTimer = 0; persistPose();
+    clearTimeout(saveTimer); saveTimer = 0;
     const text = JSON.stringify(packed());
     try {
       const currentText = localStorage.getItem(KEY), current = currentText && validPacked(JSON.parse(currentText)), backup = readStored(KEY + ':backup');
@@ -145,7 +152,7 @@
   function escape(text) { return String(text).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
   function button(id, text, cls) { return '<button id="' + id + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>'; }
   function bind(id, fn) { const node = $(id); if (node) node.addEventListener('click', fn); }
-  function open(html) { clearInputs(); panel.innerHTML = html; overlay.classList.add('open'); running = false; }
+  function open(html) { renderNeeded = true; clearInputs(); panel.innerHTML = html; overlay.classList.add('open'); running = false; }
   function close() { overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now(); }
 
   function welcome(recovered) {
@@ -167,11 +174,12 @@
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
   }
   function settings() {
-    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">These controls are kept only in this game’s preferences.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'));
+    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">These controls are kept only in this game’s preferences.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'));
     bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
     bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
     bind('sizeButton', () => { const sizes = [.92, 1, 1.1, 1.2, 1.28], index = sizes.indexOf(prefs.buttonSize); prefs.buttonSize = sizes[index < 0 || index === sizes.length - 1 ? 0 : index + 1]; savePrefs(); applyPrefs(); settings(); });
-    bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); settings(); }); bind('backMenu', menu);
+    bind('soundButton', () => { prefs.sound = !prefs.sound; savePrefs(); settings(); });
+    bind('motionButton', () => { prefs.motion = !prefs.motion; savePrefs(); applyPrefs(); settings(); }); bind('backMenu', menu);
   }
   function stages() {
     let cards = '';
@@ -341,6 +349,7 @@
   }
   function fluid(block) { return block && (block.material === 'water' || block.material === 'lava'); }
   function rebuildWorld() {
+    renderNeeded = true;
     populateTerrain(); worldRevision++;
     if (renderer) renderer.setWorld(renderBlocks, worldRevision);
     updateTarget();
@@ -383,9 +392,12 @@
       const size = worldSize(), arrival = camp ? null : findOpenArrival(), x = camp ? (wideCamp ? 10.5 : 1.5) : arrival ? arrival.x : clamp(state.player.x, .5, size - .5), z = camp ? (wideCamp ? 10.5 : 5.8) : arrival ? arrival.z : clamp(state.player.y, .5, size - .5);
       pose = { x, z, y: arrival ? arrival.y : Math.max(1, footingTopAt(Math.floor(x), Math.floor(z)) + 1) + EYE + .02, yaw: camp ? (wideCamp ? -1.57 : 0) : .15, pitch: camp ? -.04 : -.28, vy: 0, grounded: true };
     }
-    if (collides(pose.x, pose.y - EYE)) pose.y = Math.max(1, footingTopAt(Math.floor(pose.x), Math.floor(pose.z)) + 1) + EYE + .03;
+    const body = bodyPose();
+    P.recover(bodySolid, body); pose.y = body.y + EYE;
+    pose.grounded = P.supported(bodySolid, body); jumpUntil = 0; lastGroundedAt = -Infinity;
   }
   function loadStage() {
+    followChoice = 0; followPosition = null; followTime = 0;
     world = R.makeWorld(state.stage, state.edits, state.seed, state.worldVersion); target = null; previousStageComplete = !!state.stageComplete; populateTerrain(); derivePose(); rebuildWorld();
     if (renderer) renderer.setWorld(renderBlocks, worldRevision);
   }
@@ -395,38 +407,29 @@
     catch (_) { say('This browser could not start the 3D island view. Try a current browser with WebGL enabled.'); return false; }
   }
   function resize() {
+    renderNeeded = true;
     const landscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
     $('statusLine').style.top = landscape ? '62px' : '101px';
     if (!renderer) return;
     const rect = canvas.getBoundingClientRect(); renderer.resize(rect.width, rect.height, window.devicePixelRatio || 1);
   }
 
-  function collides(x, feet, z) {
-    const x0 = Math.floor(x - RADIUS + .001), x1 = Math.floor(x + RADIUS - .001);
-    const z0 = Math.floor(z - RADIUS + .001), z1 = Math.floor(z + RADIUS - .001);
-    const y0 = Math.floor(feet + .03), y1 = Math.floor(feet + BODY - .03);
-    for (let bx = x0; bx <= x1; bx++) for (let bz = z0; bz <= z1; bz++) for (let by = y0; by <= y1; by++) { const block = getBlock(bx, by, bz); if (block && !fluid(block) && !['leaves', 'fern', 'flower'].includes(block.material)) return true; }
-    return false;
-  }
+  function bodySolid(x, y, z) { const block = getBlock(x, y, z); return block && !fluid(block) && !['leaves', 'fern', 'flower'].includes(block.material); }
+  function bodyPose() { return { x: pose.x, y: pose.y - EYE, z: pose.z }; }
+  function collides(x, feet, z) { return P.collides(bodySolid, { x, y: feet, z }); }
   function tryHorizontal(dx, dz) {
-    const feet = pose.y - EYE, beforeX = pose.x, beforeZ = pose.z;
-    const size = worldSize();
-    pose.x = clamp(pose.x + dx, .2, size - .2);
-    if (collides(pose.x, feet, pose.z)) {
-      pose.y += .62;
-      if (collides(pose.x, pose.y - EYE, pose.z)) { pose.x = beforeX; pose.y -= .62; } else pose.grounded = true;
-    }
-    pose.z = clamp(pose.z + dz, .2, size - .2);
-    if (collides(pose.x, pose.y - EYE, pose.z)) {
-      pose.y += .62;
-      if (collides(pose.x, pose.y - EYE, pose.z)) { pose.z = beforeZ; pose.y -= .62; } else pose.grounded = true;
-    }
+    const body = bodyPose(), size = worldSize();
+    P.move(bodySolid, body, 'x', clamp(body.x + dx, .2, size - .2) - body.x);
+    P.move(bodySolid, body, 'z', clamp(body.z + dz, .2, size - .2) - body.z);
+    pose.x = body.x; pose.z = body.z;
   }
   function isInWater() {
     const block = getBlock(Math.floor(pose.x), Math.floor(pose.y - EYE + .2), Math.floor(pose.z));
     return block && block.material === 'water';
   }
   function updatePhysics(dt) {
+    if (pose.grounded) lastGroundedAt = performance.now();
+    applyJump();
     const forward = (input.keys.has('w') || input.keys.has('arrowup') ? 1 : 0) - (input.keys.has('s') || input.keys.has('arrowdown') ? 1 : 0) - input.joy.y;
     const sideways = (input.keys.has('d') || input.keys.has('arrowright') ? 1 : 0) - (input.keys.has('a') || input.keys.has('arrowleft') ? 1 : 0) + input.joy.x;
     const length = Math.hypot(forward, sideways) || 1, speed = isInWater() ? 2 : 3.55;
@@ -436,15 +439,13 @@
       // Keep movement on exactly the same axes as the camera.
       tryHorizontal(-Math.sin(pose.yaw) * f + Math.cos(pose.yaw) * s, -Math.cos(pose.yaw) * f - Math.sin(pose.yaw) * s);
     }
-    const feet = pose.y - EYE;
     pose.vy += (isInWater() ? -7 : -17) * dt;
     pose.vy = Math.max(pose.vy, -11);
-    pose.y += pose.vy * dt;
-    if (collides(pose.x, pose.y - EYE, pose.z)) {
-      if (pose.vy < 0) { let safe = pose.y; while (collides(pose.x, safe - EYE, pose.z) && safe < 28) safe += .03; pose.y = safe; pose.grounded = true; }
-      else pose.y = feet + EYE;
-      pose.vy = 0;
-    } else pose.grounded = false;
+    const body = bodyPose(), vertical = P.move(bodySolid, body, 'y', pose.vy * dt);
+    pose.y = body.y + EYE;
+    pose.grounded = vertical.blocked && pose.vy < 0 || pose.vy <= 0 && P.supported(bodySolid, body);
+    if (vertical.blocked) pose.vy = 0;
+    if (pose.grounded) { lastGroundedAt = performance.now(); applyJump(); }
     if (pose.y < -3) { pose.y = Math.max(1, topAt(Math.floor(pose.x), Math.floor(pose.z)) + 1) + EYE; pose.vy = 0; say('The current carried you back to solid ground.'); }
     const cell = R.getCell(world, Math.floor(pose.x), Math.floor(pose.z));
     if (cell && cell.lava && performance.now() - lastDamage > 900) { state.player.health = Math.max(0, state.player.health - .7); lastDamage = performance.now(); buzz('danger'); }
@@ -454,7 +455,13 @@
   }
   function jump() {
     if (!running) return;
-    if (pose.grounded || isInWater()) { pose.vy = isInWater() ? 4 : 5.6; pose.grounded = false; buzz('mine'); scheduleSave(); }
+    jumpUntil = performance.now() + 140; applyJump();
+  }
+  function applyJump() {
+    if (jumpUntil < performance.now() || !jumpUntil) return;
+    if (pose.grounded || pose.vy <= 0 && P.supported(bodySolid, bodyPose()) || performance.now() - lastGroundedAt < 100 || isInWater()) {
+      pose.vy = isInWater() ? 4 : 6.4; pose.grounded = false; lastGroundedAt = -Infinity; jumpUntil = 0; buzz('mine'); scheduleSave();
+    }
   }
 
   function fallbackRaycast(origin, direction, maxDistance) {
@@ -479,8 +486,8 @@
   function renderCamera() {
     const look = direction(), eye = [pose.x, pose.y, pose.z], targetDistance = clamp(Number(target && target.distance) || 5, .12, 5);
     const aimPoint = [eye[0] + look.x * targetDistance, eye[1] + look.y * targetDistance, eye[2] + look.z * targetDistance];
-    if (prefs.camera === 'first') return { position: eye, yaw: pose.yaw, pitch: pose.pitch, fov: 86, third: false, distance: 0, collision: false, aimPoint, targetDistance };
-    const feet = pose.y - EYE, right = { x: -Math.cos(pose.yaw), z: Math.sin(pose.yaw) };
+    if (prefs.camera === 'first') { followPosition = null; return { position: eye, yaw: pose.yaw, pitch: pose.pitch, fov: 86, third: false, distance: 0, collision: false, aimPoint, targetDistance }; }
+    const feet = pose.y - EYE, right = { x: -Math.cos(pose.yaw), z: Math.sin(pose.yaw) };let fov = 82;
     // Retract a padded shoulder camera against the body anchor, while aiming
     // through the exact eye ray. The selected face—not the explorer's head—
     // therefore sits at the reticle in ordinary third-person play.
@@ -488,8 +495,36 @@
     const desired = [pose.x - look.x * 4.55 + right.x * .86, feet + 2.50 - look.y * 4.55, pose.z - look.z * 4.55 + right.z * .86];
     let follow = { position: desired, distance: Math.hypot(desired[0] - anchor[0], desired[1] - anchor[1], desired[2] - anchor[2]), collision: false };
     try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => cameraBlock(x, y, z), anchor, desired, .20) || follow; } catch (_) {}
+    const obstructed = follow.collision;
+    // Keep an actual rear/shoulder view beside a wall instead of retracting
+    // into the body and switching the avatar off. A margin prevents rapid
+    // shoulder switching at a voxel edge.
+    if (follow.distance < 2.05 && V?.retractCamera) {
+      fov = 95;
+      const alternatives = [follow, ...[-1, 1].flatMap(side => [
+        [pose.x - look.x * 1.6 + right.x * side * 2.4, feet + 2.65 - look.y * 1.6, pose.z - look.z * 1.6 + right.z * side * 2.4],
+        [pose.x - look.x * 2 + right.x * side * 1.4, feet + 4.2, pose.z - look.z * 2 + right.z * side * 1.4],
+        [pose.x - look.x * .15 + right.x * side * 2.9, feet + 2.5, pose.z - look.z * .15 + right.z * side * 2.9]
+      ]).map(point => V.retractCamera(cameraBlock, anchor, point, .20))];
+      alternatives.push(V.retractCamera(cameraBlock, anchor, [pose.x, feet + 8, pose.z - look.z * .15], .20));
+      const score = candidate => {
+        const delta = aimPoint.map((value, i) => value - candidate.position[i]), length = Math.hypot(...delta) || 1;
+        const head = V.projectPoint({ position: candidate.position, yaw: Math.atan2(-delta[0], -delta[2]), pitch: Math.asin(delta[1] / length), fov }, [pose.x, feet + 1.30, pose.z], Math.max(.1, canvas.clientWidth / canvas.clientHeight));
+        const fits = head && Math.abs(head.x) < .9 && Math.abs(head.y) < .9 && candidate.distance >= 1.5;
+        return candidate.distance + (fits ? 20 : 0);
+      };
+      let choice = alternatives[followChoice] ? followChoice : 0;
+      for (let i = 0; i < alternatives.length; i++) if (score(alternatives[i]) > score(alternatives[choice]) + .4) choice = i;
+      followChoice = choice; follow = alternatives[choice];
+    } else followChoice = 0;
+    const now = performance.now(), elapsed = Math.min(.05, Math.max(0, (now - followTime) / 1000)); followTime = now;
+    if (followPosition && motionAllowed() && V?.retractCamera) {
+      const factor = 1 - Math.exp(-18 * elapsed), blended = follow.position.map((value, i) => followPosition[i] + (value - followPosition[i]) * factor);
+      follow = V.retractCamera(cameraBlock, anchor, blended, .20);
+    }
+    followPosition = follow.position.slice();
     const dx = aimPoint[0] - follow.position[0], dy = aimPoint[1] - follow.position[1], dz = aimPoint[2] - follow.position[2], length = Math.hypot(dx, dy, dz) || 1;
-    return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov: 82, third: true, distance: follow.distance, collision: follow.collision, aimPoint, targetDistance };
+    return { position: follow.position, yaw: Math.atan2(-dx, -dz), pitch: Math.asin(dy / length), fov, third: true, distance: follow.distance, collision: obstructed || follow.collision, aimPoint, targetDistance };
   }
   function normalizeRay(ray) {
     if (!ray) return null;
@@ -507,14 +542,20 @@
     try { if (V && typeof V.raycast === 'function') ray = V.raycast((x, y, z) => rayBlock(x, y, z), [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 5); } catch (_) {}
     target = normalizeRay(ray) || fallbackRaycast(origin, dir, 5);
     const tag = $('targetTag');
-    if (target && target.block && !fluid(target.block)) { const material = target.material || target.block.material || 'block'; tag.hidden = false; tag.textContent = String(material).replace(/^./, m => m.toUpperCase()) + ' · ' + (target.block.source === 'resource' ? 'hold Mine' : 'mine / build'); }
-    else tag.hidden = true;
+    const hidden = !(target && target.block && !fluid(target.block));
+    if (tag.hidden !== hidden) tag.hidden = hidden;
+    if (!hidden) {
+      const material = target.material || target.block.material || 'block';
+      const label = String(material).replace(/^./, m => m.toUpperCase()) + ' · ' + (target.block.source === 'resource' ? 'hold Mine' : 'mine / build');
+      if (tag.textContent !== label) tag.textContent = label;
+    }
   }
   function bodyWouldOverlap(x, y, z) {
     const foot = pose.y - EYE;
     return x + 1 > pose.x - RADIUS && x < pose.x + RADIUS && z + 1 > pose.z - RADIUS && z < pose.z + RADIUS && y + 1 > foot && y < foot + BODY;
   }
   function emitEffect(x, y, z, material, kind) {
+    if (!motionAllowed()) return;
     effects.push({ x, y, z, material: visibleMaterial(material), kind: kind || 'chip', at: performance.now() });
     if (effects.length > 12) effects.splice(0, effects.length - 12);
   }
@@ -582,15 +623,19 @@
   function beginMine(event) {
     event.preventDefault(); event.stopPropagation();
     if (!running || !target || fluid(target.block)) { say('Aim at a solid block first.'); return; }
+    if (mineHold && mineHold.pointer !== event.pointerId) return;
     mineHold = { x: target.x, y: target.y, z: target.z, source: target.block.source, pointer: event.pointerId }; mining = 0;
-    $('mineProgress').removeAttribute('aria-hidden'); event.currentTarget.setPointerCapture?.(event.pointerId);
+    $('mineProgress').removeAttribute('aria-hidden');
+    if (event.pointerId >= 0) event.currentTarget.setPointerCapture?.(event.pointerId);
   }
   function endMine(event) {
     if (event) event.stopPropagation();
+    if (!mineHold && mining === 0 || event && mineHold && event.pointerId !== mineHold.pointer) return;
     mineHold = null; mining = 0; $('mineProgress').setAttribute('aria-hidden', 'true'); $('mineProgress').firstElementChild.style.width = '0%';
   }
   function updateMine(dt) {
-    if (!mineHold || !target || target.x !== mineHold.x || target.y !== mineHold.y || target.z !== mineHold.z || target.block.source !== mineHold.source) return endMine();
+    if (!mineHold) return;
+    if (!target || target.x !== mineHold.x || target.y !== mineHold.y || target.z !== mineHold.z || target.block.source !== mineHold.source) return endMine();
     const block = target.block, duration = state.creative ? .08 : block.material === 'ore' || block.material === 'ice' ? .85 : block.material === 'crystal' || block.material === 'basalt' ? 1.15 : .48;
     mining = Math.min(1, mining + dt / duration); $('mineProgress').firstElementChild.style.width = Math.round(mining * 100) + '%';
     if (mining >= 1) {
@@ -598,19 +643,23 @@
       endMine(); if (result.ok) { flashAction('mineButton'); durableSave(); updateUI(); handleCompletion(); }
     }
   }
+  function updateClock() {
+    const node = $('dayClock'), label = Math.floor(state.time / 18) % 2 ? 'NIGHT' : 'DAY';
+    if (node.textContent !== label) node.textContent = label;
+  }
   function updateUI() {
     const stage = R.STAGES[state.stage];
     $('stageNumber').textContent = state.creative ? 'CREATIVE SANDBOX' : 'ISLAND ' + (state.stage + 1) + ' / 12';
     $('stageName').textContent = stage.name; $('questProgress').textContent = state.stageComplete ? 'Complete — choose your next island.' : stage.goalText;
-    $('healthText').textContent = Math.max(0, Math.ceil(state.player.health)); $('dayClock').textContent = Math.floor(state.time / 18) % 2 ? 'NIGHT' : 'DAY';
-    $('heldReadout').textContent = (selectedBlock === 'plank' && state.inventory.stonePick ? 'Stone pick' : selectedBlock) + ' · ' + (state.creative ? '∞' : state.inventory[selectedBlock] || 0);
+    $('healthText').textContent = Math.max(0, Math.ceil(state.player.health)); updateClock();
+    $('heldReadout').textContent = selectedBlock + ' · ' + (state.creative ? '∞' : state.inventory[selectedBlock] || 0);
     const colors = { plank: '#b77b49', dirt: '#8e6745', stone: '#8997a0', basalt: '#59616b', beacon: '#91e4d6' };
     $('hotbar').innerHTML = ['plank', 'dirt', 'stone', 'basalt', 'beacon'].map(item => '<button class="slot ' + (selectedBlock === item ? 'selected' : '') + '" data-block="' + item + '"' + (!state.creative && !state.inventory[item] ? ' disabled' : '') + '><span style="background:' + colors[item] + '"></span>' + item + '<em>' + (state.creative ? '∞' : state.inventory[item] || 0) + '</em></button>').join('');
     $('hotbar').querySelectorAll('[data-block]').forEach(node => node.addEventListener('click', event => { event.stopPropagation(); selectedBlock = node.dataset.block; updateUI(); say('Selected ' + selectedBlock + '.'); }));
   }
 
   function clearInputs() {
-    input.joy.x = input.joy.y = 0; input.joy.pointer = null; input.look = null; input.keys.clear(); endMine();
+    input.joy.x = input.joy.y = 0; input.joy.pointer = null; input.look = null; input.keys.clear(); jumpUntil = 0; endMine();
     const knob = $('joyKnob'); knob.style.transform = 'translate(-50%,-50%)';
   }
   function moveStart(event) {
@@ -632,13 +681,18 @@
     event.preventDefault(); const factor = .006 * prefs.sensitivity; pose.yaw -= (event.clientX - input.look.x) * factor; pose.pitch = clamp(pose.pitch - (event.clientY - input.look.y) * factor, -1.42, 1.42); input.look.x = event.clientX; input.look.y = event.clientY;
   }
   function keyboard(event, down) {
-    const key = event.key.toLowerCase();
+    const key = event.code === 'Space' || event.key === 'Spacebar' ? ' ' : event.key.toLowerCase();
+    if (!down) {
+      input.keys.delete(key);
+      if (key === 'e' && mineHold?.pointer === -1) endMine();
+    }
+    if (key === 'escape' && down && !event.repeat) { overlay.classList.contains('open') ? close() : menu(); return; }
+    if (!running || event.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || '')) return;
     if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
     if (key === ' ') { if (down && !event.repeat) jump(); return; }
     if (key === 'e' && down && !event.repeat) { beginMine({ preventDefault() {}, stopPropagation() {}, pointerId: -1, currentTarget: $('mineButton') }); return; }
     if (key === 'q' && down && !event.repeat) { placeTarget(); return; }
     if (key === 'f' && down && !event.repeat) { attack(); return; }
-    if (key === 'escape' && down && !event.repeat) { overlay.classList.contains('open') ? close() : menu(); return; }
     if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) down ? input.keys.add(key) : input.keys.delete(key);
   }
   function entities() {
@@ -649,40 +703,44 @@
   }
   function loop(now) {
     const rawDt = Math.max(0, (now - lastTime) / 1000), dt = Math.min(.05, rawDt); lastTime = now;
-    if (running && !document.hidden) {
+    if (document.hidden) { requestAnimationFrame(loop); return; }
+    if (running) {
       updatePhysics(dt); handleCompletion(); updateTarget();
       // Rendering may be slower in a software-emulated browser than it is on
       // a phone GPU. Mining is an intentional held action, so let its visible
       // progress track bounded real time while physics remains fixed-step.
       updateMine(Math.min(.16, rawDt));
-      const ticked = R.tick(state, world, dt);
+      const ticked = R.tick(state, world, dt); updateClock();
       if (ticked.defeated) { durableSave(); open('<p class="eyebrow">RECOVERY</p><h2>Back at camp</h2><p class="lead">The island wildlife overwhelmed you. Retrying keeps tools and most materials, but resets this island’s terrain and foes.</p>' + button('retryButton', 'Retry island') + button('mapAfterLoss', 'Campaign map', 'secondary')); bind('retryButton', retry); bind('mapAfterLoss', stages); }
       else if (ticked.damaged) { buzz('danger'); updateUI(); }
       if (!saveTimer && now - lastSavedAt > 5000) durableSave();
     }
     while (effects.length && now - effects[0].at > 680) effects.shift();
-    if (ensureRenderer()) {
+    if ((running || renderNeeded || effects.length || toolSwingUntil > now) && ensureRenderer()) {
       try {
         const camera = renderCamera(), aspect = Math.max(.1, canvas.clientWidth / Math.max(1, canvas.clientHeight));
         const projectedAvatarHead = camera.third && V && typeof V.projectPoint === 'function' ? V.projectPoint(camera, [pose.x, pose.y - EYE + 1.30, pose.z], aspect) : null;
-        // A retracted camera can end up inside the explorer's personal space.
-        // Do not let the avatar cover the centered, authoritative interaction ray.
-        const avatarVisible = !!camera.third && (!projectedAvatarHead || Math.hypot(projectedAvatarHead.x, projectedAvatarHead.y) >= .12) && camera.distance >= 1.5;
+        // In a genuinely tight passage retain a translucent body instead of
+        // popping it out of existence. The interaction ray stays authoritative.
+        const reticleClearance = projectedAvatarHead ? clamp((Math.hypot(projectedAvatarHead.x, projectedAvatarHead.y) - .10) / .12, 0, 1) : 1;
+        const avatarOpacity = .24 + .76 * reticleClearance * clamp((camera.distance - .35) / 1.4, 0, 1);
+        const avatarVisible = !!camera.third;
         const avatarHead = avatarVisible ? projectedAvatarHead : null;
         const projectedAim = V && typeof V.projectPoint === 'function' ? V.projectPoint(camera, camera.aimPoint, aspect) : null;
         lastRenderCamera = { mode: camera.third ? 'third' : 'first', distance: camera.distance, collision: !!camera.collision, position: camera.position.slice(), yaw: camera.yaw, pitch: camera.pitch, fov: camera.fov, aimPoint: camera.aimPoint.slice(), targetDistance: camera.targetDistance, avatarHead, avatarVisible, projectedAim };
         renderer.render({
-          camera, time: state.time, environment: { biome: R.STAGES[state.stage].biome },
+          camera, time: motionAllowed() ? state.time : 0, environment: { biome: R.STAGES[state.stage].biome },
           daylight: clamp(.7 + Math.sin(state.time / 18 * Math.PI) * .24, .34, .94),
           target: target && { block: [target.x, target.y, target.z], normal: [target.normal.x || 0, target.normal.y || 0, target.normal.z || 0], progress: mining },
-          entities: entities(), effects: effects.map(effect => Object.assign({}, effect, { age: clamp((now - effect.at) / 680, 0, 1) })),
+          entities: entities().map(entity => motionAllowed() ? entity : Object.assign({}, entity, { walk: 0, attack: 0 })), effects: motionAllowed() ? effects.map(effect => Object.assign({}, effect, { age: clamp((now - effect.at) / 680, 0, 1) })) : [],
           // The avatar remains visible whenever rear view is selected. A
           // retracted camera can be close to the player, but silently
           // switching the rendering to an empty first-person-looking frame
           // makes the mobile camera control misleading.
-          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, walk: Math.hypot(input.joy.x, input.joy.y) + input.keys.size ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) } : null,
-          held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) }
+          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, opacity: avatarOpacity, walk: motionAllowed() && (Math.hypot(input.joy.x, input.joy.y) + input.keys.size) ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 } : null,
+          held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 }
         });
+        renderNeeded = false;
       } catch (_) {}
     }
     requestAnimationFrame(loop);
@@ -703,5 +761,7 @@
   $('importInput').addEventListener('change', event => { const file = event.target.files && event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { importSave(JSON.parse(String(reader.result))); } catch (_) { say('That file is not valid JSON. Your current journey is unchanged.'); } close(); }; reader.readAsText(file); event.target.value = ''; });
   window.addEventListener('resize', () => { clearInputs(); resize(); }); window.addEventListener('orientationchange', clearInputs); window.addEventListener('blur', clearInputs);
   document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInputs(); durableSave(); } else lastTime = performance.now(); }); window.addEventListener('pagehide', durableSave);
+  canvas.addEventListener('webglcontextrestored', () => { renderNeeded = true; });
+  reducedMotion.addEventListener?.('change', applyPrefs);
   applyPrefs(); loadStage(); updateUI(); welcome(loaded.recovered); requestAnimationFrame(loop);
 })();
