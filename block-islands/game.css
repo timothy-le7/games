@@ -47,3 +47,5 @@
 /* Keep WebGL's frequently changing backing store below its real controls on
    compositors that split canvas and DOM layers during a stage rebuild. */
 .touch-layer{isolation:isolate;transform:translateZ(0)}.action-cluster,.action-button{will-change:transform}
+
+.motion-reduced *,.motion-reduced *:before,.motion-reduced *:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}

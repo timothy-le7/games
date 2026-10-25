@@ -39,6 +39,7 @@
     uniform vec4 uShadowClip;
     varying vec3 vNormal;
     varying vec3 vWorld;
+    varying vec3 vColor;
     void main(){
       if(uShadow.z>0.0){
         if(vWorld.x<uShadowClip.x||vWorld.z<uShadowClip.y||vWorld.x>uShadowClip.z||vWorld.z>uShadowClip.w)discard;
@@ -54,7 +55,7 @@
       float sky=max(dot(normal,coolFill),0.0);
       float rim=pow(1.0-max(dot(normal,normalize(vec3(0.0,.72,1.0))),0.0),2.0);
       float shade=.29+key*.54+sky*.17+rim*.12;
-      vec3 c=mix(uColor.rgb,vec3(1.0),uFlash);
+      vec3 c=mix(uColor.rgb*vColor,vec3(1.0),uFlash);
       c+=vec3(1.0,.73,.47)*key*.075;
       float fog=smoothstep(17.0,31.0,length(vWorld));
       c=mix(c,vec3(.12,.21,.29),fog*.30);
@@ -72,16 +73,16 @@
   function modelMatrix(x,y,z,sx,sy,sz,yaw,pitch,roll){const cy=Math.cos(yaw||0),syw=Math.sin(yaw||0),cx=Math.cos(pitch||0),sxw=Math.sin(pitch||0),cz=Math.cos(roll||0),szw=Math.sin(roll||0),r00=cy*cz+syw*sxw*szw,r01=-cy*szw+syw*sxw*cz,r02=syw*cx,r10=cx*szw,r11=cx*cz,r12=-sxw,r20=-syw*cz+cy*sxw*szw,r21=syw*szw+cy*sxw*cz,r22=cy*cx;return{matrix:new Float32Array([r00*sx,r10*sx,r20*sx,0,r01*sy,r11*sy,r21*sy,0,r02*sz,r12*sz,r22*sz,0,x,y,z,1]),normal:new Float32Array([r00,r10,r20,r01,r11,r21,r02,r12,r22])};}
   class TowerRenderer3D{
     constructor(canvas,engine){this.canvas=canvas;this.engine=engine;this.gl=null;this.lost=false;this.stats={drawCalls:0,triangles:0,units:0,pixelRatio:1,context:'webgl'};canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();this.lost=true;},false);canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.init();},false);this.init();}
-    init(){const gl=this.canvas.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:false,powerPreference:'high-performance'});if(!gl)throw new Error('Pennant Duel requires WebGL');this.gl=gl;const vertex='attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uModel;uniform mat4 uViewProjection;uniform mat3 uNormal;varying vec3 vNormal;varying vec3 vWorld;void main(){vec4 world=uModel*vec4(aPosition,1.0);vWorld=world.xyz;vNormal=normalize(uNormal*aNormal);gl_Position=uViewProjection*world;}';const fragment=fragmentSource();const compile=(type,source)=>{const shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));return shader;};const program=gl.createProgram();gl.attachShader(program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));this.program=program;this.locations={position:gl.getAttribLocation(program,'aPosition'),normal:gl.getAttribLocation(program,'aNormal'),model:gl.getUniformLocation(program,'uModel'),viewProjection:gl.getUniformLocation(program,'uViewProjection'),normalMatrix:gl.getUniformLocation(program,'uNormal'),color:gl.getUniformLocation(program,'uColor'),flash:gl.getUniformLocation(program,'uFlash'),shadow:gl.getUniformLocation(program,'uShadow'),shadowClip:gl.getUniformLocation(program,'uShadowClip')};this.meshes={box:this.mesh(this.boxData()),sphere:this.mesh(this.sphereData(10,6)),cylinder:this.mesh(this.cylinderData(10,1)),cone:this.mesh(this.cylinderData(10,0)),disc:this.mesh(this.cylinderData(16,1,.06)),ring:this.mesh(this.ringData(20))};gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(.055,.105,.16,1);}
-    mesh(data){const gl=this.gl,mesh={count:data.indices.length};mesh.position=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,mesh.position);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.positions),gl.STATIC_DRAW);mesh.normal=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,mesh.normal);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.normals),gl.STATIC_DRAW);mesh.index=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.index);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data.indices),gl.STATIC_DRAW);return mesh;}
+    init(){const gl=this.canvas.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:false,powerPreference:'high-performance'});if(!gl)throw new Error('Pennant Duel requires WebGL');this.gl=gl;this.arenaBatch=null;this.viewProjection=null;const vertex='attribute vec3 aPosition;attribute vec3 aNormal;attribute vec3 aColor;uniform mat4 uModel;uniform mat4 uViewProjection;uniform mat3 uNormal;varying vec3 vNormal;varying vec3 vWorld;varying vec3 vColor;void main(){vColor=aColor;vec4 world=uModel*vec4(aPosition,1.0);vWorld=world.xyz;vNormal=normalize(uNormal*aNormal);gl_Position=uViewProjection*world;}';const fragment=fragmentSource();const compile=(type,source)=>{const shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));return shader;};const program=gl.createProgram();gl.attachShader(program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));this.program=program;this.locations={position:gl.getAttribLocation(program,'aPosition'),normal:gl.getAttribLocation(program,'aNormal'),colorAttribute:gl.getAttribLocation(program,'aColor'),model:gl.getUniformLocation(program,'uModel'),viewProjection:gl.getUniformLocation(program,'uViewProjection'),normalMatrix:gl.getUniformLocation(program,'uNormal'),color:gl.getUniformLocation(program,'uColor'),flash:gl.getUniformLocation(program,'uFlash'),shadow:gl.getUniformLocation(program,'uShadow'),shadowClip:gl.getUniformLocation(program,'uShadowClip')};this.meshes={box:this.mesh(this.boxData()),sphere:this.mesh(this.sphereData(10,6)),cylinder:this.mesh(this.cylinderData(10,1)),cone:this.mesh(this.cylinderData(10,0)),disc:this.mesh(this.cylinderData(16,1,.06)),ring:this.mesh(this.ringData(20))};gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(.055,.105,.16,1);}
+    mesh(data){const gl=this.gl,mesh={count:data.indices.length,data};mesh.position=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,mesh.position);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.positions),gl.STATIC_DRAW);mesh.normal=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,mesh.normal);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.normals),gl.STATIC_DRAW);mesh.index=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.index);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data.indices),gl.STATIC_DRAW);if(data.colors){mesh.color=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,mesh.color);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.colors),gl.STATIC_DRAW);}return mesh;}
     boxData(){const p=[],n=[],i=[],faces=[[[0,0,1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]],[[0,0,-1],[1,-1,-1],[-1,-1,-1],[-1,1,-1],[1,1,-1]],[[1,0,0],[1,-1,1],[1,-1,-1],[1,1,-1],[1,1,1]],[[-1,0,0],[-1,-1,-1],[-1,-1,1],[-1,1,1],[-1,1,-1]],[[0,1,0],[-1,1,1],[1,1,1],[1,1,-1],[-1,1,-1]],[[0,-1,0],[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1]]];faces.forEach(f=>{const base=p.length/3;for(let k=1;k<5;k++){p.push(...f[k]);n.push(...f[0]);}i.push(base,base+1,base+2,base,base+2,base+3);});return{positions:p,normals:n,indices:i};}
     sphereData(segments,rings){const p=[],n=[],i=[];for(let y=0;y<=rings;y++){const phi=y/rings*Math.PI;for(let x=0;x<=segments;x++){const theta=x/segments*TAU,nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);p.push(nx,ny,nz);n.push(nx,ny,nz);}}for(let y=0;y<rings;y++)for(let x=0;x<segments;x++){const a=y*(segments+1)+x,b=a+segments+1;if(y===0)i.push(b,a+1,b+1);else if(y===rings-1)i.push(a,a+1,b);else i.push(a,a+1,b,b,a+1,b+1);}return{positions:p,normals:n,indices:i};}
     cylinderData(segments,topRadius,bottomRadius){bottomRadius=bottomRadius==null?1:bottomRadius;const p=[],n=[],i=[];for(let s=0;s<=segments;s++){const a=s/segments*TAU,c=Math.cos(a),z=Math.sin(a);p.push(c*bottomRadius,-1,z*bottomRadius,c*topRadius,1,z*topRadius);n.push(c,0,z,c,0,z);}for(let s=0;s<segments;s++){const a=s*2;if(topRadius===0)i.push(a,a+1,a+2);else i.push(a,a+1,a+2,a+1,a+3,a+2);}const cap=(y,radius,normal)=>{const center=p.length/3;p.push(0,y,0);n.push(0,normal,0);for(let s=0;s<=segments;s++){const a=s/segments*TAU;p.push(Math.cos(a)*radius,y,Math.sin(a)*radius);n.push(0,normal,0);}for(let s=0;s<segments;s++)normal>0?i.push(center,center+s+2,center+s+1):i.push(center,center+s+1,center+s+2);};cap(-1,bottomRadius,-1);if(topRadius)cap(1,topRadius,1);return{positions:p,normals:n,indices:i};}
     ringData(segments){const p=[],n=[],i=[];for(let s=0;s<=segments;s++){const a=s/segments*TAU,c=Math.cos(a),z=Math.sin(a);p.push(c*.76,0,z*.76,c,0,z);n.push(0,1,0,0,1,0);}for(let s=0;s<segments;s++){const a=s*2;i.push(a,a+2,a+1,a+1,a+2,a+3);}return{positions:p,normals:n,indices:i};}
-    resize(){const rect=this.canvas.getBoundingClientRect(),budget=12000000,dpr=Math.min(devicePixelRatio||1,Math.sqrt(budget/Math.max(1,rect.width*rect.height))),width=Math.max(1,Math.round(rect.width*dpr)),height=Math.max(1,Math.round(rect.height*dpr));if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}this.stats.pixelRatio=Math.min(width/Math.max(1,rect.width),height/Math.max(1,rect.height));this.gl.viewport(0,0,width,height);const aspect=width/height,portrait=aspect<.8,eye=portrait?[0,19.5,7.2]:[0,19,6.4],target=[0,.3,0],halfHeight=portrait?7.65:8.45,halfWidth=halfHeight*aspect;this.camera={eye,target,aspect,halfHeight,halfWidth,projection:'orthographic-three-quarter'};this.viewProjection=mul(orthographic(-halfWidth,halfWidth,-halfHeight,halfHeight,-45,45),lookAt(eye,target,[0,1,0]));this.inverseViewProjection=inverse(this.viewProjection);}
+    resize(){const rect=this.canvas.getBoundingClientRect(),budget=12000000,dpr=Math.min(devicePixelRatio||1,Math.sqrt(budget/Math.max(1,rect.width*rect.height))),width=Math.max(1,Math.round(rect.width*dpr)),height=Math.max(1,Math.round(rect.height*dpr));if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}this.stats.pixelRatio=Math.min(width/Math.max(1,rect.width),height/Math.max(1,rect.height));if(this.viewProjection&&this.projectionWidth===width&&this.projectionHeight===height)return;this.projectionWidth=width;this.projectionHeight=height;this.gl.viewport(0,0,width,height);const aspect=width/height,portrait=aspect<.8,eye=portrait?[0,19.5,7.2]:[0,19,6.4],target=[0,.3,0],halfHeight=portrait?7.65:8.45,halfWidth=halfHeight*aspect;this.camera={eye,target,aspect,halfHeight,halfWidth,projection:'orthographic-three-quarter'};this.viewProjection=mul(orthographic(-halfWidth,halfWidth,-halfHeight,halfHeight,-45,45),lookAt(eye,target,[0,1,0]));this.inverseViewProjection=inverse(this.viewProjection);}
     screenToWorld(clientX,clientY){const rect=this.canvas.getBoundingClientRect(),nx=(clientX-rect.left)/rect.width*2-1,ny=1-(clientY-rect.top)/rect.height*2,near=transformPoint(this.inverseViewProjection,nx,ny,-1),far=transformPoint(this.inverseViewProjection,nx,ny,1),dy=far[1]-near[1],t=Math.abs(dy)<1e-8?0:-near[1]/dy,x=near[0]+(far[0]-near[0])*t,z=near[2]+(far[2]-near[2])*t;return{x:x*115+500,y:z*100+700};}
     worldToScreen(engineX,engineY,worldHeight){const rect=this.canvas.getBoundingClientRect(),clip=transformPoint(this.viewProjection,(engineX-500)/115,worldHeight||0,(engineY-700)/100);return{x:rect.left+(clip[0]+1)*rect.width/2,y:rect.top+(1-clip[1])*rect.height/2};}
-    drawMesh(name,x,y,z,sx,sy,sz,color,yaw,pitch,roll,alpha,flash,shadow,shadowClip){const gl=this.gl,mesh=this.meshes[name],model=modelMatrix(x,y,z,sx,sy,sz,yaw,pitch,roll),rgb=Array.isArray(color)?color:hex(color);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.position);gl.enableVertexAttribArray(this.locations.position);gl.vertexAttribPointer(this.locations.position,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.normal);gl.enableVertexAttribArray(this.locations.normal);gl.vertexAttribPointer(this.locations.normal,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.index);gl.uniformMatrix4fv(this.locations.model,false,model.matrix);gl.uniformMatrix3fv(this.locations.normalMatrix,false,model.normal);gl.uniform4f(this.locations.color,rgb[0],rgb[1],rgb[2],alpha==null?1:alpha);gl.uniform1f(this.locations.flash,flash||0);gl.uniform4f(this.locations.shadow,...(shadow||[0,0,0,0]));gl.uniform4f(this.locations.shadowClip,...(shadowClip||[0,0,0,0]));if((alpha==null?1:alpha)<1)gl.depthMask(false);gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);if((alpha==null?1:alpha)<1)gl.depthMask(true);this.stats.drawCalls++;this.stats.triangles+=mesh.count/3;}
+    drawMesh(name,x,y,z,sx,sy,sz,color,yaw,pitch,roll,alpha,flash,shadow,shadowClip){if(this.arenaCapture){this.arenaCapture.push(Array.from(arguments));return;}const gl=this.gl,mesh=typeof name==='string'?this.meshes[name]:name,model=modelMatrix(x,y,z,sx,sy,sz,yaw,pitch,roll),rgb=Array.isArray(color)?color:hex(color);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.position);gl.enableVertexAttribArray(this.locations.position);gl.vertexAttribPointer(this.locations.position,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.normal);gl.enableVertexAttribArray(this.locations.normal);gl.vertexAttribPointer(this.locations.normal,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.index);if(mesh.color){gl.bindBuffer(gl.ARRAY_BUFFER,mesh.color);gl.enableVertexAttribArray(this.locations.colorAttribute);gl.vertexAttribPointer(this.locations.colorAttribute,3,gl.FLOAT,false,0,0);}else{gl.disableVertexAttribArray(this.locations.colorAttribute);gl.vertexAttrib3f(this.locations.colorAttribute,1,1,1);}gl.uniformMatrix4fv(this.locations.model,false,model.matrix);gl.uniformMatrix3fv(this.locations.normalMatrix,false,model.normal);gl.uniform4f(this.locations.color,rgb[0],rgb[1],rgb[2],alpha==null?1:alpha);gl.uniform1f(this.locations.flash,flash||0);gl.uniform4f(this.locations.shadow,...(shadow||[0,0,0,0]));gl.uniform4f(this.locations.shadowClip,...(shadowClip||[0,0,0,0]));if((alpha==null?1:alpha)<1)gl.depthMask(false);gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,(mesh.offset||0)*2);if((alpha==null?1:alpha)<1)gl.depthMask(true);this.stats.drawCalls++;this.stats.triangles+=mesh.count/3;}
     shadow(x,z,scale,alpha){
       const rx=Math.max(.001,scale),rz=rx*.58,footprint=[x,z,1/rx,1/rz];
       for(const receiver of SHADOW_RECEIVERS){
@@ -94,8 +95,55 @@
     }
     part(name,origin,offset,scale,color,yaw,pitch,roll,alpha,flash){const c=Math.cos(yaw||0),s=Math.sin(yaw||0),ox=offset[0]*c+offset[2]*s,oz=-offset[0]*s+offset[2]*c;this.drawMesh(name,origin[0]+ox,origin[1]+offset[1],origin[2]+oz,scale[0],scale[1],scale[2],color,yaw,pitch,roll,alpha,flash);}
     render(match,options){if(this.lost||!this.gl||!match)return;this.resize();const gl=this.gl;this.stats.drawCalls=0;this.stats.triangles=0;this.stats.units=match.units.length;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);gl.uniformMatrix4fv(this.locations.viewProjection,false,this.viewProjection);this.drawArena(match);this.drawPlacement(match,options);match.towers.filter(t=>t.alive).forEach(t=>this.drawTower(t));match.units.slice().sort((a,b)=>a.y-b.y).forEach(u=>this.drawUnit(u,match));match.towers.filter(t=>!t.alive).forEach(t=>this.drawTower(t));match.projectiles.forEach(p=>this.drawProjectile(p));if(!options.reducedEffects)match.effects.forEach(e=>this.drawEffect(e));if(options.dragPreview&&options.dragPreview.inside)this.drawGhost(options.dragPreview,match);}
+    compileArena(calls){
+      const data={positions:[],normals:[],colors:[],indices:[]},transparent=[],commands=[];
+      let range=null;
+      for(const call of calls){
+        const [name,x,y,z,sx,sy,sz,color,yaw,pitch,roll,alpha,,shadow]=call;
+        if(alpha!=null&&alpha<1||shadow){transparent.push(call);commands.push({call});range=null;continue;}
+        if(!range){range={offset:data.indices.length,count:0};commands.push({range});}
+        const source=this.meshes[name].data,{matrix:m,normal:n}=modelMatrix(x,y,z,sx,sy,sz,yaw,pitch,roll),rgb=Array.isArray(color)?color:hex(color),base=data.positions.length/3;
+        if(base+source.positions.length/3>65535)throw new Error('Arena batch exceeds WebGL1 vertex range');
+        for(let i=0;i<source.positions.length;i+=3){
+          const px=source.positions[i],py=source.positions[i+1],pz=source.positions[i+2],nx=source.normals[i],ny=source.normals[i+1],nz=source.normals[i+2];
+          data.positions.push(m[0]*px+m[4]*py+m[8]*pz+m[12],m[1]*px+m[5]*py+m[9]*pz+m[13],m[2]*px+m[6]*py+m[10]*pz+m[14]);
+          data.normals.push(n[0]*nx+n[3]*ny+n[6]*nz,n[1]*nx+n[4]*ny+n[7]*nz,n[2]*nx+n[5]*ny+n[8]*nz);
+          data.colors.push(...rgb);
+        }
+        for(const index of source.indices)data.indices.push(base+index);
+        range.count+=source.indices.length;
+      }
+      return{data,transparent,commands};
+    }
+    drawCachedArena(index){
+      if(!this.arenaBatch||this.arenaBatch.index!==index){
+        if(this.arenaBatch)for(const name of ['position','normal','index','color'])this.gl.deleteBuffer(this.arenaBatch.mesh[name]);
+        const calls=[];this.arenaCapture=calls;
+        try{this.drawArenaStatic(index);}finally{this.arenaCapture=null;}
+        const compiled=this.compileArena(calls);
+        const mesh=this.mesh(compiled.data);
+        // Keep alpha/shadow submissions between their original opaque runs.
+        // A bridge's own shadow must remain below its deck, for example.
+        this.arenaBatch={index,mesh,commands:compiled.commands.map(command=>command.call?command:{mesh:Object.assign({},mesh,command.range)}),sourceDraws:calls.length};
+      }
+      const batch=this.arenaBatch;
+      for(const command of batch.commands){
+        if(command.call)this.drawMesh(...command.call);
+        else this.drawMesh(command.mesh,0,0,0,1,1,1,[1,1,1]);
+      }
+      this.stats.arenaSourceDraws=batch.sourceDraws;
+      this.stats.arenaDrawCalls=batch.commands.length;
+    }
     drawArena(match){
-      const index=match.arena%PALETTES.length,p=PALETTES[index],theme=ARENA_THEMES[index],half=4.36,lane=LANE_X;
+      const index=match.arena%PALETTES.length,p=PALETTES[index],theme=ARENA_THEMES[index];
+      this.drawCachedArena(index);
+      // Water glints and moving landmarks remain live; they never enter the
+      // static batch or freeze when the same arena is reused after a restore.
+      for(let x=-4.05;x<=4.05;x+=.58)this.drawMesh('box',x,.092,Math.sin(match.time*1.7+x)*.08,.23,.012,.014,theme.accent,0,0,0,.36);
+      this.drawArenaLandmarks(index,p,theme,match.time);
+    }
+    drawArenaStatic(index){
+      const p=PALETTES[index],theme=ARENA_THEMES[index],half=4.36,lane=LANE_X;
       // The structural slab ends below one coherent turf surface, leaving a
       // real gap instead of the former coplanar top faces and their banding.
       this.drawMesh('box',0,-.32,0,half,.30,7.5,mix(p.grass,'#172e29',.16));
@@ -108,10 +156,8 @@
         for(let z=-5.75;z<=5.75;z+=1.15)this.drawMesh('box',x,SURFACE.path+.003,z,.68,.003,.018,mix(p.path,'#263136',.35),0,0,0,.48);
       }
       this.drawMesh('box',0,SURFACE.water-.07,0,half,.07,.55,mix(p.water,'#061d39',.14));
-      for(let x=-4.05;x<=4.05;x+=.58)this.drawMesh('box',x,.092,Math.sin(match.time*1.7+x)*.08,.23,.012,.014,theme.accent,0,0,0,.36);
       for(const x of [-lane,lane])this.drawBridge(x,p,theme);
       this.drawRamparts(p,theme);
-      this.drawArenaLandmarks(index,p,theme,match.time);
     }
     drawBridge(x,p,theme){
       this.shadow(x,0,1.08,.34);
@@ -204,7 +250,7 @@
     }
     drawDefender(o,side,s,heading,recoil,flash){const team=TEAM[side],yaw=heading+Math.PI/2;this.part('sphere',o,[0,.08,0],[.2*s,.23*s,.2*s],'#d7a979',yaw,0,0,1,flash);this.part('cylinder',o,[0,-.17,0],[.24*s,.24*s,.24*s],team,yaw,0,0,1,flash);this.part('box',o,[0,.24,0],[.24*s,.06*s,.23*s],'#213047',yaw);this.part('cylinder',o,[0,.02,-.35-recoil*.1],[.07*s,.34*s,.07*s],'#4f5555',yaw,Math.PI/2);this.part('cylinder',o,[0,.02,-.62-recoil*.1],[.11*s,.12*s,.11*s],'#2e3639',yaw,Math.PI/2);}
     hpBar(x,y,z,ratio,side,width){this.drawMesh('box',x,y,z,.5*width,.035,.045,'#172233');this.drawMesh('box',x-(1-ratio)*.5*width,y+.008,z-.003,.48*width*ratio,.045,.055,TEAM[side]);}
-    drawUnit(u,match,ghostAlpha){const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,yaw=(u.heading||-Math.PI/2)+Math.PI/2,s=Math.max(.74,card.size/34),fly=u.flying?.58+Math.sin(match.time*5+String(u.id).length)*.08:0,bob=Math.sin(u.walk||0)*.035,o=[x,.22+fly+bob,z],a=ghostAlpha==null?(u.deploy>0?.64:1):ghostAlpha,flash=Math.min(1,(u.hit||0)*6),attack=(u.attackAnim||0)>0?Math.sin((1-u.attackAnim/.24)*Math.PI):0;this.shadow(x,z,.28+s*.22,u.flying?.18:.32);if(MODEL_GROUPS.golem.includes(card.id))this.drawGolem(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.beast.includes(card.id))this.drawBeast(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.flying.includes(card.id))this.drawFlying(card,u,o,yaw,s,attack,a,flash);else this.drawFighter(card,u,o,yaw,s,attack,a,flash);this.drawTeamMark(o,yaw,s,u.side,a,!!u.flying);if(ghostAlpha==null){this.hpBar(x,o[1]+1.02*s,z,u.hp/u.maxHp,u.side,.46+s*.16);if(u.slow>0)this.drawMesh('ring',x,.06,z,.34+s*.16,1,.34+s*.16,'#ef9de9',0,0,0,.7);}}
+    drawUnit(u,match,ghostAlpha){const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,yaw=(u.heading||-Math.PI/2)+Math.PI/2,s=Math.max(.74,card.size/34),fly=u.flying?.58+Math.sin(match.time*5+String(u.id).length)*.08:0,bob=Math.sin(u.walk||0)*.035,o=[x,.22+fly+bob,z],a=ghostAlpha==null?(u.deploy>0?.64:1):ghostAlpha,flash=Math.min(1,(u.hit||0)*6),attack=(u.attackAnim||0)>0?Math.sin((1-u.attackAnim/.24)*Math.PI):0;this.shadow(x,z,.28+s*.22,u.flying?.18:.32);if(MODEL_GROUPS.golem.includes(card.id))this.drawGolem(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.beast.includes(card.id))this.drawBeast(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.flying.includes(card.id))this.drawFlying(card,u,o,yaw,s,attack,a,flash,match.time);else this.drawFighter(card,u,o,yaw,s,attack,a,flash);this.drawTeamMark(o,yaw,s,u.side,a,!!u.flying);if(ghostAlpha==null){this.hpBar(x,o[1]+1.02*s,z,u.hp/u.maxHp,u.side,.46+s*.16);if(u.slow>0)this.drawMesh('ring',x,.06,z,.34+s*.16,1,.34+s*.16,'#ef9de9',0,0,0,.7);}}
     drawTeamMark(o,yaw,s,side,a,flying){
       const team=TEAM[side],light=TEAM_LIGHT[side],height=flying?.46:.58;
       this.part('box',o,[0,height,.31*s],[.19*s,.18*s,.035*s],team,yaw,0,Math.PI/4,a);
@@ -284,8 +330,8 @@
         this.part('cone',o,[0,.33,.58],[.18*s,.32*s,.18*s],body,yaw,Math.PI/2,0,a);
       }
     }
-    drawFlying(card,u,o,yaw,s,attack,a,flash){
-      const team=TEAM[u.side],light=TEAM_LIGHT[u.side],body=card.color,dark='#28334b',flap=Math.sin((u.walk||0)+performance.now()*.012)*.45,thrust=attack*.16;
+    drawFlying(card,u,o,yaw,s,attack,a,flash,time){
+      const team=TEAM[u.side],light=TEAM_LIGHT[u.side],body=card.color,dark='#28334b',flap=Math.sin((u.walk||0)+(time||0)*12)*.45,thrust=attack*.16;
       this.part(card.id==='cloudrays'?'box':'sphere',o,[0,.35,-thrust],[.34*s,.42*s,.42*s],body,yaw,-attack*.12,0,a,flash);
       this.part('sphere',o,[0,.64,-.20-thrust],[.25*s,.25*s,.25*s],dark,yaw,0,0,a,flash);
       for(const x of [-.09,.09])this.part('sphere',o,[x,.69,-.43-thrust],[.045*s,.05*s,.035*s],light,yaw,0,0,a);

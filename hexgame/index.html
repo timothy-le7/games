@@ -191,7 +191,7 @@ function miningStatus(t){
  const c=game.cities.find(c=>c.id===t.cityId);return{state:'ready',title:'Ore · Mine available',message:'Build for 5 stars to add 2 population to '+(c?.name||'your city')+'.'};
 }
 function isAnimating(){return performance.now()<animationUntil}
-function finishAnimation(){animationUntil=0;clearTimeout(animationTimer);const tap=pendingMapTile;pendingMapTile=null;updateUI();if(tap&&!busy&&!game.over&&!upgradeQueue.length&&!$('modal-layer').classList.contains('open')&&!$('tech-layer').classList.contains('open')){const p=screenPoint(tap.x,tap.y),r=canvas.getBoundingClientRect();clickMap(p.x+r.left,p.y+r.top)}}
+function finishAnimation(){animationUntil=0;clearTimeout(animationTimer);const tap=pendingMapTile;pendingMapTile=null;updateUI();if(tap&&!busy&&!game.over&&!upgradeQueue.length&&!game.contactQueue.length&&!$('modal-layer').classList.contains('open')&&!$('tech-layer').classList.contains('open')){const p=screenPoint(tap.x,tap.y),r=canvas.getBoundingClientRect();clickMap(p.x+r.left,p.y+r.top)}scheduleUpgrades(30);if(game.contactQueue.length)scheduleContactPresentation(30)}
 function lockAnimation(duration){if(reducedMotion.matches||duration<=0)return;animationUntil=Math.max(animationUntil,performance.now()+duration);clearTimeout(animationTimer);animationTimer=setTimeout(finishAnimation,animationUntil-performance.now()+20)}
 function startMovement(u,path){if(reducedMotion.matches)return;u.anim={kind:'move',fromBoat:u.boat??null,path:[{x:u.x,y:u.y},...path],start:performance.now(),duration:180+Math.max(0,path.length-1)*80};if(u.owner===0)lockAnimation(u.anim.duration)}
 // One visual pose drives the body, shadow, health number, and depth ordering.
@@ -690,7 +690,7 @@ function recomputeTerritory(){
 function reveal(x,y,r=1,initial=false,id=0,delay=0){
  const explored=id===0?game.seen:faction(id).explored;let changed=false;
  for(let yy=y-r;yy<=y+r;yy++)for(let xx=x-r;xx<=x+r;xx++){const t=tileAt(xx,yy);if(!t)continue;if(t.building==='lighthouse'){if(initial)continue;claimLighthouse(t,id)}const i=tileIndex(xx,yy);if(!explored[i]){changed=true;if(id===0&&!initial&&!reducedMotion.matches)fogReveals.set(i,{start:performance.now()+delay,duration:180})}explored[i]=true;discoverContactOnTile(id,t)}
- if(id===0&&changed){floorRevision++;requestRender()}return changed
+ if(id===0&&changed){floorRevision++;if(!initial)lockAnimation(delay+180);requestRender()}return changed
 }
 function visualSeen(t,time=drawTime){if(!seen(t))return false;const a=fogReveals.get(tileIndex(t.x,t.y));return !a||time>=a.start+a.duration*.55||game.over||reducedMotion.matches}
 
@@ -699,12 +699,13 @@ function revealUnit(u){let r=unitDef(u).vision||1;if(tileAt(u.x,u.y).terrain==='
 // This is an independent implementation, not the native engine's RNG.
 function ruleRandom(salt=0){return rng(game.seed^salt^Math.imul(++game.ruleEvents,0x9e3779b1))}
 function runExplorer(x,y,id=0){
- const random=ruleRandom(0x3e78129),explored=id===0?game.seen:faction(id).explored,visits=new Map(),path=[],walkable=t=>t&&(t.terrain!=='mountain'||ownsTech(id,'climbing'))&&(!waterTile(t)||ownsTech(id,t.terrain==='ocean'?'navigation':'fishing')||faction(id).tribe==='reef');let p=tileAt(x,y);
+ const random=ruleRandom(0x3e78129),explored=id===0?game.seen:faction(id).explored,visits=new Map(),path=[],animated=id===0&&!reducedMotion.matches,start=performance.now(),stepDuration=95,walkable=t=>t&&(t.terrain!=='mountain'||ownsTech(id,'climbing'))&&(!waterTile(t)||ownsTech(id,t.terrain==='ocean'?'navigation':'fishing')||faction(id).tribe==='reef');let p=tileAt(x,y);
  for(let step=0;step<12;step++){
   const candidates=adjacentTiles(p).filter(walkable);if(!candidates.length)break;const fog=game.tiles.filter(t=>!explored[tileIndex(t.x,t.y)]&&walkable(t));
   const value=t=>{let unseen=0;const vision=t.terrain==='mountain'?2:1;for(let yy=t.y-vision;yy<=t.y+vision;yy++)for(let xx=t.x-vision;xx<=t.x+vision;xx++){const n=tileAt(xx,yy);if(n&&!explored[tileIndex(xx,yy)])unseen++}const closest=fog.length?Math.min(...fog.map(n=>distance(t,n))):0;return unseen*10-closest*3-(visits.get(tileIndex(t.x,t.y))||0)*4};
-  const ranked=shuffle(candidates,random).sort((a,b)=>value(b)-value(a));p=ranked[0];path.push({x:p.x,y:p.y});visits.set(tileIndex(p.x,p.y),(visits.get(tileIndex(p.x,p.y))||0)+1);reveal(p.x,p.y,p.terrain==='mountain'?2:1,false,id,reducedMotion.matches?0:step*35);
+  const ranked=shuffle(candidates,random).sort((a,b)=>value(b)-value(a));p=ranked[0];path.push({x:p.x,y:p.y});visits.set(tileIndex(p.x,p.y),(visits.get(tileIndex(p.x,p.y))||0)+1);reveal(p.x,p.y,p.terrain==='mountain'?2:1,false,id,animated?(step+1)*stepDuration:0);
  }
+ if(animated&&path.length){const travelDuration=path.length*stepDuration,duration=travelDuration+180;effects.push({kind:'explorer',owner:id,path:[{x,y},...path],start,travelDuration,duration});lockAnimation(duration)}
  if(id===0)requestRender();return path;
 }
 function pushUnit(u,sourceOwner){
@@ -1512,7 +1513,7 @@ function drawUnitLabel(u,preview=null){
 }
 // Fog belongs to its own diamond. Clipping keeps explored resources and move
 // destinations visible along the cloud boundary, including during a reveal.
-function fogEdgeMask(t){return [[0,-1],[1,0],[0,1],[-1,0]].reduce((mask,[dx,dy],i)=>{const n=tileAt(t.x+dx,t.y+dy);return mask|(n&&seen(n)?1<<i:0)},0)}
+function fogEdgeMask(t){return [[0,-1],[1,0],[0,1],[-1,0]].reduce((mask,[dx,dy],i)=>{const n=tileAt(t.x+dx,t.y+dy);return mask|(n&&visualSeen(n)?1<<i:0)},0)}
 function fogFacetVariant(t){return(Math.imul(t.x+17,73856093)^Math.imul(t.y+31,19349663)^Math.imul((t.variant||0)+1,83492791))>>>0}
 function fogBoundaryEdges(t){
  const p=iso(t.x,t.y),north=[p.x,p.y-TH/2],east=[p.x+TW/2,p.y],south=[p.x,p.y+TH/2],west=[p.x-TW/2,p.y];
@@ -1543,6 +1544,12 @@ function paintScenery(t,c){
  if(t.resource==='fruit')fruit(x,y,t.biome);else if(t.resource==='animal')deer(x-2,y+5);else if(t.resource==='fish')fish(x,y);else if(t.resource==='starfish')starfish(x,y);
 }
 function drawScenery(t,c){
+ const reveal=fogReveals.get(tileIndex(t.x,t.y));
+ if(!seen(t)||!reveal||reducedMotion.matches||game.over){drawScenerySprite(t,c);return}
+ const progress=Math.max(0,Math.min(1,(drawTime-reveal.start)/reveal.duration));if(!progress)return;
+ ctx.save();ctx.globalAlpha*=progress*progress*(3-2*progress);drawScenerySprite(t,c);ctx.restore();
+}
+function drawScenerySprite(t,c){
  const known=seen(t);
  if(known&&!c&&(t.bridge||t.building==='ruin'||t.effect&&drawTime<t.effect.start+t.effect.duration)){paintScenery(t,c);return}
  if(known&&!c&&!t.building&&!t.resource&&!['forest','mountain'].includes(t.terrain))return;
@@ -1589,6 +1596,19 @@ function selectionPreview(u){
  if(!previewCache||previewCache.u!==u||previewCache.active!==active)previewCache={u,active,moves:active?reachable(u):new Map(),attacks:active?attackable(u):[]};
  return previewCache;
 }
+// The scout is presentation only: it never occupies a tile, fights or enters a save.
+function explorerPose(e,time){
+ const travel=Math.max(0,Math.min(e.path.length-1,(time-e.start)/e.travelDuration*(e.path.length-1))),step=Math.min(e.path.length-2,Math.floor(travel)),phase=travel-step,from=e.path[step],to=e.path[step+1],ease=phase*phase*(3-2*phase),x=from.x+(to.x-from.x)*ease,y=from.y+(to.y-from.y)*ease,p=iso(x,y);
+ return{x,y,px:p.x,py:p.y-Math.sin(phase*Math.PI)*3,groundY:p.y,stride:Math.sin(phase*Math.PI*2)};
+}
+function drawExplorer(e,time){
+ const p=explorerPose(e,time),b=tribeFor(e.owner),fade=Math.max(0,Math.min(1,(e.start+e.duration-time)/180));
+ ctx.save();ctx.translate(p.px,p.py);ctx.scale(.72,.72);ctx.globalAlpha*=fade*.88;
+ ellipse(0,1,12,4,'#17334440');line([[-4,0],[-5+p.stride*2,-9]],b.dark,3);line([[4,0],[5-p.stride*2,-9]],b.dark,3);
+ polygon([[-7,-20],[6,-20],[8,-8],[-6,-8]],b.color,b.dark,1);polygon([[-9,-19],[-5,-19],[-5,-10],[-10,-11]],'#beab7a',b.dark,1);
+ ellipse(0,-26,6,7,'#e4c39e');polygon([[-8,-29],[0,-35],[8,-29],[7,-26],[-8,-26]],b.dark);line([[-7,-27],[8,-27]],b.light,2);
+ ellipse(3,-25,1,1,'#233b47');line([[7,-19],[11,-14],[14,-28]],'#ead6ab',2);ellipse(14,-29,2,2,'#fff4bd');ctx.restore();
+}
 function render(time=performance.now()){
  if(!game)return;drawTime=time;for(const [i,a]of fogReveals)if(time>=a.start+a.duration||reducedMotion.matches||game.over)fogReveals.delete(i);if(animationUntil&&time>=animationUntil)finishAnimation();ctx.setTransform(view.pixelRatioX,0,0,view.pixelRatioY,0,0);ctx.globalAlpha=1;
  if(cameraMotion){const a=cameraMotion,p=Math.max(0,Math.min(1,(time-a.start)/a.duration)),ease=1-Math.pow(1-p,3);view.x=a.from.x+(a.to.x-a.from.x)*ease;view.y=a.from.y+(a.to.y-a.from.y)*ease;if(p===1){cameraMotion=null;saveViewSoon()}}
@@ -1604,10 +1624,12 @@ function render(time=performance.now()){
  const objects=sorted.map(t=>({kind:'tile',t,depth:iso(t.x,t.y).y}));
  for(const u of game.units)if(visualSeen(tileAt(u.x,u.y),time)){const p=unitPose(u);if(inViewport({x:p.px,y:p.py}))objects.push({kind:'unit',u,depth:p.groundY+3})}
  effects=effects.filter(e=>time<e.start+e.duration);for(const e of effects)if(e.kind==='death'&&time>=e.appear&&seen(tileAt(e.unit.x,e.unit.y)))objects.push({kind:'death',e,depth:iso(e.unit.x,e.unit.y).y+3});
+ for(const e of effects)if(e.kind==='explorer'&&!reducedMotion.matches&&time>=e.start){const p=explorerPose(e,time);if(inViewport({x:p.px,y:p.py}))objects.push({kind:'explorer',e,depth:p.groundY+4})}
  objects.sort((a,b)=>a.depth-b.depth);
  for(const item of objects){
   if(item.kind==='unit'){if(attacks.includes(item.u))drawTileCue(tileAt(item.u.x,item.u.y),ACTION_COLORS.attack);if(ownUnit===item.u)drawTileCue(tileAt(item.u.x,item.u.y),ACTION_COLORS.selected,true);drawUnit(item.u);continue}
   if(item.kind==='death'){const e=item.e;ctx.save();ctx.globalAlpha=time<e.start?1:1-Math.max(0,(time-e.start)/e.duration);drawUnit(e.unit);ctx.restore();continue}
+  if(item.kind==='explorer'){drawExplorer(item.e,time);continue}
   const t=item.t;drawScenery(t,cityLookup.get(tileIndex(t.x,t.y)));
  }
  for(const t of sorted){const a=fogReveals.get(tileIndex(t.x,t.y));if(a)drawFog(t,1-Math.max(0,Math.min(1,(time-a.start)/a.duration)))}
@@ -1615,7 +1637,7 @@ function render(time=performance.now()){
  // legal destination. Their centers remain open to show the terrain.
  for(const m of moves.values())drawTileCue(tileAt(m.x,m.y),ACTION_COLORS.move);
  if(selected&&!ownUnit)drawTileCue(tileAt(selected.x,selected.y),ACTION_COLORS.selected,true);
- for(const e of effects)if(e.kind!=='death'&&seen(tileAt(e.from.x,e.from.y))&&seen(tileAt(e.to.x,e.to.y)))drawAttackEffect(e,time);ctx.restore();
+ for(const e of effects)if(e.kind!=='death'&&e.kind!=='explorer'&&seen(tileAt(e.from.x,e.from.y))&&seen(tileAt(e.to.x,e.to.y)))drawAttackEffect(e,time);ctx.restore();
  const battle=battlePreviewModel();for(const c of game.cities)if(visualSeen(tileAt(c.x,c.y),time)&&inViewport(iso(c.x,c.y)))drawCityLabel(c);for(const u of game.units)if(visualSeen(tileAt(u.x,u.y),time)&&inViewport(iso(unitPose(u).x,unitPose(u).y)))drawUnitLabel(u,battle);for(const e of effects)if(e.kind==='death'&&time<e.start&&seen(tileAt(e.unit.x,e.unit.y)))drawUnitLabel({...e.unit,hp:e.oldHP});
  particles=particles.filter(p=>time-p.start<p.duration);for(const p of particles){const age=Math.max(0,(time-p.start)/p.duration);if(time<p.start||!seen(tileAt(p.x,p.y)))continue;const s=screenPoint(p.x,p.y),lift=reducedMotion.matches?0:age*27,y=s.y-56-lift-p.offset;ctx.globalAlpha=Math.min(1,(1-age)*3);ctx.font='600 13px "Avenir Next", sans-serif';ctx.textAlign='center';ctx.strokeStyle='#000b';ctx.lineWidth=3;ctx.strokeText(p.text,s.x,y);ctx.fillStyle=p.color;ctx.fillText(p.text,s.x,y)}ctx.globalAlpha=1;
 }
@@ -1833,6 +1855,7 @@ function openTraining(c){
  openModal(`${modalCloseButton()}<span class="eyebrow">${c.name.toUpperCase()} · LEVEL ${c.level}</span><h2>Train a unit</h2>${cityProgressHTML(c)}<p class="subtitle">${blocked||'Choose a unit · Ready next turn.'}</p><div class="unit-grid">${choices.map(k=>{const d=TYPES[k];return `<button class="unit-card" data-train="${k}" aria-label="Train ${d.name} for ${d.cost} stars"><div class="portrait">${portrait(faction(0).tribe,k)}</div><span class="price">${d.cost}${icon('star')}</span><strong>${d.name}</strong><small>${d.hp} HP · ${d.convert?'Convert':d.freeze&&!d.attack?'Freeze':d.attack+' attack'}</small></button>`}).join('')}</div><p class="save-label">${faction(0).stars} stars available${!blocked&&unaffordable?' · Save more stars for stronger units.':''}<br>Research in the Tech Tree to unlock more units.</p>`,'Train a unit');$('modal').classList.add('unit-chooser');document.querySelectorAll('[data-train]').forEach(el=>el.onclick=()=>train(c,el.dataset.train));
 }
 function showNextUpgrade(){
+ if(isAnimating()){closeModal(true);scheduleUpgrades(Math.max(0,animationUntil-performance.now())+30);return}
  if(!upgradeQueue.length){closeModal(true);scheduleContactPresentation(30);return}const reward=upgradeQueue[0],c=game.cities.find(c=>c.id===reward.id);if(!c||c.owner!==0){upgradeQueue.shift();showNextUpgrade();return}const level=reward.level;
  const superDef=TYPES[superUnit(0)],rewards=level===2?[{key:'workshop',name:'Workshop',icon:'city',desc:'+1 star every turn'},{key:'explorer',name:'Explorer',icon:'eye',desc:'An Explorer travels 12 steps toward unexplored lands'}]:level===3?[{key:'resources',name:'Resources',icon:'star',desc:'Receive 5 stars now'},{key:'walls',name:'City walls',icon:'shield',desc:'Triple defense inside this city'}]:level===4?[{key:'borders',name:'Border growth',icon:'expand',desc:'Expand your territory by one ring'},{key:'population',name:'Population',icon:'city',desc:'+3 population for this city'}]:[{key:'giant',name:superDef.name,icon:superDef.icon,desc:superDef.hp+' health · Your tribe’s super unit'},{key:'park',name:'Park',icon:'tree',desc:'+250 bonus points'}];
  openModal(`<span class="eyebrow">YOUR CIVILIZATION IS GROWING</span><h2>${c.name} grows!</h2><p class="subtitle">Welcome to level ${level}. Choose your city reward.</p><div style="height:77px;width:77px;margin:20px auto 0">${cityPortrait(0)}</div><div class="reward-grid">${rewards.map(r=>`<button class="reward-card" data-reward="${r.key}">${icon(r.icon)}<strong>${r.name}</strong><small>${r.desc}</small></button>`).join('')}</div>`,'City upgrade');
@@ -1942,6 +1965,7 @@ function refreshResolution(){resize();const p=battlePreviewModel();if(p&&battleP
 window.addEventListener('resize',refreshResolution);window.visualViewport?.addEventListener('resize',refreshResolution);
 function watchResolution(){const query=matchMedia('(resolution: '+(window.devicePixelRatio||1)+'dppx)');query.addEventListener('change',()=>{refreshResolution();watchResolution()},{once:true})}watchResolution();
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearBattlePreview();panMotion=cameraMotion=null;save();cancelAnimationFrame(frameId);frameId=0;clearTimeout(idleFrameTimer);pointerState.clear();gesture=null;canvas.classList.remove('dragging')}else{requestRender();if(game.turnState&&!busy&&!game.over)resumeTurn()}});
+reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches){fogReveals.clear();effects=effects.filter(e=>e.kind!=='explorer');for(const u of game.units)delete u.anim;finishAnimation()}requestRender()});
 window.addEventListener('pagehide',save);
 if(load()){updateUI();if(game.over)setTimeout(showResult,150);else if(game.turnState)resumeTurn();else if(upgradeQueue.length)setTimeout(showNextUpgrade,100);else scheduleContactPresentation(100)}else newGame();
 if(saveNotice)setTimeout(()=>toast(saveNotice),180);
