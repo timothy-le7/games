@@ -492,26 +492,32 @@
     // through the exact eye ray. The selected face—not the explorer's head—
     // therefore sits at the reticle in ordinary third-person play.
     const anchor = [pose.x, feet + 1.10, pose.z];
-    const desired = [pose.x - look.x * 4.55 + right.x * .86, feet + 2.50 - look.y * 4.55, pose.z - look.z * 4.55 + right.z * .86];
+    // Orbit with yaw rather than the pitched interaction ray: looking up
+    // must not pull the camera down through the ground or into the body.
+    const back = { x: -Math.sin(pose.yaw), z: -Math.cos(pose.yaw) };
+    const desired = [pose.x - back.x * 4.55 + right.x * .86, feet + Math.max(2.10, 2.50 - look.y * 4.55), pose.z - back.z * 4.55 + right.z * .86];
     let follow = { position: desired, distance: Math.hypot(desired[0] - anchor[0], desired[1] - anchor[1], desired[2] - anchor[2]), collision: false };
     try { if (V && typeof V.retractCamera === 'function') follow = V.retractCamera((x, y, z) => cameraBlock(x, y, z), anchor, desired, .20) || follow; } catch (_) {}
     const obstructed = follow.collision;
     // Keep an actual rear/shoulder view beside a wall instead of retracting
     // into the body and switching the avatar off. A margin prevents rapid
     // shoulder switching at a voxel edge.
-    if (follow.distance < 2.05 && V?.retractCamera) {
+    const headFits = candidate => {
+      const delta = aimPoint.map((value, i) => value - candidate.position[i]), length = Math.hypot(...delta) || 1;
+      const head = V.projectPoint({ position: candidate.position, yaw: Math.atan2(-delta[0], -delta[2]), pitch: Math.asin(delta[1] / length), fov }, [pose.x, feet + 1.30, pose.z], Math.max(.1, canvas.clientWidth / canvas.clientHeight));
+      return head && Math.abs(head.x) < .82 && head.y > -.55 && head.y < .82 && candidate.distance >= 1.5;
+    };
+    if ((follow.distance < 2.05 || !headFits(follow)) && V?.retractCamera) {
       fov = 95;
       const alternatives = [follow, ...[-1, 1].flatMap(side => [
         [pose.x - look.x * 1.6 + right.x * side * 2.4, feet + 2.65 - look.y * 1.6, pose.z - look.z * 1.6 + right.z * side * 2.4],
         [pose.x - look.x * 2 + right.x * side * 1.4, feet + 4.2, pose.z - look.z * 2 + right.z * side * 1.4],
-        [pose.x - look.x * .15 + right.x * side * 2.9, feet + 2.5, pose.z - look.z * .15 + right.z * side * 2.9]
+        [pose.x - look.x * .15 + right.x * side * 2.9, feet + 2.5, pose.z - look.z * .15 + right.z * side * 2.9],
+        [pose.x - back.x * 9 + right.x * side, feet + 3.2, pose.z - back.z * 9 + right.z * side]
       ]).map(point => V.retractCamera(cameraBlock, anchor, point, .20))];
       alternatives.push(V.retractCamera(cameraBlock, anchor, [pose.x, feet + 8, pose.z - look.z * .15], .20));
       const score = candidate => {
-        const delta = aimPoint.map((value, i) => value - candidate.position[i]), length = Math.hypot(...delta) || 1;
-        const head = V.projectPoint({ position: candidate.position, yaw: Math.atan2(-delta[0], -delta[2]), pitch: Math.asin(delta[1] / length), fov }, [pose.x, feet + 1.30, pose.z], Math.max(.1, canvas.clientWidth / canvas.clientHeight));
-        const fits = head && Math.abs(head.x) < .9 && Math.abs(head.y) < .9 && candidate.distance >= 1.5;
-        return candidate.distance + (fits ? 20 : 0);
+        return candidate.distance + (headFits(candidate) ? 20 : 0);
       };
       let choice = alternatives[followChoice] ? followChoice : 0;
       for (let i = 0; i < alternatives.length; i++) if (score(alternatives[i]) > score(alternatives[choice]) + .4) choice = i;
@@ -520,7 +526,8 @@
     const now = performance.now(), elapsed = Math.min(.05, Math.max(0, (now - followTime) / 1000)); followTime = now;
     if (followPosition && motionAllowed() && V?.retractCamera) {
       const factor = 1 - Math.exp(-18 * elapsed), blended = follow.position.map((value, i) => followPosition[i] + (value - followPosition[i]) * factor);
-      follow = V.retractCamera(cameraBlock, anchor, blended, .20);
+      const smoothed = V.retractCamera(cameraBlock, anchor, blended, .20);
+      if (headFits(smoothed)) follow = smoothed;
     }
     followPosition = follow.position.slice();
     const dx = aimPoint[0] - follow.position[0], dy = aimPoint[1] - follow.position[1], dz = aimPoint[2] - follow.position[2], length = Math.hypot(dx, dy, dz) || 1;

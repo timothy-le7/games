@@ -35,7 +35,7 @@
   function supportY(actor){return actor.gravity===1?.44:CEILING-.44;}
   function inputActor(actor,input){actor.held=!!input.held;if(input.pressed){actor.press=true;actor.buffer=.115;}}
   function recommendedInput(match,actor){
-    const level=levels[match.level],baseReaction={steady:3.9,sharp:4.25,ace:4.55}[actor.difficulty]||4.55,reaction=baseReaction+Math.min(.72,actor.deaths*.14),section=sectionAt(level,actor.x+.15);
+    const level=levels[match.level],baseReaction={steady:3.9,sharp:4.25,ace:4.55}[actor.difficulty]||4.55,reaction=baseReaction+Math.min(.72,actor.deaths*.14),section=sectionAt(level,actor.x+(actor.kind==='cpu'?.15:0));
     if(section.mode==='flight'){
       const next=level.obstacles.find(o=>o.type==='gate'&&o.x>actor.x+1),target=next?next.center:3,predicted=actor.y+actor.vy*(actor.difficulty==='steady'?.16:.24);
       return{held:predicted<target,pressed:false};

@@ -17,7 +17,7 @@
   <main id="app">
     <canvas id="arena" aria-label="Rivet Rumble 3D arena"></canvas>
     <section id="hud" class="hud hidden" aria-label="Match status">
-      <div class="score-strip"><div><span class="team blue"></span><strong id="blueScore">0</strong><small>BLUE</small></div><div id="matchClock">1:18</div><div><strong id="redScore">0</strong><small>RED</small><span class="team red"></span></div></div>
+      <div class="score-strip"><div><span class="team blue"></span><strong id="blueScore">0</strong><small id="blueLabel">BLUE</small></div><div id="matchClock">1:18</div><div><strong id="redScore">0</strong><small id="redLabel">RED</small><span class="team red"></span></div></div>
       <div class="player-readout"><div class="health"><i id="healthFill"></i></div><span id="ammoReadout">4 bolts</span><span id="specialReadout">Special charging</span></div>
       <button id="pauseButton" class="round-button" type="button" aria-label="Pause match">Ⅱ</button>
     </section>
@@ -39,13 +39,14 @@
       <div class="arena-row" id="arenaRow" role="group" aria-label="Arena"></div>
       <p id="fighterNote" class="fighter-note"></p>
       <button id="startButton" class="start-button" type="button">Start Foundry Hold</button>
+      <button id="newMatchButton" class="start-button hidden" type="button">Start new match with selected crew</button>
       <div class="menu-actions"><button id="settingsButton" type="button">Settings &amp; saves</button><button data-install-game type="button">Install / offline help</button><a data-all-games href="../">All games</a></div>
       <span data-game-offline-status class="offline-status" role="status"></span>
       <p id="menuNotice" class="notice" role="status" aria-live="polite"></p>
     </section>
     <section id="pausePanel" class="panel modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
       <p class="eyebrow">MATCH PAUSED</p><h2 id="pauseTitle">Tools down.</h2><p id="pauseDetail">No simulation runs while paused.</p>
-      <div class="modal-actions"><button id="resumeButton" class="start-button" type="button">Resume</button><button id="quitButton" type="button">Save &amp; return to hangar</button></div>
+      <div class="modal-actions"><button id="resumeButton" class="start-button" type="button">Resume</button><button id="quitButton" type="button">Save &amp; return to hangar</button><button id="pauseExportButton" type="button">Export match backup</button></div>
     </section>
     <section id="settingsPanel" class="panel modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <p class="eyebrow">LOCAL WORKBENCH</p><h2 id="settingsTitle">Settings &amp; backups</h2>
