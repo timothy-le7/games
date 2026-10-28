@@ -15,7 +15,7 @@
 </head>
 <body>
   <main id="app">
-    <canvas id="arena" aria-label="Rivet Rumble 3D arena"></canvas>
+    <canvas tabindex="0" id="arena" aria-label="Rivet Rumble 3D arena"></canvas>
     <section id="hud" class="hud hidden" aria-label="Match status">
       <div class="score-strip"><div><span class="team blue"></span><strong id="blueScore">0</strong><small id="blueLabel">BLUE</small></div><div id="matchClock">1:18</div><div><strong id="redScore">0</strong><small id="redLabel">RED</small><span class="team red"></span></div></div>
       <div class="player-readout"><div class="health"><i id="healthFill"></i></div><span id="ammoReadout">4 bolts</span><span id="specialReadout">Special charging</span></div>
@@ -31,7 +31,7 @@
       <p class="eyebrow">LOCAL CPU SPORT</p>
       <h1 id="menuTitle">Rivet <em>Rumble</em></h1>
       <p class="lede">Mechanical crews compete in a pocket-sized working foundry. Every rival here is an offline CPU using the same tools, walls, ammo and damage rules as you.</p>
-      <p class="tutorial"><strong>Hands on:</strong> move with the left thumb; drag the right thumb and release to fire. AUTO FIRE only targets a visible rival. Desktop: WASD/arrows + pointer, Space for Special.</p>
+      <p class="tutorial"><strong>Hands on:</strong> move with the left thumb; drag the right thumb and release to fire. AUTO FIRE only targets a visible rival. Desktop: WASD/arrows move; aim with the pointer and hold left click to fire, or hold F for quick fire. Q/Space or right click uses Special. P/Escape pauses. Tab and Enter operate menus.</p>
       <div class="mode-row" id="modeRow" role="group" aria-label="Mode"></div>
       <div class="choice-label">Choose a machine</div>
       <div class="roster" id="roster" aria-label="Fighter roster"></div>

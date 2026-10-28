@@ -85,11 +85,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.s
 </head>
 <body>
 <div class="desktop-brand">HEXGAME<span>Explore. Build. Conquer.</span></div>
-<div class="desktop-help">Drag to explore · Scroll to zoom<br><kbd>T</kbd> technology <kbd>E</kbd> end turn <kbd>C</kbd> capital</div>
+<div class="desktop-help">Drag / WASD to explore · Scroll / + − to zoom<br><kbd>N</kbd> next unit · arrows aim · Enter selects<br><kbd>T</kbd> tech <kbd>E</kbd> end turn <kbd>C</kbd> capital · P / Esc menu</div>
 <main class="phone" id="phone">
  <div class="status-bar" aria-hidden="true"><span>9:41</span><div class="island"></div><div class="status-icons"><svg viewBox="0 0 20 12"><path fill="currentColor" d="M1 8h3v4H1zM6 6h3v6H6zM11 3h3v9h-3zM16 0h3v12h-3z"/></svg><svg viewBox="0 0 16 12"><path fill="none" stroke="currentColor" stroke-width="2" d="M1 4Q8-2 15 4M4 7q4-4 8 0"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/></svg><svg viewBox="0 0 26 12"><rect x="1" y="1" width="21" height="10" rx="2" fill="none" stroke="currentColor"/><rect x="3" y="3" width="17" height="6" rx="1" fill="currentColor"/><path stroke="currentColor" stroke-width="2" d="M24 4v4"/></svg></div></div>
  <header class="topbar"><div id="tribe-mark" class="tribe-mark"></div><div class="tribe-title"><strong id="tribe-name">Crownlanders</strong><small class="team-identity" id="team-identity">1 · YOU</small></div><div class="stat"><span class="stat-label">Score</span><div class="stat-value" id="score">0</div></div><div class="stat"><span class="stat-label" id="stars-label">Stars (+2)</span><div class="stat-value"><span data-icon="star"></span><span id="stars">5</span></div><small id="income">+2 per turn</small></div><div class="stat turn-stat"><span class="stat-label">Turn</span><div class="stat-value" id="turn">0</div><small id="turn-label">Turn</small></div></header>
- <div class="stage" id="stage"><canvas id="map" aria-label="Interactive isometric world. Tap a unit, then a highlighted tile to move. Drag to explore." tabindex="0"></canvas><div class="map-heading"><b id="mode-label">DOMINATION</b><span id="opponents-label">2 rival tribes</span></div><button class="ready-pill" id="next-unit" aria-label="Select the next available unit"><span class="dot"></span><span id="ready-count">1 unit ready</span><span data-icon="chevron"></span></button><div class="map-tools"><button id="center-map" title="Center on capital (C)" aria-label="Center on your capital"><span data-icon="target"></span></button><button class="zoom" id="zoom-in" aria-label="Zoom in">+</button><button class="zoom" id="zoom-out" aria-label="Zoom out">−</button></div><div class="tutorial" id="tutorial"><div class="hint-copy"><strong id="hint-title">Your next move</strong><span id="hint-copy">Explore, build, and grow your tribe.</span></div><button id="hint-go" aria-label="Show suggested action">Show</button><button id="dismiss-tutorial" aria-label="Dismiss hints">×</button></div><section class="selection hidden" id="selection" aria-label="Selected tile"></section><div class="turn-progress" id="turn-progress"><i class="spinner"></i><span id="thinking">The other tribes are playing…</span></div></div>
+ <div class="stage" id="stage"><canvas id="map" aria-label="Isometric world. N selects your next unit; arrow keys choose an adjacent tile; Enter or Space selects, moves or attacks. WASD pans. Touch: tap units and highlighted tiles; drag or pinch to explore." tabindex="0"></canvas><div class="map-heading"><b id="mode-label">DOMINATION</b><span id="opponents-label">2 rival tribes</span></div><button class="ready-pill" id="next-unit" aria-label="Select the next available unit"><span class="dot"></span><span id="ready-count">1 unit ready</span><span data-icon="chevron"></span></button><div class="map-tools"><button id="center-map" title="Center on capital (C)" aria-label="Center on your capital"><span data-icon="target"></span></button><button class="zoom" id="zoom-in" aria-label="Zoom in">+</button><button class="zoom" id="zoom-out" aria-label="Zoom out">−</button></div><div class="tutorial" id="tutorial"><div class="hint-copy"><strong id="hint-title">Your next move</strong><span id="hint-copy">Explore, build, and grow your tribe.</span></div><button id="hint-go" aria-label="Show suggested action">Show</button><button id="dismiss-tutorial" aria-label="Dismiss hints">×</button></div><section class="selection hidden" id="selection" aria-label="Selected tile"></section><div class="turn-progress" id="turn-progress"><i class="spinner"></i><span id="thinking">The other tribes are playing…</span></div></div>
  <section class="battle-preview" id="battle-preview" role="status" aria-live="polite" hidden></section>
  <nav class="nav"><button class="nav-button" id="menu-button"><span class="nav-disc" data-icon="menu"></span><span>Menu</span></button><button class="nav-button" id="stats-button" aria-label="Game statistics"><span class="nav-disc"><span id="stats-mark"></span></span><span>Game Stats</span></button><button class="nav-button" id="tech-button"><span class="nav-disc" data-icon="tech"></span><span>Tech Tree</span></button><button class="nav-button end-button" id="end-turn"><span class="nav-disc" data-icon="check"></span><span id="end-label">Next Turn</span></button></nav><div class="home-bar" aria-hidden="true"></div>
  <div class="toast" id="toast" role="status" aria-live="polite"></div><div class="turn-banner" id="turn-banner"><div><strong id="banner-title">Your turn</strong><span id="banner-subtitle"></span></div></div>
@@ -441,6 +441,51 @@ const SAVE_KEY='cairncoast-save-v1', BACKUP_KEY='cairncoast-save-backup-v1', PRE
 // Older installations retain their data; copy a validated game once into the new namespace.
 try{if(!localStorage.getItem(SAVE_KEY)){for(const [from,to]of [['poly-top-save-v1',SAVE_KEY],['poly-top-save-backup-v1',BACKUP_KEY],['poly-top-prefs-v1',PREFS_KEY]]){const value=localStorage.getItem(from);if(value)localStorage.setItem(to,value)}}}catch{}
 let prefs={sound:false,hint:true};try{Object.assign(prefs,JSON.parse(localStorage.getItem(PREFS_KEY)||'{}'))}catch{}
+  // Browser/IME shortcuts and native form/button activation keep their own keys.
+  function gameKeyBlocked(event) {
+    const form=event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+    const backFromCheck=event.code==='Escape'&&form?.matches('input[type="checkbox"],input[type="radio"]');
+    return event.defaultPrevented || event.isComposing || event.keyCode===229 || event.ctrlKey || event.metaKey || event.altKey || !!form&&!backFromCheck;
+  }
+  function nativeKeyActivation(event) {
+    return (event.code==='Space'||event.code==='Enter'||event.code==='NumpadEnter'||event.key===' ') && !!event.target?.closest?.('button,a[href],[role="button"]');
+  }
+  // Secondary touch contacts do not consistently synthesize a native click.
+  // Activate plain buttons from their own completed contact, then deduplicate
+  // the compatibility click. Keyboard/assistive click(detail=0) stays native.
+  function installGameButtons(beforePress){
+    const pointers=new Map(),recent=new WeakMap();let finishedContact=null;
+    const plain=node=>node?.closest?.('button:not(#mineButton):not(#pulse):not([data-hand-card])');
+    const finish=(event,cancelled)=>{
+      const held=pointers.get(event.pointerId);if(!held)return;pointers.delete(event.pointerId);recent.set(held.node,performance.now()+650);finishedContact={x:event.clientX,y:event.clientY,until:performance.now()+650};
+      if(cancelled||held.moved||held.node.disabled||!held.node.isConnected)return;
+      const r=held.node.getBoundingClientRect();if(event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)held.node.click();
+    };
+    document.addEventListener('pointerdown',event=>{
+      finishedContact=null;const node=plain(event.target);if(!node||node.disabled||event.button!==0)return;
+      recent.set(node,performance.now()+650);if([...pointers.values()].some(p=>p.node===node))return;
+      beforePress?.();pointers.set(event.pointerId,{node,x:event.clientX,y:event.clientY,moved:false});
+      if(event.pointerType==='mouse'){event.preventDefault();node.focus({preventScroll:true});}
+      try{node.setPointerCapture(event.pointerId);}catch{}
+    },true);
+    document.addEventListener('pointermove',event=>{const held=pointers.get(event.pointerId);if(held&&Math.hypot(event.clientX-held.x,event.clientY-held.y)>10)held.moved=true;},true);
+    document.addEventListener('pointerup',event=>finish(event,false),true);
+    for(const type of ['pointercancel','lostpointercapture'])document.addEventListener(type,event=>finish(event,true),true);
+    document.addEventListener('click',event=>{const node=plain(event.target);if(event.detail>0&&(node&&performance.now()<(recent.get(node)||0)||finishedContact&&performance.now()<finishedContact.until&&Math.hypot(event.clientX-finishedContact.x,event.clientY-finishedContact.y)<32)){event.preventDefault();event.stopImmediatePropagation();}},true);
+    const release=()=>{pointers.clear();finishedContact=null;};window.addEventListener('blur',release);window.addEventListener('orientationchange',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
+  }
+
+  installGameButtons(()=>cancelMapGesture());
+  function trapGameTab(event,root) {
+    if(event.key!=='Tab'||event.ctrlKey||event.metaKey||event.altKey||!root)return false;
+    const nodes=[...root.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(node=>node.getClientRects().length);
+    const index=nodes.indexOf(document.activeElement);
+    // WebKit can skip buttons under the system's default Tab preference.
+    if(nodes.length){event.preventDefault();nodes[index<0?(event.shiftKey?nodes.length-1:0):(index+(event.shiftKey?-1:1)+nodes.length)%nodes.length].focus();}
+    return true;
+  }
+
+let keyboardTile=null;
 let game,selected=null,selectCity=false,busy=false,techSelected=null,upgradeQueue=[],particles=[],effects=[],toastTimer,bannerTimer,audioCtx,animationUntil=0,animationTimer,pendingMapTile=null;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const canvas=$('map');let ctx=canvas.getContext('2d');
@@ -660,6 +705,7 @@ function generateWorld(keys,random,mapType){
  recomputeTerritory();starts.forEach((p,id)=>reveal(p.x,p.y,2,true,id));return starts;
 }
 function newGame(options={}){
+ keyboardTile=null;
  const tribe=TRIBES[options.tribe]?options.tribe:'crown',mode=options.mode==='perfection'?'perfection':'domination',count=opponentCount(options.size,options.opponents),sizeAuto=options.size==null||options.size==='auto',size=sizeAuto?appWorldSize(mode,count):worldSettings(options.size).size,seed=options.seed??Math.floor(Math.random()*1e9);
  const rivalsRandom=rng(seed^0x715b27a1),others=shuffle(Object.keys(TRIBES).filter(k=>k!==tribe),rivalsRandom),requested=(options.opponentTribes||[]).filter(k=>Object.hasOwn(TRIBES,k)),rivals=[...requested,...others.filter(k=>!requested.includes(k))],keys=[tribe,...(options.mirror?Array(count).fill(tribe):rivals.slice(0,count))],mapType=Object.hasOwn(MAP_TYPES,options.mapType)?options.mapType:'continents';
  game={version:1,generatorVersion:4,rulesVersion:5,presentationVersion:3,ruleEvents:0,rivalSelection:options.mirror?'mirror':requested.length===count&&requested.every(k=>k===requested[0])?requested[0]:'random',seed,size,sizeAuto,mapType,opponentsAuto:false,mode,difficulty:['easy','normal','hard','crazy'].includes(options.difficulty)?options.difficulty:'normal',turn:0,nextId:1,kills:0,losses:0,bonus:0,over:false,winner:null,contactQueue:[],factions:keys.map((k,id)=>({id,tribe:k,stars:TRIBES[k].stars,tech:TRIBES[k].start?[TRIBES[k].start]:[],eliminated:false,contacts:[]})),tiles:[],cities:[],units:[],seen:Array(size*size).fill(false)};
@@ -1652,6 +1698,7 @@ function render(time=performance.now()){
  // legal destination. Their centers remain open to show the terrain.
  for(const m of moves.values())drawTileCue(tileAt(m.x,m.y),ACTION_COLORS.move);
  if(selected&&!ownUnit)drawTileCue(tileAt(selected.x,selected.y),ACTION_COLORS.selected,true);
+ if(keyboardTile&&document.activeElement===canvas){const t=tileAt(keyboardTile.x,keyboardTile.y);if(t)drawTileCue(t,'#ffe29a',true);}
  for(const e of effects)if(e.kind!=='death'&&e.kind!=='explorer'&&seen(tileAt(e.from.x,e.from.y))&&seen(tileAt(e.to.x,e.to.y)))drawAttackEffect(e,time);ctx.restore();
  const battle=battlePreviewModel();for(const c of game.cities)if(visualSeen(tileAt(c.x,c.y),time)&&inViewport(iso(c.x,c.y)))drawCityLabel(c);for(const u of game.units)if(visualSeen(tileAt(u.x,u.y),time)&&inViewport(iso(unitPose(u).x,unitPose(u).y)))drawUnitLabel(u,battle);for(const e of effects)if(e.kind==='death'&&time<e.start&&seen(tileAt(e.unit.x,e.unit.y)))drawUnitLabel({...e.unit,hp:e.oldHP});
  particles=particles.filter(p=>time-p.start<p.duration);for(const p of particles){const age=Math.max(0,(time-p.start)/p.duration);if(time<p.start||!seen(tileAt(p.x,p.y)))continue;const s=screenPoint(p.x,p.y),lift=reducedMotion.matches?0:age*27,y=s.y-56-lift-p.offset;ctx.globalAlpha=Math.min(1,(1-age)*3);ctx.font='600 13px "Avenir Next", sans-serif';ctx.textAlign='center';ctx.strokeStyle='#000b';ctx.lineWidth=3;ctx.strokeText(p.text,s.x,y);ctx.fillStyle=p.color;ctx.fillText(p.text,s.x,y)}ctx.globalAlpha=1;
@@ -1795,11 +1842,13 @@ function hitMap(clientX,clientY){
  }
  hits.sort((a,b)=>b.depth-a.depth);if(!hits.length)return{tile:ground,unitHit:false};const u=hits[0].u,p=unitScreenPoint(u,performance.now()),same=ground&&ground.x===u.x&&ground.y===u.y;return{tile:tileAt(u.x,u.y),unitHit:!same||y<p.y-8*unitArtScale(u)*view.zoom};
 }
-function clickMap(clientX,clientY){
- if(busy)return;const hit=hitMap(clientX,clientY),t=hit.tile;if(isAnimating()){if(t&&seen(t))pendingMapTile={x:t.x,y:t.y};return}if(!t){selected=null;updateSelection();return}if(!seen(t)){toast('Explore this area with your units to reveal it.');return}
+function cancelMapGesture(){pointerState.clear();gesture=null;panMotion=null;clearTimeout(battleHoldTimer);battleHoldTimer=0;canvas.classList.remove('dragging');requestRender()}
+function clickMap(clientX,clientY){const hit=hitMap(clientX,clientY);activateMapTile(hit.tile,hit.unitHit)}
+function activateMapTile(t,unitHit=false){
+ if(busy||$('modal-layer').classList.contains('open')||$('tech-layer').classList.contains('open'))return;if(isAnimating()){if(t&&seen(t))pendingMapTile={x:t.x,y:t.y};return}if(!t){selected=null;updateSelection();return}if(!seen(t)){toast('Explore this area with your units to reveal it.');return}
  if(game.over){selected=null;updateSelection();return}const u=selected&&!selectCity?unitAt(selected.x,selected.y):null,target=unitAt(t.x,t.y);
  if(u?.owner===0){if(target&&target.owner!==0&&attackable(u).includes(target)){attackUnit(u,target);return}if(reachable(u).has(tileIndex(t.x,t.y))){moveUnit(u,t.x,t.y);return}}
- selectCity=!hit.unitHit&&!!(selected&&selected.x===t.x&&selected.y===t.y&&(cityAt(t.x,t.y)||unitAt(t.x,t.y))&&!selectCity);selected={x:t.x,y:t.y};sound();updateSelection();
+ selectCity=!unitHit&&!!(selected&&selected.x===t.x&&selected.y===t.y&&(cityAt(t.x,t.y)||unitAt(t.x,t.y))&&!selectCity);selected={x:t.x,y:t.y};sound();updateSelection();
 }
 function clearBattlePreview(restore=true){clearTimeout(battleHoldTimer);battleHoldTimer=0;if(battlePreview){const camera=battlePreview.camera;battlePreview=null;$('stage').classList.remove('battle-planning');const hud=$('battle-preview');hud.hidden=true;$('phone').appendChild(hud);$('selection').classList.remove('previewing');if(restore&&camera){cameraMotion=null;Object.assign(view,camera);saveViewSoon()}requestRender()}}
 function battlePreviewModel(){
@@ -1824,6 +1873,7 @@ function presentBattlePreview(attacker,target,pinned=false){
 }
 function zoomMap(factor,cx=view.w/2,cy=view.h/2,persist=true){clearBattlePreview();cameraMotion=panMotion=null;const next=Math.max(.42,Math.min(1.9,view.zoom*factor)),ratio=next/view.zoom;view.x=(view.x-(cx-view.w/2))*ratio+(cx-view.w/2);view.y=(view.y-(cy-view.h/2))*ratio+(cy-view.h/2);view.zoom=next;requestRender();if(persist)saveViewSoon()}
 canvas.addEventListener('pointerdown',e=>{
+ if(e.button!==0)return;keyboardTile=null;canvas.focus({preventScroll:true});
  clearBattlePreview(false);
  cameraMotion=panMotion=null;pointerState.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);
  if(pointerState.size===1){gesture={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false,pinched:false,previewed:false,time:performance.now(),vx:0,vy:0};battleHoldTimer=setTimeout(()=>{if(gesture&&!gesture.moved&&!gesture.pinched&&showBattlePreview(e.clientX,e.clientY))gesture.previewed=true},300)}
@@ -1839,7 +1889,7 @@ canvas.addEventListener('pointermove',e=>{
 canvas.addEventListener('pointerup',e=>{clearBattlePreview();pointerState.delete(e.pointerId);if(!pointerState.size){const now=performance.now();if(gesture&&!gesture.moved&&!gesture.pinched&&!gesture.previewed)clickMap(e.clientX,e.clientY);else if(gesture?.moved&&!gesture.pinched&&!reducedMotion.matches&&now-gesture.time<80){panMotion={x:Math.max(-2.5,Math.min(2.5,gesture.vx)),y:Math.max(-2.5,Math.min(2.5,gesture.vy)),time:now};requestRender()}gesture=null;canvas.classList.remove('dragging')}else if(gesture){const p=[...pointerState.values()][0];gesture.x=p.x;gesture.y=p.y;gesture.moved=true}saveViewSoon()});
 canvas.addEventListener('pointercancel',()=>{clearBattlePreview();panMotion=null;pointerState.clear();gesture=null;canvas.classList.remove('dragging');requestRender();saveViewSoon()});canvas.addEventListener('pointerleave',()=>{if(!pointerState.size&&!battlePreview?.pinned)clearBattlePreview()});canvas.addEventListener('contextmenu',e=>e.preventDefault());canvas.addEventListener('wheel',e=>{e.preventDefault();const r=canvas.getBoundingClientRect();zoomMap(Math.exp(-e.deltaY*.001),e.clientX-r.left,e.clientY-r.top)},{passive:false});
 let returnFocus=null;
-function openModal(html,label='Game menu'){clearBattlePreview();$('tech-layer').classList.remove('open');returnFocus=document.activeElement;$('modal').classList.remove('tribe-chooser','unit-chooser','contact-encounter');$('modal').innerHTML=html;$('modal').setAttribute('aria-label',label);$('modal-layer').classList.add('open');if($('modal-close'))$('modal-close').onclick=()=>closeModal();setTimeout(()=>$('modal').querySelector('button,select')?.focus(),40)}
+function openModal(html,label='Game menu'){cancelMapGesture();clearBattlePreview();$('tech-layer').classList.remove('open');returnFocus=document.activeElement;$('modal').classList.remove('tribe-chooser','unit-chooser','contact-encounter');$('modal').innerHTML=html;$('modal').setAttribute('aria-label',label);$('modal-layer').classList.add('open');if($('modal-close'))$('modal-close').onclick=()=>closeModal();$('modal').querySelector('button,select')?.focus({preventScroll:true})}
 function closeModal(force=false){if(!force&&upgradeQueue.length){showNextUpgrade();return}$('modal-layer').classList.remove('open');requestRender();if(returnFocus&&returnFocus.isConnected)returnFocus.focus({preventScroll:true});if(game?.contactQueue?.length)scheduleContactPresentation(40)}
 function modalCloseButton(){return `<button class="close-mini modal-close" id="modal-close" aria-label="Back to game">${icon('close')}</button>`}
 function openMenu(){
@@ -1862,7 +1912,7 @@ function openNewGame(){
  $('start-game').onclick=()=>{const settings={tribe:chosen,mode:$('new-mode').value,difficulty:$('new-difficulty').value,opponents:$('new-opponents').value,size:$('new-size').value,mapType:$('new-map-type').value,mirror:$('new-rivals').value==='mirror',opponentTribes:Object.hasOwn(TRIBES,$('new-rivals').value)?Array(Number($('new-opponents').value)).fill($('new-rivals').value):[]};newGame(settings);sound('turn');toast('Welcome to the world, '+tribeFor(0).name+'.')};
 }
 function openHelp(){
- openModal(`${modalCloseButton()}<span class="eyebrow">EXPLORATION IS EVERYTHING</span><h2>Your first few turns</h2><p class="subtitle">Build your tribe into a tiny, mighty civilization.</p><div class="help-list"><div class="help-step"><span class="help-number">1</span><div><b>Explore the square.</b><br>Tap your warrior, then a blue tile to move. Drag the map and pinch or scroll to zoom. Start a turn on ancient ruins, then tap Examine to find treasure, technology, population, an Explorer, or a veteran unit.</div></div><div class="help-step"><span class="help-number">2</span><div><b>Grow your cities.</b><br>Harvest fruit, animals, and fish inside your borders. Climbing reveals gold ore on some mountains; Mining lets you build mines there for 5 stars and 2 population. Mountains without ore cannot be mined.</div></div><div class="help-step"><span class="help-number">3</span><div><b>Spend your stars wisely.</b><br>Research in Technology to unlock buildings and units. Ports cost 7 stars and turn arriving land units into Rafts. Upgrade a Raft in your territory into a Scout, Rammer or Bomber.</div></div><div class="help-step"><span class="help-number">4</span><div><b>Settle. Battle. Conquer.</b><br>Stand on a village or enemy city. On your next turn, tap Capture. Tap red targets to attack. An idle damaged unit can recover.</div></div><div class="help-step"><span class="help-number">5</span><div><b>Make every turn count.</b><br>Discover four Lighthouses for capital population. Track free Monument rewards in Game Stats. Markets beside production buildings raise your income. End turn refreshes units and collects stars. In Domination, capture every enemy city. In Perfection, build your highest score in 30 turns.</div></div></div><button class="large-button" id="help-done">Let's explore ${icon('chevron')}</button>`,'How to play');$('help-done').onclick=()=>closeModal();
+ openModal(`${modalCloseButton()}<span class="eyebrow">EXPLORATION IS EVERYTHING</span><h2>Your first few turns</h2><p class="subtitle">Build your tribe into a tiny, mighty civilization.</p><p class="subtitle"><b>Keyboard:</b> N selects a ready unit. With the map focused, arrow keys choose adjacent tiles and Enter/Space selects or takes the same move/attack as a tap. WASD pans; +/− zooms; T opens technology; E ends a turn; C centers; M/P opens the menu; Escape cancels or goes back. Tab and Enter operate menus. <b>Touch:</b> tap a unit then a marked tile; drag to pan, pinch to zoom, and use the labeled buttons.</p><div class="help-list"><div class="help-step"><span class="help-number">1</span><div><b>Explore the square.</b><br>Tap your warrior, then a blue tile to move. Drag the map and pinch or scroll to zoom. Start a turn on ancient ruins, then tap Examine to find treasure, technology, population, an Explorer, or a veteran unit.</div></div><div class="help-step"><span class="help-number">2</span><div><b>Grow your cities.</b><br>Harvest fruit, animals, and fish inside your borders. Climbing reveals gold ore on some mountains; Mining lets you build mines there for 5 stars and 2 population. Mountains without ore cannot be mined.</div></div><div class="help-step"><span class="help-number">3</span><div><b>Spend your stars wisely.</b><br>Research in Technology to unlock buildings and units. Ports cost 7 stars and turn arriving land units into Rafts. Upgrade a Raft in your territory into a Scout, Rammer or Bomber.</div></div><div class="help-step"><span class="help-number">4</span><div><b>Settle. Battle. Conquer.</b><br>Stand on a village or enemy city. On your next turn, tap Capture. Tap red targets to attack. An idle damaged unit can recover.</div></div><div class="help-step"><span class="help-number">5</span><div><b>Make every turn count.</b><br>Discover four Lighthouses for capital population. Track free Monument rewards in Game Stats. Markets beside production buildings raise your income. End turn refreshes units and collects stars. In Domination, capture every enemy city. In Perfection, build your highest score in 30 turns.</div></div></div><button class="large-button" id="help-done">Let's explore ${icon('chevron')}</button>`,'How to play');$('help-done').onclick=()=>closeModal();
 }
 function openTraining(c){
  if(busy||game.over||isAnimating()||upgradeQueue.length||!game.cities.includes(c)||c.owner!==0)return;
@@ -1912,7 +1962,7 @@ function zoomTech(delta){
  techZoom=Math.max(.8,Math.min(1.3,Math.round((techZoom+delta)*100)/100));renderTech();
  map.scrollLeft=x*techZoom-map.clientWidth/2;map.scrollTop=y*techZoom-map.clientHeight/2;
 }
-function openTech(key=null){if(busy||isAnimating()||game.over){if(busy)toast('Wait for your turn.');return}clearBattlePreview();closeModal(true);techView='branch';techSelected=TECHS[key]?key:techSelected||tribeFor(0).start||'organization';$('tech-layer').classList.add('open');renderTech();centerTechBranch();sound();setTimeout(()=>$('close-tech').focus({preventScroll:true}),30)}
+function openTech(key=null){cancelMapGesture();if(busy||isAnimating()||game.over){if(busy)toast('Wait for your turn.');return}clearBattlePreview();closeModal(true);techView='branch';techSelected=TECHS[key]?key:techSelected||tribeFor(0).start||'organization';$('tech-layer').classList.add('open');renderTech();centerTechBranch();sound();$('close-tech').focus({preventScroll:true})}
 function finishTechDrag(){const id=techDrag?.id;techDrag=null;$('tech-map').classList.remove('dragging');if(id!=null&&$('tech-map').hasPointerCapture(id))$('tech-map').releasePointerCapture(id)}
 function closeTech(){finishTechDrag();$('tech-layer').classList.remove('open');requestRender();$('tech-button').focus({preventScroll:true});if(upgradeQueue.length)showNextUpgrade();else scheduleContactPresentation(30)}
 function renderTech(){
@@ -1970,11 +2020,22 @@ $('stats-button').onclick=openStats;$('menu-button').onclick=openMenu;$('tech-bu
 $('center-map').onclick=()=>{const c=playerCities().find(c=>c.capital)||playerCities()[0];if(c){focusOn(c.x,c.y,true);sound()}};$('zoom-in').onclick=()=>zoomMap(1.2);$('zoom-out').onclick=()=>zoomMap(1/1.2);$('hint-go').onclick=showGuideTarget;$('dismiss-tutorial').onclick=()=>{prefs.hint=false;updateGuide();save()};
 $('modal-layer').addEventListener('click',e=>{if(e.target===$('modal-layer')&&!upgradeQueue.length&&!$('modal').classList.contains('contact-encounter'))closeModal()});
 document.addEventListener('keydown',e=>{
- if(e.key==='Tab'){const open=$('tech-layer').classList.contains('open')?$('tech-layer'):$('modal-layer').classList.contains('open')?$('modal'):null;if(open){const elements=[...open.querySelectorAll('button:not(:disabled),select,[tabindex="0"]')],first=elements[0],last=elements.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}return}
- if(e.key==='Escape'){if($('tech-layer').classList.contains('open'))closeTech();else if($('modal-layer').classList.contains('open')&&!$('modal').classList.contains('contact-encounter'))closeModal();else if(!$('modal-layer').classList.contains('open')){selected=null;updateSelection()}return}
- if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)||$('modal-layer').classList.contains('open')||$('tech-layer').classList.contains('open'))return;
- if(e.key.toLowerCase()==='t')openTech();if(e.key.toLowerCase()==='e'){e.preventDefault();endTurn()}if(e.key.toLowerCase()==='c')$('center-map').click();if(e.key==='+'||e.key==='=')zoomMap(1.15);if(e.key==='-')zoomMap(1/1.15);if(e.key.startsWith('Arrow'))cameraMotion=panMotion=null;if(e.key==='ArrowLeft'){e.preventDefault();view.x+=35}if(e.key==='ArrowRight'){e.preventDefault();view.x-=35}if(e.key==='ArrowUp'){e.preventDefault();view.y+=35}if(e.key==='ArrowDown'){e.preventDefault();view.y-=35}requestRender();saveViewSoon();
+ const modal=$('tech-layer').classList.contains('open')?$('tech-layer'):$('modal-layer').classList.contains('open')?$('modal'):null;
+ if(trapGameTab(e,modal)||gameKeyBlocked(e))return;
+ if(e.code==='Escape'&&!e.repeat){e.preventDefault();if($('tech-layer').classList.contains('open'))closeTech();else if($('modal-layer').classList.contains('open')&&!$('modal').classList.contains('contact-encounter'))closeModal();else if(!modal){if(selected){selected=null;keyboardTile=null;updateSelection();requestRender()}else openMenu()}return}
+ if(modal||nativeKeyActivation(e))return;
+ if(!e.repeat){
+  const action={KeyT:openTech,KeyE:endTurn,KeyC:()=>$('center-map').click(),KeyM:openMenu,KeyP:openMenu,KeyN:()=>{nextUnit();if(selected)keyboardTile={...selected};canvas.focus({preventScroll:true});requestRender()}}[e.code];
+  if(action){e.preventDefault();action();return;}
+ }
+ if((e.key==='+'||e.key==='='||e.key==='-')&&!busy){e.preventDefault();zoomMap(e.key==='-'?1/1.15:1.15);return;}
+ const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.code];
+ if(delta&&document.activeElement===canvas){e.preventDefault();if(busy||game.over||isAnimating())return;const origin=keyboardTile||selected||playerCities().find(c=>c.capital)||playerCities()[0]||{x:0,y:0};keyboardTile={x:Math.max(0,Math.min(game.size-1,origin.x+delta[0])),y:Math.max(0,Math.min(game.size-1,origin.y+delta[1]))};focusOn(keyboardTile.x,keyboardTile.y,false);requestRender();return;}
+ if(['Space','Enter','NumpadEnter'].includes(e.code)&&document.activeElement===canvas&&!e.repeat){e.preventDefault();if(busy||game.over||isAnimating())return;const origin=keyboardTile||selected||playerCities().find(c=>c.capital)||playerCities()[0];if(origin){keyboardTile={x:origin.x,y:origin.y};activateMapTile(tileAt(keyboardTile.x,keyboardTile.y));requestRender()}return;}
+ const pan={KeyW:[0,35],KeyS:[0,-35],KeyA:[35,0],KeyD:[-35,0]}[e.code];
+ if(pan&&document.activeElement===canvas){e.preventDefault();cameraMotion=panMotion=null;view.x+=pan[0];view.y+=pan[1];clampPan();requestRender();saveViewSoon();}
 });
+window.addEventListener('blur',()=>{clearBattlePreview();pointerState.clear();gesture=null;panMotion=cameraMotion=null;canvas.classList.remove('dragging');requestRender()});
 new ResizeObserver(()=>{resize();render()}).observe($('stage'));resize();
 function refreshResolution(){resize();const p=battlePreviewModel();if(p&&battlePreview.pinned)focusOn((p.attacker.x+p.target.x)/2,(p.attacker.y+p.target.y)/2);if($('tech-layer').classList.contains('open')){renderTech();centerTechBranch()}requestRender()}
 window.addEventListener('resize',refreshResolution);window.visualViewport?.addEventListener('resize',refreshResolution);

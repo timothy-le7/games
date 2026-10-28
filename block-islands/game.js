@@ -20,7 +20,53 @@
   let target = null, running = true, previousStageComplete = false, completionOpen = false, lastRenderCamera = { mode: 'third', distance: 0, collision: false };
   let saveTimer = 0, lastSavedAt = performance.now(), lastTime = performance.now(), lastTargetAt = 0;
   let mineHold = null, mining = 0, audioContext = null, lastDamage = 0, toolSwingUntil = 0, feedbackTimer = 0;
-  let jumpUntil = 0, lastGroundedAt = -Infinity;
+  let jumpUntil = 0, lastGroundedAt = -Infinity, hasStarted = false;
+  const mineOwners = new Set();
+  let overlayBack = null, releasingMouseForPanel = false;
+  // Browser/IME shortcuts and native form/button activation keep their own keys.
+  function gameKeyBlocked(event) {
+    const form=event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+    const backFromCheck=event.code==='Escape'&&form?.matches('input[type="checkbox"],input[type="radio"]');
+    return event.defaultPrevented || event.isComposing || event.keyCode===229 || event.ctrlKey || event.metaKey || event.altKey || !!form&&!backFromCheck;
+  }
+  function nativeKeyActivation(event) {
+    return (event.code==='Space'||event.code==='Enter'||event.code==='NumpadEnter'||event.key===' ') && !!event.target?.closest?.('button,a[href],[role="button"]');
+  }
+  // Secondary touch contacts do not consistently synthesize a native click.
+  // Activate plain buttons from their own completed contact, then deduplicate
+  // the compatibility click. Keyboard/assistive click(detail=0) stays native.
+  function installGameButtons(beforePress){
+    const pointers=new Map(),recent=new WeakMap();let finishedContact=null;
+    const plain=node=>node?.closest?.('button:not(#mineButton):not(#pulse):not([data-hand-card])');
+    const finish=(event,cancelled)=>{
+      const held=pointers.get(event.pointerId);if(!held)return;pointers.delete(event.pointerId);recent.set(held.node,performance.now()+650);finishedContact={x:event.clientX,y:event.clientY,until:performance.now()+650};
+      if(cancelled||held.moved||held.node.disabled||!held.node.isConnected)return;
+      const r=held.node.getBoundingClientRect();if(event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)held.node.click();
+    };
+    document.addEventListener('pointerdown',event=>{
+      finishedContact=null;const node=plain(event.target);if(!node||node.disabled||event.button!==0)return;
+      recent.set(node,performance.now()+650);if([...pointers.values()].some(p=>p.node===node))return;
+      beforePress?.();pointers.set(event.pointerId,{node,x:event.clientX,y:event.clientY,moved:false});
+      if(event.pointerType==='mouse'){event.preventDefault();node.focus({preventScroll:true});}
+      try{node.setPointerCapture(event.pointerId);}catch{}
+    },true);
+    document.addEventListener('pointermove',event=>{const held=pointers.get(event.pointerId);if(held&&Math.hypot(event.clientX-held.x,event.clientY-held.y)>10)held.moved=true;},true);
+    document.addEventListener('pointerup',event=>finish(event,false),true);
+    for(const type of ['pointercancel','lostpointercapture'])document.addEventListener(type,event=>finish(event,true),true);
+    document.addEventListener('click',event=>{const node=plain(event.target);if(event.detail>0&&(node&&performance.now()<(recent.get(node)||0)||finishedContact&&performance.now()<finishedContact.until&&Math.hypot(event.clientX-finishedContact.x,event.clientY-finishedContact.y)<32)){event.preventDefault();event.stopImmediatePropagation();}},true);
+    const release=()=>{pointers.clear();finishedContact=null;};window.addEventListener('blur',release);window.addEventListener('orientationchange',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
+  }
+
+  installGameButtons();
+  function trapGameTab(event,root) {
+    if(event.key!=='Tab'||event.ctrlKey||event.metaKey||event.altKey||!root)return false;
+    const nodes=[...root.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(node=>node.getClientRects().length);
+    const index=nodes.indexOf(document.activeElement);
+    // WebKit can skip buttons under the system's default Tab preference.
+    if(nodes.length){event.preventDefault();nodes[index<0?(event.shiftKey?nodes.length-1:0):(index+(event.shiftKey?-1:1)+nodes.length)%nodes.length].focus();}
+    return true;
+  }
+
   let followChoice = 0, followPosition = null, followTime = 0;
   const effects = [];
   const input = { joy: { x: 0, y: 0, pointer: null }, look: null, keys: new Set() };
@@ -152,18 +198,18 @@
   function escape(text) { return String(text).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
   function button(id, text, cls) { return '<button id="' + id + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>'; }
   function bind(id, fn) { const node = $(id); if (node) node.addEventListener('click', fn); }
-  function open(html) { renderNeeded = true; clearInputs(); panel.innerHTML = html; overlay.classList.add('open'); running = false; }
-  function close() { overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now(); }
+  function open(html,back=close) { overlayBack=back; renderNeeded = true; clearInputs();if(document.pointerLockElement===canvas){releasingMouseForPanel=true;document.exitPointerLock?.();} panel.innerHTML = html; overlay.classList.add('open'); running = false;panel.querySelector('button,input,select')?.focus({preventScroll:true}); }
+  function close() { overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now();canvas.focus({preventScroll:true}); }
 
   function welcome(recovered) {
     const continued = profiles.campaign.completed.length || profiles.campaign.time > 1;
     const rendererNote = V ? '' : '<p class="tiny"><strong>3D view is loading.</strong> This build needs its local voxel renderer before play can begin.</p>';
-    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD. Push fully forward to run; Shift runs on a keyboard.</div><div><strong>2 · Look</strong>Drag the open right side of the view.</div><div><strong>3 · Mine</strong>Hold Mine on a block in the crosshair.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Space jumps · 1–5 hotbar · I crafting · F5 camera. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
+    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD. Push fully forward or hold Shift to run; hold C to walk slowly.</div><div><strong>2 · Look</strong>Drag the open right side, use arrow keys, or choose Mouse look on desktop.</div><div><strong>3 · Mine</strong>Hold Mine or R on a block in the crosshair. In Mouse look, hold left click.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place, Q, or right click.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Space jumps · 1–5 hotbar · E/I crafting · V camera · P/Esc pause/back. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
     bind('startButton', () => activateMode('campaign')); bind('creativeButton', () => activateMode('creative'));
   }
   function activateMode(mode) {
     syncProfile(); if (mode === 'creative' && !profiles.creative) profiles.creative = makeCreative();
-    activeMode = mode; state = clone(profiles[mode]); loadStage(); durableSave(); updateUI(); close();
+    hasStarted = true; activeMode = mode; state = clone(profiles[mode]); loadStage(); durableSave(); updateUI(); close();
   }
   function menu() {
     const offline = document.querySelector('[data-game-offline-status]')?.textContent || 'Offline status will appear after the local game is cached.';
@@ -174,7 +220,7 @@
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
   }
   function settings() {
-    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">These controls are kept only in this game’s preferences.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'));
+    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">WASD moves; arrows or a right-side drag look. Space jumps; Shift runs; C walks slowly. Hold R or Mine to gather; Q/right click places; F strikes; E/I crafts; V changes view; 1–5 selects blocks; P/Escape pauses or goes back. Mouse look locks the desktop pointer: left click mines, right click places. Escape releases the mouse. On touch, move with the left thumb and look with the right; action buttons work with another finger.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
     bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
     bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
     bind('sizeButton', () => { const sizes = [.92, 1, 1.1, 1.2, 1.28], index = sizes.indexOf(prefs.buttonSize); prefs.buttonSize = sizes[index < 0 || index === sizes.length - 1 ? 0 : index + 1]; savePrefs(); applyPrefs(); settings(); });
@@ -184,7 +230,7 @@
   function stages() {
     let cards = '';
     for (let i = 0; i <= state.unlocked; i++) cards += '<button class="recipe-card" data-stage="' + i + '"><strong>' + (i + 1) + '. ' + escape(R.STAGES[i].name) + '</strong><span>' + escape(R.STAGES[i].goalText) + (state.completed.includes(i) ? ' · Complete' : '') + '</span></button>';
-    open('<p class="eyebrow">CAMPAIGN MAP</p><h2>Choose an unlocked island</h2><div class="recipe-grid">' + cards + '</div>' + button('backMenu', 'Back', 'secondary'));
+    open('<p class="eyebrow">CAMPAIGN MAP</p><h2>Choose an unlocked island</h2><div class="recipe-grid">' + cards + '</div>' + button('backMenu', 'Back', 'secondary'),menu);
     panel.querySelectorAll('[data-stage]').forEach(node => node.addEventListener('click', () => { const stage = Number(node.dataset.stage); if (stage <= state.unlocked) { R.startStage(state, stage, false); loadStage(); durableSave(); updateUI(); close(); } }));
     bind('backMenu', menu);
   }
@@ -430,9 +476,11 @@
   function updatePhysics(dt) {
     if (pose.grounded) lastGroundedAt = performance.now();
     applyJump();
-    const forward = (input.keys.has('w') || input.keys.has('arrowup') ? 1 : 0) - (input.keys.has('s') || input.keys.has('arrowdown') ? 1 : 0) - input.joy.y;
-    const sideways = (input.keys.has('d') || input.keys.has('arrowright') ? 1 : 0) - (input.keys.has('a') || input.keys.has('arrowleft') ? 1 : 0) + input.joy.x;
-    const length = Math.max(1,Math.hypot(forward, sideways)), sprint=input.keys.has('shift')||input.joy.y<-.93, sneak=input.keys.has('control'), speed = isInWater() ? 2 : sneak?1.35:sprint&&forward>0?5.1:3.55;
+    pose.yaw+=((input.keys.has('arrowleft')?1:0)-(input.keys.has('arrowright')?1:0))*1.65*dt;
+    pose.pitch=clamp(pose.pitch+((input.keys.has('arrowup')?1:0)-(input.keys.has('arrowdown')?1:0))*1.25*dt,-1.42,1.42);
+    const forward = (input.keys.has('w') ? 1 : 0) - (input.keys.has('s') ? 1 : 0) - input.joy.y;
+    const sideways = (input.keys.has('d') ? 1 : 0) - (input.keys.has('a') ? 1 : 0) + input.joy.x;
+    const length = Math.max(1,Math.hypot(forward, sideways)), sprint=input.keys.has('shift')||input.joy.y<-.93, sneak=input.keys.has('c'), speed = isInWater() ? 2 : sneak?1.35:sprint&&forward>0?5.1:3.55;
     if (forward || sideways) {
       const f = forward / length * speed * dt, s = sideways / length * speed * dt;
       // The renderer's contract is yaw 0 → -Z and positive yaw → -X.
@@ -627,28 +675,28 @@
     say(result.ok ? state.message : result.reason); buzz(result.ok ? 'success' : 'danger');
     if (result.ok) { flashAction('strikeButton'); durableSave(); updateUI(); handleCompletion(); }
   }
+  function resetMining(){mineHold=null;mining=0;$('mineProgress').setAttribute('aria-hidden','true');$('mineProgress').firstElementChild.style.width='0%';}
   function beginMine(event) {
-    event.preventDefault(); event.stopPropagation();
-    if (!running || !target || fluid(target.block)) { say('Aim at a solid block first.'); return; }
-    if (mineHold && mineHold.pointer !== event.pointerId) return;
-    mineHold = { x: target.x, y: target.y, z: target.z, source: target.block.source, pointer: event.pointerId }; mining = 0;
+    event.preventDefault();event.stopPropagation();if(!running)return;
+    if(event.button!=null&&event.button!==0)return;
+    mineOwners.add(event.pointerId);
+    if(event.pointerId>=0){try{event.currentTarget.setPointerCapture?.(event.pointerId);}catch{}}
+    if(!target||fluid(target.block)){say('Aim at a solid block first.');return;}
+    if(!mineHold){mineHold={x:target.x,y:target.y,z:target.z,source:target.block.source,pointer:event.pointerId};mining=0;}
     $('mineProgress').removeAttribute('aria-hidden');
-    if (event.pointerId >= 0) event.currentTarget.setPointerCapture?.(event.pointerId);
   }
   function endMine(event) {
-    if (event) event.stopPropagation();
-    if (!mineHold && mining === 0 || event && mineHold && event.pointerId !== mineHold.pointer) return;
-    mineHold = null; mining = 0; $('mineProgress').setAttribute('aria-hidden', 'true'); $('mineProgress').firstElementChild.style.width = '0%';
+    event?.stopPropagation?.();if(event)mineOwners.delete(event.pointerId);else mineOwners.clear();
+    if(mineOwners.size){if(mineHold)mineHold.pointer=mineOwners.values().next().value;return;}resetMining();
   }
   function updateMine(dt) {
-    if (!mineHold) return;
-    if (!target || target.x !== mineHold.x || target.y !== mineHold.y || target.z !== mineHold.z || target.block.source !== mineHold.source) return endMine();
-    const block = target.block, duration = state.creative ? .08 : block.material === 'ore' || block.material === 'ice' ? .85 : block.material === 'crystal' || block.material === 'basalt' ? 1.15 : .48;
-    mining = Math.min(1, mining + dt / duration); $('mineProgress').firstElementChild.style.width = Math.round(mining * 100) + '%';
-    if (mining >= 1) {
-      const result = mineTarget(target); say(result.ok ? state.message : result.reason); buzz(result.ok ? 'mine' : 'danger');
-      endMine(); if (result.ok) { flashAction('mineButton'); durableSave(); updateUI(); handleCompletion(); }
-    }
+    if(!mineOwners.size)return;
+    if(!target||fluid(target.block)){resetMining();return;}
+    if(!mineHold||target.x!==mineHold.x||target.y!==mineHold.y||target.z!==mineHold.z||target.block.source!==mineHold.source){resetMining();mineHold={x:target.x,y:target.y,z:target.z,source:target.block.source,pointer:mineOwners.values().next().value};}
+    $('mineProgress').removeAttribute('aria-hidden');
+    const block=target.block,duration=state.creative?.08:block.material==='ore'||block.material==='ice'?.85:block.material==='crystal'||block.material==='basalt'?1.15:.48;
+    mining=Math.min(1,mining+dt/duration);$('mineProgress').firstElementChild.style.width=Math.round(mining*100)+'%';
+    if(mining>=1){const result=mineTarget(target);say(result.ok?state.message:result.reason);buzz(result.ok?'mine':'danger');resetMining();if(result.ok){flashAction('mineButton');durableSave();updateUI();handleCompletion();}}
   }
   function updateClock() {
     const node = $('dayClock'), label = Math.floor(state.time / 18) % 2 ? 'NIGHT' : 'DAY';
@@ -670,7 +718,7 @@
     const knob = $('joyKnob'); knob.style.transform = 'translate(-50%,-50%)';
   }
   function moveStart(event) {
-    if (!running) return; event.preventDefault(); event.stopPropagation(); input.joy.pointer = event.pointerId; event.currentTarget.setPointerCapture?.(event.pointerId); updateJoy(event);
+    if (!running||input.joy.pointer!==null||event.button!==0) return; event.preventDefault(); event.stopPropagation(); input.joy.pointer = event.pointerId; try{event.currentTarget.setPointerCapture?.(event.pointerId);}catch{} updateJoy(event);
   }
   function updateJoy(event) {
     if (event.pointerId !== input.joy.pointer) return;
@@ -680,30 +728,31 @@
     input.joy.x = dx / max; input.joy.y = dy / max; $('joyKnob').style.transform = 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px))';
   }
   function lookStart(event) {
-    if (!running || event.pointerType === 'mouse' && event.button !== 0) return;
-    event.preventDefault(); input.look = { pointer: event.pointerId, x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture?.(event.pointerId);
+    if (!running || input.look || document.pointerLockElement===canvas || event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault(); input.look = { pointer: event.pointerId, x: event.clientX, y: event.clientY }; try{event.currentTarget.setPointerCapture?.(event.pointerId);}catch{}
   }
   function lookMove(event) {
     if (!input.look || event.pointerId !== input.look.pointer) return;
     event.preventDefault(); const factor = .006 * prefs.sensitivity; pose.yaw -= (event.clientX - input.look.x) * factor; pose.pitch = clamp(pose.pitch - (event.clientY - input.look.y) * factor, -1.42, 1.42); input.look.x = event.clientX; input.look.y = event.clientY;
   }
-  function keyboard(event, down) {
-    const key = event.code === 'Space' || event.key === 'Spacebar' ? ' ' : event.key.toLowerCase();
-    if (!down) {
-      input.keys.delete(key);
-      if (key === 'e' && mineHold?.pointer === -1) endMine();
+  function keyboard(event,down){
+    const key=event.code==='Space'?' ':event.code?.startsWith('Key')?event.code.slice(3).toLowerCase():event.key.toLowerCase();
+    if(!down){input.keys.delete(key);if(key==='r')endMine({pointerId:-1});if([' ','enter'].includes(key))endMine({pointerId:-3});return;}
+    if(trapGameTab(event,overlay.classList.contains('open')?panel:null))return;
+    if(event.ctrlKey||event.metaKey||event.altKey){input.keys.clear();endMine({pointerId:-1});endMine({pointerId:-3});return;}
+    if(gameKeyBlocked(event))return;
+    if((key==='escape'||key==='p')&&!event.repeat){if(hasStarted){event.preventDefault();overlay.classList.contains('open')?overlayBack?.():menu();}return;}
+    if(!running)return;
+    if(nativeKeyActivation(event)){
+      if(event.target===$('mineButton')){event.preventDefault();if(!event.repeat)beginMine({preventDefault(){},stopPropagation(){},pointerId:-3,currentTarget:$('mineButton')});}
+      return;
     }
-    if (key === 'escape' && down && !event.repeat) { overlay.classList.contains('open') ? close() : menu(); return; }
-    if (!running || event.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || '')) return;
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
-    if (key === ' ') { if (down && !event.repeat) jump(); return; }
-    if (key === 'e' && down && !event.repeat) { beginMine({ preventDefault() {}, stopPropagation() {}, pointerId: -1, currentTarget: $('mineButton') }); return; }
-    if (key === 'q' && down && !event.repeat) { placeTarget(); return; }
-    if (key === 'f' && down && !event.repeat) { attack(); return; }
-    if(down&&!event.repeat&&key==='f5'){event.preventDefault();$('cameraButton').click();return;}
-    if(down&&!event.repeat&&key==='i'){craftMenu();return;}
-    if(down&&/^[1-5]$/.test(key)){const slot=$('hotbar').querySelectorAll('[data-block]')[Number(key)-1];if(slot&&!slot.disabled)slot.click();return;}
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright','shift','control'].includes(key)) down ? input.keys.add(key) : input.keys.delete(key);
+    if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift','c'].includes(key)){event.preventDefault();input.keys.add(key);return;}
+    if(key===' '){event.preventDefault();if(!event.repeat)jump();return;}
+    if(event.repeat)return;
+    const action={r:()=>beginMine({preventDefault(){},stopPropagation(){},pointerId:-1,currentTarget:$('mineButton')}),e:craftMenu,i:craftMenu,q:placeTarget,f:attack,v:()=>$('cameraButton').click()}[key];
+    if(action){event.preventDefault();action();return;}
+    if(/^[1-5]$/.test(key)){event.preventDefault();const slot=$('hotbar').querySelectorAll('[data-block]')[Number(key)-1];if(slot&&!slot.disabled)slot.click();}
   }
   function entities() {
     return state.enemies.filter(e => e.alive).map(e => ({
@@ -747,7 +796,7 @@
           // retracted camera can be close to the player, but silently
           // switching the rendering to an empty first-person-looking frame
           // makes the mobile camera control misleading.
-          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, opacity: avatarOpacity, walk: motionAllowed() && (Math.hypot(input.joy.x, input.joy.y)>0||['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].some(key=>input.keys.has(key))) ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 } : null,
+          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, opacity: avatarOpacity, walk: motionAllowed() && (Math.hypot(input.joy.x, input.joy.y)>0||['w','a','s','d'].some(key=>input.keys.has(key))) ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 } : null,
           held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 }
         });
         renderNeeded = false;
@@ -764,13 +813,21 @@
   $('strikeButton').addEventListener('click', event => { event.stopPropagation(); attack(); });
   $('craftButton').addEventListener('click', event => { event.stopPropagation(); craftMenu(); });
   $('mineButton').addEventListener('pointerdown', beginMine); $('mineButton').addEventListener('pointerup', endMine); $('mineButton').addEventListener('pointercancel', endMine); $('mineButton').addEventListener('lostpointercapture', endMine);
-  $('moveZone').addEventListener('pointerdown', moveStart); $('moveZone').addEventListener('pointermove', updateJoy); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('moveZone').addEventListener(type, event => { if (event.pointerId === input.joy.pointer) clearInputs(); }));
+  $('moveZone').addEventListener('pointerdown', moveStart); $('moveZone').addEventListener('pointermove', updateJoy); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('moveZone').addEventListener(type, event => { if(event.pointerId===input.joy.pointer){input.joy.pointer=null;input.joy.x=input.joy.y=0;$('joyKnob').style.transform='translate(-50%,-50%)';} }));
   $('lookZone').addEventListener('pointerdown', lookStart); $('lookZone').addEventListener('pointermove', lookMove); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('lookZone').addEventListener(type, event => { if (input.look && event.pointerId === input.look.pointer) input.look = null; }));
-  canvas.addEventListener('pointerdown', event => { if (event.pointerType === 'mouse' && running) lookStart(event); }); canvas.addEventListener('pointermove', lookMove); canvas.addEventListener('pointerup', () => { input.look = null; });
+  for(const node of [canvas,$('lookZone')]){
+    node.addEventListener('contextmenu',event=>{if(running)event.preventDefault();});
+    node.addEventListener('pointerdown',event=>{if(!running||event.pointerType!=='mouse')return;if(event.button===2){event.preventDefault();placeTarget();return;}if(document.pointerLockElement===canvas){if(event.button===0)beginMine(event);}else if(node===canvas)lookStart(event);});
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])node.addEventListener(type,event=>{endMine(event);if(input.look?.pointer===event.pointerId)input.look=null;});
+  }
+  canvas.addEventListener('pointermove',lookMove);
+  $('mouseButton').addEventListener('click',()=>{if(!running)return;try{const request=canvas.requestPointerLock?.();if(!canvas.requestPointerLock)throw Error();request?.catch(()=>say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.'));}catch{say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.');}});
+  document.addEventListener('mousemove',event=>{if(document.pointerLockElement===canvas&&running){pose.yaw-=event.movementX*.0025*prefs.sensitivity;pose.pitch=clamp(pose.pitch-event.movementY*.0025*prefs.sensitivity,-1.42,1.42);}});
+  document.addEventListener('pointerlockchange',()=>{clearInputs();if(document.pointerLockElement===canvas)canvas.focus({preventScroll:true});else{const intentional=releasingMouseForPanel;releasingMouseForPanel=false;if(!intentional&&running&&hasStarted)menu();}});
   window.addEventListener('keydown', event => keyboard(event, true)); window.addEventListener('keyup', event => keyboard(event, false));
   $('importInput').addEventListener('change', event => { const file = event.target.files && event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { importSave(JSON.parse(String(reader.result))); } catch (_) { say('That file is not valid JSON. Your current journey is unchanged.'); } close(); }; reader.readAsText(file); event.target.value = ''; });
-  window.addEventListener('resize', () => { clearInputs(); resize(); }); window.addEventListener('orientationchange', clearInputs); window.addEventListener('blur', clearInputs);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInputs(); durableSave(); } else lastTime = performance.now(); }); window.addEventListener('pagehide', durableSave);
+  window.addEventListener('resize', () => { clearInputs(); resize(); }); window.addEventListener('orientationchange', clearInputs); window.addEventListener('blur',()=>{clearInputs();if(running&&hasStarted){durableSave();menu();}});
+  document.addEventListener('visibilitychange', () => { if(document.hidden){clearInputs();durableSave();if(running&&hasStarted)menu();} else lastTime = performance.now(); }); window.addEventListener('pagehide', durableSave);
   canvas.addEventListener('webglcontextrestored', () => { renderNeeded = true; });
   reducedMotion.addEventListener?.('change', applyPrefs);
   applyPrefs(); loadStage(); updateUI(); welcome(loaded.recovered); requestAnimationFrame(loop);

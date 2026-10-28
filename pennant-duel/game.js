@@ -1,5 +1,49 @@
 (function () {
   'use strict';
+  // Browser/IME shortcuts and native form/button activation keep their own keys.
+  function gameKeyBlocked(event) {
+    const form=event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+    const backFromCheck=event.code==='Escape'&&form?.matches('input[type="checkbox"],input[type="radio"]');
+    return event.defaultPrevented || event.isComposing || event.keyCode===229 || event.ctrlKey || event.metaKey || event.altKey || !!form&&!backFromCheck;
+  }
+  function nativeKeyActivation(event) {
+    return (event.code==='Space'||event.code==='Enter'||event.code==='NumpadEnter'||event.key===' ') && !!event.target?.closest?.('button,a[href],[role="button"]');
+  }
+  // Secondary touch contacts do not consistently synthesize a native click.
+  // Activate plain buttons from their own completed contact, then deduplicate
+  // the compatibility click. Keyboard/assistive click(detail=0) stays native.
+  function installGameButtons(beforePress){
+    const pointers=new Map(),recent=new WeakMap();let finishedContact=null;
+    const plain=node=>node?.closest?.('button:not(#mineButton):not(#pulse):not([data-hand-card])');
+    const finish=(event,cancelled)=>{
+      const held=pointers.get(event.pointerId);if(!held)return;pointers.delete(event.pointerId);recent.set(held.node,performance.now()+650);finishedContact={x:event.clientX,y:event.clientY,until:performance.now()+650};
+      if(cancelled||held.moved||held.node.disabled||!held.node.isConnected)return;
+      const r=held.node.getBoundingClientRect();if(event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)held.node.click();
+    };
+    document.addEventListener('pointerdown',event=>{
+      finishedContact=null;const node=plain(event.target);if(!node||node.disabled||event.button!==0)return;
+      recent.set(node,performance.now()+650);if([...pointers.values()].some(p=>p.node===node))return;
+      beforePress?.();pointers.set(event.pointerId,{node,x:event.clientX,y:event.clientY,moved:false});
+      if(event.pointerType==='mouse'){event.preventDefault();node.focus({preventScroll:true});}
+      try{node.setPointerCapture(event.pointerId);}catch{}
+    },true);
+    document.addEventListener('pointermove',event=>{const held=pointers.get(event.pointerId);if(held&&Math.hypot(event.clientX-held.x,event.clientY-held.y)>10)held.moved=true;},true);
+    document.addEventListener('pointerup',event=>finish(event,false),true);
+    for(const type of ['pointercancel','lostpointercapture'])document.addEventListener(type,event=>finish(event,true),true);
+    document.addEventListener('click',event=>{const node=plain(event.target);if(event.detail>0&&(node&&performance.now()<(recent.get(node)||0)||finishedContact&&performance.now()<finishedContact.until&&Math.hypot(event.clientX-finishedContact.x,event.clientY-finishedContact.y)<32)){event.preventDefault();event.stopImmediatePropagation();}},true);
+    const release=()=>{pointers.clear();finishedContact=null;};window.addEventListener('blur',release);window.addEventListener('orientationchange',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
+  }
+
+  installGameButtons();
+  function trapGameTab(event,root) {
+    if(event.key!=='Tab'||event.ctrlKey||event.metaKey||event.altKey||!root)return false;
+    const nodes=[...root.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(node=>node.getClientRects().length);
+    const index=nodes.indexOf(document.activeElement);
+    // WebKit can skip buttons under the system's default Tab preference.
+    if(nodes.length){event.preventDefault();nodes[index<0?(event.shiftKey?nodes.length-1:0):(index+(event.shiftKey?-1:1)+nodes.length)%nodes.length].focus();}
+    return true;
+  }
+
   const E = window.TowerDuelEngine;
   if (!E) throw new Error('Pennant Duel engine did not load');
 
@@ -29,6 +73,7 @@
   let suppressCanvasPointerUntil = 0;
   let suppressHandClickUntil = 0;
   let dragPreview = null;
+  let keyboardAim={x:280,y:900},keyboardAiming=false,modalBack=null;
   let audioContext = null;
   let impactSeen = 0;
   let lastOverlayPaint = 0;
@@ -201,7 +246,7 @@
   }
   function resumeMatch() {
     if (!match || match.phase !== 'playing') return launchMatch(profile.lastMode === 'draft' ? 'classic' : profile.lastMode, profile.deck);
-    paused = false; showScreen('battle'); setupBattleHeader(); renderHand(true); lastFrame = performance.now();
+    paused = false; showScreen('battle'); setupBattleHeader(); renderHand(true); lastFrame = performance.now();els['game-canvas'].focus({preventScroll:true});
   }
   function setupBattleHeader() { els['arena-name'].textContent = E.arenas[match.arena].name; els['mode-name'].textContent = match.mode === 'frenzy' ? 'Frenzy · double spark' : match.mode === 'draft' ? 'Draft Challenge' : 'Classic'; }
 
@@ -232,7 +277,7 @@
     const signature = match.hands.player.join('|');
     if (els.hand.dataset.signature !== signature) {
       els.hand.dataset.signature = signature;
-      els.hand.innerHTML = match.hands.player.map((id,index) => { const card=E.cardMap[id]; return '<button type="button" class="hand-card" data-hand-card="'+id+'" aria-label="'+(index+1)+': '+card.name+', cost '+card.cost+', '+card.desc+'">'+cardPortrait(card)+'<span class="card-cost">'+card.cost+'</span><b>'+card.name+'</b></button>'; }).join('');
+      els.hand.innerHTML = match.hands.player.map((id,index) => { const card=E.cardMap[id]; return '<button type="button" class="hand-card" data-hand-card="'+id+'" aria-keyshortcuts="'+(index+1)+'" aria-label="'+(index+1)+': '+card.name+', cost '+card.cost+', '+card.desc+'">'+cardPortrait(card)+'<kbd class="hand-shortcut" aria-hidden="true">'+(index+1)+'</kbd><span class="card-cost">'+card.cost+'</span><b>'+card.name+'</b></button>'; }).join('');
     }
     els.hand.querySelectorAll('[data-hand-card]').forEach((node) => {
       const id=node.dataset.handCard, affordable=match.energy.player+1e-6>=E.cardMap[id].cost;
@@ -244,11 +289,12 @@
     const nextId=match.queues.player[0];
     if (els['next-card'].dataset.card !== nextId) { els['next-card'].dataset.card=nextId; els['next-card-art'].innerHTML=cardPortrait(E.cardMap[nextId]); els['next-card'].setAttribute('aria-label','Next card: '+E.cardMap[nextId].name); }
   }
-  function selectCard(id) { if (!match || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id; renderHand(true); if (selectedCard && !profile.tutorialDone) showTutorial(E.cardMap[id].kind === 'spell' ? 'Spells can land anywhere. Tap a useful target area.' : 'Now tap your blue half. Units enter through the nearest lane.'); }
+  function selectCard(id) { if (!match || paused || match.phase!=='playing' || !els.modal.classList.contains('hidden') || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id; renderHand(true);els['game-canvas'].focus({preventScroll:true}); if (selectedCard && !profile.tutorialDone) showTutorial(E.cardMap[id].kind === 'spell' ? 'Spells can land anywhere. Tap a useful target area.' : 'Now tap your blue half. Units enter through the nearest lane.'); }
   function canvasPoint(clientX, clientY) { return renderer3d.screenToWorld(clientX,clientY); }
   function previewAt(clientX,clientY,id){const rect=els['game-canvas'].getBoundingClientRect(),inside=clientX>=rect.left&&clientX<=rect.right&&clientY>=rect.top&&clientY<=rect.bottom;dragPreview={id,inside,world:canvasPoint(clientX,clientY)};}
   function cancelDrag(pointerId){if(pointerDrag&&(pointerId==null||pointerDrag.pointerId===pointerId)){pointerDrag=null;dragPreview=null;renderHand(false);}}
   function deployAt(point) {
+    if(!match||match.phase!=='playing'||!els.modal.classList.contains('hidden'))return;
     if (!selectedCard || !match || paused) { if (!selectedCard) toast('Choose a card first'); return; }
     const result=E.playCard(match,'player',selectedCard,point.x,point.y);
     if (!result.ok) { toast(result.reason); chirp(150,.08,'square'); return; }
@@ -308,7 +354,7 @@
     const scale=portrait?0:Math.min(shell.width/E.WIDTH,shell.height/E.HEIGHT);
     const cssWidth=Math.max(1,Math.floor(portrait?shell.width:E.WIDTH*scale)),cssHeight=Math.max(1,Math.floor(portrait?shell.height:E.HEIGHT*scale));
     if(canvas.style.width!==cssWidth+'px'||canvas.style.height!==cssHeight+'px'){canvas.style.width=cssWidth+'px';canvas.style.height=cssHeight+'px';}
-    renderer3d.render(match,{selectedCard,dragPreview,reducedEffects:prefs.reducedEffects});
+    renderer3d.render(match,{selectedCard,dragPreview:dragPreview||(keyboardAiming&&selectedCard?{id:selectedCard,inside:true,world:keyboardAim}:null),reducedEffects:prefs.reducedEffects});
     drawBattleOverlay();
   }
   function drawBattleOverlay() {
@@ -367,14 +413,14 @@
   function drawEffect(effect){ctx.save();const life=Math.max(0,effect.life/effect.maxLife);ctx.globalAlpha=life;if(effect.kind==='rubble'){ctx.fillStyle=effect.color;for(let i=0;i<9;i++){const a=i*2.39,d=(1-life)*effect.radius*1.8;ctx.save();ctx.translate(effect.x+Math.cos(a)*d,effect.y+Math.sin(a)*d);ctx.rotate(a);ctx.fillRect(-10,-8,20,16);ctx.restore();}}else if(effect.kind==='defeat'){ctx.fillStyle=effect.color;for(let i=0;i<7;i++){const a=i*.9;ctx.beginPath();ctx.arc(effect.x+Math.cos(a)*(1-life)*45,effect.y+Math.sin(a)*(1-life)*45,5+life*5,0,Math.PI*2);ctx.fill();}}else{ctx.strokeStyle=effect.color;ctx.lineWidth=18*(1-life)+4;ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius*(1-life*.4),0,Math.PI*2);ctx.stroke();}ctx.restore();}
   function drawDragGhost(){const card=E.cardMap[dragPreview.id],p=dragPreview.world;ctx.save();ctx.translate(p.x,p.y-(card.kind==='unit'?70:0));if(card.kind==='unit')drawUnitModel(card,'player',{walk:match.time*5,flying:card.flying,id:'ghost'},.78);else{ctx.strokeStyle=card.color;ctx.lineWidth=12;ctx.beginPath();ctx.arc(0,0,card.radius*.55,0,Math.PI*2);ctx.stroke();}ctx.restore();}
 
-  function pauseBattle() { if (!match || match.phase!=='playing') return; paused=true; saveNow(); showModal('PAUSED','Take a breather','<p>Your match is saved on this browser. Leaving safely keeps this exact battle.</p>',[
-    {label:'Resume',primary:true,action:()=>{closeModal();paused=false;lastFrame=performance.now();}},
+  function pauseBattle() { if (!match || match.phase!=='playing') return; paused=true;cancelDrag();keyboardAiming=false; saveNow(); showModal('PAUSED','Take a breather','<p>Your match is saved on this browser. Leaving safely keeps this exact battle.</p>',[
+    {label:'Resume',primary:true,action:()=>{closeModal();paused=false;lastFrame=performance.now();els['game-canvas'].focus({preventScroll:true});}},
     {label:'Settings',action:showSettings},
     {label:'Main menu',action:()=>{closeModal();showHome();}}
   ]); }
   function showSettings() {
     const wasBattle=currentScreen()==='battle';
-    showModal('SETTINGS','Sound & save','<div class="settings-grid"><label>Sound effects <input id="audio-setting" type="checkbox" '+(prefs.audio?'checked':'')+'></label><label>Reduced effects <input id="effects-setting" type="checkbox" '+(prefs.reducedEffects?'checked':'')+'></label><button id="export-setting" type="button">Export save file</button><button id="import-setting" type="button">Import save file</button></div><p>Progress is local to this browser or Home Screen app. Export a backup before switching between them.</p>',[
+    showModal('SETTINGS','Sound & save','<div class="settings-grid"><label>Sound effects <input id="audio-setting" type="checkbox" '+(prefs.audio?'checked':'')+'></label><label>Reduced effects <input id="effects-setting" type="checkbox" '+(prefs.reducedEffects?'checked':'')+'></label><button id="export-setting" type="button">Export save file</button><button id="import-setting" type="button">Import save file</button></div><p><b>Controls:</b> 1–4 selects a card; arrows or WASD move its target; Enter/Space deploys. P pauses; Escape cancels a selected card, pauses, or goes back. Mouse/touch: select then tap the arena, or drag a card onto legal ground. A cancelled drag spends nothing. Tab and Enter operate buttons.</p><p>Progress is local to this browser or Home Screen app. Export a backup before switching between them.</p>',[
       {label:wasBattle?'Back to pause':'Done',primary:true,action:()=>{prefs.audio=document.getElementById('audio-setting').checked;prefs.reducedEffects=document.getElementById('effects-setting').checked;savePrefs();closeModal();if(wasBattle)pauseBattle();}}
     ]);
     document.getElementById('export-setting').onclick=downloadSave;
@@ -382,8 +428,8 @@
   }
   function downloadSave(){const blob=new Blob([JSON.stringify(exportSave(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pennant-duel-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
   function showConfirm(title,body,confirm,action){showModal('CONFIRM',title,'<p>'+body+'</p>',[{label:confirm,primary:true,action},{label:'Keep current battle',action:closeModal}]);}
-  function showModal(kicker,title,body,actions){els['modal-kicker'].textContent=kicker;els['modal-title'].textContent=title;els['modal-body'].innerHTML=body;els['modal-actions'].innerHTML='';actions.forEach((item)=>{const button=document.createElement('button');button.type='button';button.textContent=item.label;if(item.primary)button.className='primary';button.onclick=item.action;els['modal-actions'].append(button);});els.modal.classList.remove('hidden');setTimeout(()=>els['modal-actions'].querySelector('button')?.focus(),0);}
-  function closeModal(){els.modal.classList.add('hidden');}
+  function showModal(kicker,title,body,actions){els['modal-kicker'].textContent=kicker;els['modal-title'].textContent=title;els['modal-body'].innerHTML=body;els['modal-actions'].innerHTML='';actions.forEach((item)=>{const button=document.createElement('button');button.type='button';button.textContent=item.label;if(item.primary)button.className='primary';button.onclick=item.action;els['modal-actions'].append(button);});modalBack=actions.find(item=>['Resume','Cancel','Done','Close','Okay','Got it','Continue','Main menu','Keep current battle','Back to pause'].includes(item.label))?.action||null;els.modal.classList.remove('hidden');els['modal-actions'].querySelector('button')?.focus({preventScroll:true});}
+  function closeModal(){els.modal.classList.add('hidden');if(currentScreen()==='battle')els['game-canvas'].focus({preventScroll:true});else els['continue-button'].focus({preventScroll:true});}
   function toast(message){els.toast.textContent=message;els.toast.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>els.toast.classList.add('hidden'),1500);}
   function showTutorial(message){els['tutorial-tip'].textContent=message;els['tutorial-tip'].classList.remove('hidden');}
   function hideTutorial(){els['tutorial-tip'].classList.add('hidden');}
@@ -404,12 +450,23 @@
   document.addEventListener('pointercancel',(event)=>cancelDrag(event.pointerId));
   els.hand.addEventListener('lostpointercapture',(event)=>{if(pointerDrag&&pointerDrag.pointerId===event.pointerId&&event.buttons===0)cancelDrag(event.pointerId);});
   els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)cancelDrag(event.pointerId);});
-  els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
+  els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&!pointerDrag&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
   els['pause-button'].addEventListener('click',pauseBattle);
   els['import-file'].addEventListener('change',async()=>{const file=els['import-file'].files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(!importSave(value))throw new Error('invalid');showModal('IMPORTED','Save restored','<p>Your validated Pennant Duel progress is ready.</p>',[{label:'Continue',primary:true,action:closeModal}]);}catch(_){showModal('IMPORT STOPPED','That save is not valid','<p>Nothing was changed. Choose an unedited Pennant Duel export file.</p>',[{label:'Okay',primary:true,action:closeModal}]);}finally{els['import-file'].value='';}});
-  document.addEventListener('keydown',(event)=>{if(currentScreen()!=='battle'||els.modal.classList.contains('hidden')===false)return;if(['1','2','3','4'].includes(event.key)){selectCard(match.hands.player[Number(event.key)-1]);event.preventDefault();}else if(event.key===' '||event.key==='Escape'){pauseBattle();event.preventDefault();}});
+  document.addEventListener('keydown',event=>{
+    if(trapGameTab(event,!els.modal.classList.contains('hidden')?els.modal:null)||gameKeyBlocked(event))return;
+    if(!els.modal.classList.contains('hidden')){if(!event.repeat&&(event.code==='Escape'||event.code==='KeyP'&&els['modal-kicker'].textContent==='PAUSED')){event.preventDefault();modalBack?.();}return;}
+    if(currentScreen()!=='battle'||!match||match.phase!=='playing')return;
+    if((event.code==='Escape'||event.code==='KeyP')&&!event.repeat){event.preventDefault();if(event.code==='Escape'&&(selectedCard||pointerDrag)){cancelDrag();selectedCard=null;keyboardAiming=false;renderHand(false);}else pauseBattle();return;}
+    if(paused||nativeKeyActivation(event))return;
+    if(/^[1-4]$/.test(event.key)&&!event.repeat){event.preventDefault();selectCard(match.hands.player[Number(event.key)-1]);keyboardAiming=!!selectedCard;return;}
+    const delta={ArrowLeft:[-35,0],KeyA:[-35,0],ArrowRight:[35,0],KeyD:[35,0],ArrowUp:[0,-35],KeyW:[0,-35],ArrowDown:[0,35],KeyS:[0,35]}[event.code];
+    if(delta&&selectedCard){event.preventDefault();keyboardAim={x:Math.max(35,Math.min(E.WIDTH-35,keyboardAim.x+delta[0])),y:Math.max(35,Math.min(E.HEIGHT-35,keyboardAim.y+delta[1]))};keyboardAiming=true;return;}
+    if(['Space','Enter','NumpadEnter'].includes(event.code)){event.preventDefault();if(!event.repeat)deployAt(keyboardAim);}
+  });
+  els['game-canvas'].addEventListener('pointermove',event=>{if(pointerDrag)return;const p=canvasPoint(event.clientX,event.clientY);if(Number.isFinite(p.x)&&Number.isFinite(p.y)){keyboardAim=p;keyboardAiming=false;}});
   document.addEventListener('visibilitychange',()=>{cancelDrag();if(document.hidden&&match&&match.phase==='playing'){paused=true;saveNow();}else{lastFrame=performance.now();if(match&&match.phase==='playing'&&currentScreen()==='battle'&&els.modal.classList.contains('hidden'))pauseBattle();}});
-  window.addEventListener('blur',()=>cancelDrag());
+  window.addEventListener('blur',()=>{cancelDrag();if(match?.phase==='playing'&&!paused&&currentScreen()==='battle'&&els.modal.classList.contains('hidden'))pauseBattle();});
   window.addEventListener('orientationchange',()=>{cancelDrag();lastFrame=performance.now();});
   window.addEventListener('pagehide',()=>{if(match&&match.phase==='playing')saveNow();});
   document.querySelector('[data-install-game]').addEventListener('click',()=>{if(!document.querySelector('link[rel="manifest"]'))showModal('INSTALL','Add to Home Screen','<p>In Safari, use <b>Share → Add to Home Screen → Add</b>. Offline installation status is available on the published site.</p>',[{label:'Got it',primary:true,action:closeModal}]);});

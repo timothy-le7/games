@@ -133,3 +133,5 @@ h3 { margin: 24px 0 8px; }
 .hand-card .painted-portrait { border-radius:9px 9px 4px 4px; height:auto; max-height:none; }
 .library-card .painted-portrait,.draft-card .painted-portrait { margin:0 auto 5px; }
 #next-card-art .painted-portrait { border-radius:7px; }
+
+.hand-shortcut{display:none}@media(pointer:fine){.hand-shortcut{display:block;position:absolute;left:6px;top:6px;z-index:2;min-width:20px;padding:2px 4px;border:1px solid #9bd3e0;border-radius:5px;background:#132b43e8;color:#fff;font:700 12px system-ui;text-align:center}}
