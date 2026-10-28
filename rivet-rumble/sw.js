@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:rivet-rumble:";
-const RELEASE = "e0e2b66da400f6c338c5";
+const RELEASE = "51953b63490ccc61863f";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
 

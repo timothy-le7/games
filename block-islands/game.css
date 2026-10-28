@@ -49,3 +49,5 @@
 .touch-layer{isolation:isolate;transform:translateZ(0)}.action-cluster,.action-button{will-change:transform}
 
 .motion-reduced *,.motion-reduced *:before,.motion-reduced *:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+
+.mouse-look{display:none}@media(pointer:fine) and (min-width:700px){.mouse-look{display:block;position:absolute;left:20px;bottom:22px;z-index:5;min-height:44px;padding:8px 16px;background:#193b50;color:#fff;border:1px solid #8ac1d0;border-radius:12px}}

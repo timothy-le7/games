@@ -23,10 +23,56 @@
     silence(){for(const o of this.voices){try{o.stop();}catch{}}this.voices.clear();}
     suspend(){this.silence();try{this.ctx?.suspend();}catch{}}
   }
+  // Browser/IME shortcuts and native form/button activation keep their own keys.
+  function gameKeyBlocked(event) {
+    const form=event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+    const backFromCheck=event.code==='Escape'&&form?.matches('input[type="checkbox"],input[type="radio"]');
+    return event.defaultPrevented || event.isComposing || event.keyCode===229 || event.ctrlKey || event.metaKey || event.altKey || !!form&&!backFromCheck;
+  }
+  function nativeKeyActivation(event) {
+    return (event.code==='Space'||event.code==='Enter'||event.code==='NumpadEnter'||event.key===' ') && !!event.target?.closest?.('button,a[href],[role="button"]');
+  }
+  // Secondary touch contacts do not consistently synthesize a native click.
+  // Activate plain buttons from their own completed contact, then deduplicate
+  // the compatibility click. Keyboard/assistive click(detail=0) stays native.
+  function installGameButtons(beforePress){
+    const pointers=new Map(),recent=new WeakMap();let finishedContact=null;
+    const plain=node=>node?.closest?.('button:not(#mineButton):not(#pulse):not([data-hand-card])');
+    const finish=(event,cancelled)=>{
+      const held=pointers.get(event.pointerId);if(!held)return;pointers.delete(event.pointerId);recent.set(held.node,performance.now()+650);finishedContact={x:event.clientX,y:event.clientY,until:performance.now()+650};
+      if(cancelled||held.moved||held.node.disabled||!held.node.isConnected)return;
+      const r=held.node.getBoundingClientRect();if(event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom)held.node.click();
+    };
+    document.addEventListener('pointerdown',event=>{
+      finishedContact=null;const node=plain(event.target);if(!node||node.disabled||event.button!==0)return;
+      recent.set(node,performance.now()+650);if([...pointers.values()].some(p=>p.node===node))return;
+      beforePress?.();pointers.set(event.pointerId,{node,x:event.clientX,y:event.clientY,moved:false});
+      if(event.pointerType==='mouse'){event.preventDefault();node.focus({preventScroll:true});}
+      try{node.setPointerCapture(event.pointerId);}catch{}
+    },true);
+    document.addEventListener('pointermove',event=>{const held=pointers.get(event.pointerId);if(held&&Math.hypot(event.clientX-held.x,event.clientY-held.y)>10)held.moved=true;},true);
+    document.addEventListener('pointerup',event=>finish(event,false),true);
+    for(const type of ['pointercancel','lostpointercapture'])document.addEventListener(type,event=>finish(event,true),true);
+    document.addEventListener('click',event=>{const node=plain(event.target);if(event.detail>0&&(node&&performance.now()<(recent.get(node)||0)||finishedContact&&performance.now()<finishedContact.until&&Math.hypot(event.clientX-finishedContact.x,event.clientY-finishedContact.y)<32)){event.preventDefault();event.stopImmediatePropagation();}},true);
+    const release=()=>{pointers.clear();finishedContact=null;};window.addEventListener('blur',release);window.addEventListener('orientationchange',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
+  }
+
+  installGameButtons();
+  function trapGameTab(event,root) {
+    if(event.key!=='Tab'||event.ctrlKey||event.metaKey||event.altKey||!root)return false;
+    const nodes=[...root.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(node=>node.getClientRects().length);
+    const index=nodes.indexOf(document.activeElement);
+    // WebKit can skip buttons under the system's default Tab preference.
+    if(nodes.length){event.preventDefault();nodes[index<0?(event.shiftKey?nodes.length-1:0):(index+(event.shiftKey?-1:1)+nodes.length)%nodes.length].focus();}
+    return true;
+  }
+
   const audio=new AudioPulse();
+  const inputOwners=new Set();
+  let modalBack=null;
   function renderHome(){document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===selectedMode)));els.grid.innerHTML=E.levels.map((l,i)=>{const unlocked=i<=profile.unlocked,r=profile.records[i],record=r.completed?('Clear '+r.bestTime.toFixed(2)+'s'):(r.best?('Best '+r.best+'%'):'New course');return `<button class="level-card ${i===profile.selected?'selected ':''}${unlocked?'':'locked'}" data-level="${i}" type="button" ${unlocked?'':'disabled'}><b>${l.name}</b><small>${l.theme.blurb}</small><small class="level-record">${record}${r.practiceBest?' · P '+r.practiceBest+'%':''}</small><span class="level-number">${unlocked?i+1:'—'}</span></button>`;}).join('');els.start.textContent=match&&match.phase==='playing'?'Continue saved run':`Start ${E.levels[profile.selected].name}`;els.newRun.classList.toggle('hidden',!(match&&match.phase==='playing'));els.newRun.textContent='Start new '+E.levels[profile.selected].name+' · '+({solo:'Solo',rivals:'CPU race',practice:'Practice'}[selectedMode]);els.grid.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>{profile.selected=Number(b.dataset.level);renderHome();save();});}
   function showHome(){playing=false;releaseInput();els.battle.classList.add('hidden');els.home.classList.remove('hidden');renderHome();}
-  function showBattle(){els.home.classList.add('hidden');els.battle.classList.remove('hidden');if(!renderer)renderer=new window.PulseFoundryRenderer(els.stage,E);playing=match?.phase==='playing';lastFrame=performance.now();renderHud();requestAnimationFrame(loop);}
+  function showBattle(){els.home.classList.add('hidden');els.battle.classList.remove('hidden');if(!renderer)renderer=new window.PulseFoundryRenderer(els.stage,E);playing=match?.phase==='playing';lastFrame=performance.now();renderHud();els.stage.focus({preventScroll:true});requestAnimationFrame(loop);}
   function startRun(){audio.arm();const rivals=selectedMode==='rivals';match=E.makeMatch({level:profile.selected,practice:selectedMode==='practice',rivals,rivalCount:rivals?2:0,seed:0x51f00d+profile.selected});profile.lastMode=selectedMode;lastSection='';lastBeat=-1;closeModal();showBattle();save();showCallout(profile.selected===0?'PRESS TO JUMP':selectedMode==='practice'?'CHECKPOINTS ACTIVE':rivals?'LOCAL CPU RACE':'HOLD TO SHAPE THE JUMP');}
   function continueRun(){if(!match)return startRun();audio.arm();profile.selected=match.level;selectedMode=match.practice?'practice':match.actors.length>1?'rivals':'solo';showBattle();if(match.phase==='dead')showResult();}
   function showCallout(text){els.callout.textContent=text;els.callout.style.opacity='1';clearTimeout(showCallout.timer);showCallout.timer=setTimeout(()=>els.callout.style.opacity='.15',1350);}
@@ -35,20 +81,30 @@
   function loop(now){if(els.battle.classList.contains('hidden')||!match)return;const delta=Math.min(.25,Math.max(0,(now-lastFrame)/1000));lastFrame=now;if(playing&&match.phase==='playing'){E.advance(match,input,delta);input.pressed=false;const l=E.levels[match.level],beat=Math.floor(match.elapsed*l.bpm/60*2);if(beat!==lastBeat){lastBeat=beat;if(beat%2===0)audio.tone(110+(match.level*13),.045,.012,'square');}saveDue+=delta;if(saveDue>2.5)save();processEvents();if(match.phase!=='playing'){playing=false;finishRun();}}renderer.render(match,{reducedMotion:prefs.reducedMotion});renderHud();requestAnimationFrame(loop);}
   function finishRun(){releaseInput();const a=match.actors[0],l=E.levels[match.level],pct=Math.min(100,Math.floor(a.x/l.length*100)),r=profile.records[match.level];if(match.phase==='finished'){if(match.practice){r.practiceBest=Math.max(r.practiceBest,100);}else{r.best=100;r.completed=true;r.bestTime=r.bestTime==null?match.elapsed:Math.min(r.bestTime,match.elapsed);profile.wins++;profile.unlocked=Math.max(profile.unlocked,Math.min(5,match.level+1));}save();showResult();}else{if(match.practice)r.practiceBest=Math.max(r.practiceBest,pct);else r.best=Math.max(r.best,pct);save();showResult();}}
   function showResult(){const done=match.phase==='finished',practice=match.practice,a=match.actors[0],place=match.result?.place;openModal(done?(practice?'Practice complete':'Course forged'):'Pulse broken',done?'FINISH':'RETRY',done?`<p>${practice?'Practice records stay separate; normal completion remains unearned.':`Finished in <strong>${match.elapsed.toFixed(2)}s</strong>${place?' · place '+place:''}.`}</p>`:`<p>${match.result?.cause||'A foundry hazard'} at <strong>${match.result?.percent||0}%</strong>. Retry starts ${practice&&match.checkpoint?'from the safe checkpoint at '+Math.floor(match.checkpoint/E.levels[match.level].length*100)+'%':'from the opening beat'}.</p>`,[{label:done?'Run again':'Retry',primary:true,action:()=>{audio.arm();E.restart(match);closeModal();playing=true;lastFrame=performance.now();lastSection='';save();}},{label:'Course menu',action:()=>{match=null;profile.activeMatch=null;save();closeModal();showHome();}}]);}
-  function openModal(title,kicker,body,actions){playing=false;audio.suspend();releaseInput();els.title.textContent=title;els.kicker.textContent=kicker;els.body.innerHTML=body;els.actions.innerHTML='';for(const item of actions){const b=document.createElement('button');b.type='button';b.textContent=item.label;if(item.primary)b.className='primary';b.onclick=item.action;els.actions.append(b);}els.modal.classList.remove('hidden');els.actions.querySelector('button')?.focus();}
-  function closeModal(){els.modal.classList.add('hidden');}
+  function openModal(title,kicker,body,actions){playing=false;audio.suspend();releaseInput();els.title.textContent=title;els.kicker.textContent=kicker;els.body.innerHTML=body;els.actions.innerHTML='';for(const item of actions){const b=document.createElement('button');b.type='button';b.textContent=item.label;if(item.primary)b.className='primary';b.onclick=item.action;els.actions.append(b);}modalBack=actions.find(a=>['Resume','Close','Course menu'].includes(a.label))?.action||null;els.modal.classList.remove('hidden');els.actions.querySelector('button')?.focus();}
+  function closeModal(){els.modal.classList.add('hidden');if(!els.battle.classList.contains('hidden'))els.stage.focus({preventScroll:true});else els.settings.focus({preventScroll:true});}
   function pause(){if(!match||match.phase!=='playing')return;const stored=save();openModal('Foundry paused','PAUSED',`<p>Timing and CPU rivals are frozen. Held input was released.</p>${stored?'':'<p role="alert">This browser rejected the local save. Resume keeps this run in memory; export a backup before leaving.</p>'}`,[{label:'Resume',primary:true,action:()=>{audio.arm();closeModal();playing=true;lastFrame=performance.now();}},{label:'Restart run',action:()=>{audio.arm();E.restart(match);closeModal();playing=true;lastFrame=performance.now();lastSection='';}},{label:'Course menu',action:()=>{closeModal();showHome();}}]);}
-  function settings(){openModal('Sound, motion & local save','SETTINGS',`<label class="setting-row">Synth audio <input id="sound-toggle" type="checkbox" ${prefs.sound?'checked':''}></label><label class="setting-row">Reduced motion <input id="motion-toggle" type="checkbox" ${prefs.reducedMotion?'checked':''}></label><p>Audio is original and generated locally after a gesture. Muting never changes course timing.</p><p id="settings-feedback" role="status">${storageBlocked?'Local storage was rejected. Current memory is intact; export a backup before leaving.':''}</p>`,[{label:'Export backup',action:download},{label:'Import backup',action:()=>els.import.click()},{label:'Close',primary:true,action:()=>{prefs.sound=$('sound-toggle').checked;prefs.reducedMotion=$('motion-toggle').checked;savePrefs();closeModal();renderHome();}}]);}
+  function settings(){openModal('Sound, motion & local save','SETTINGS',`<label class="setting-row">Synth audio <input id="sound-toggle" type="checkbox" ${prefs.sound?'checked':''}></label><label class="setting-row">Reduced motion <input id="motion-toggle" type="checkbox" ${prefs.reducedMotion?'checked':''}></label><p><b>Controls:</b> Space, W or ↑: jump/hold to fly. P or Escape: pause/back. R: retry from pause/results. On touch, hold the stage or PRESS / HOLD; release to fall. Buttons keep their normal Enter/Space actions.</p><p>Audio is original and generated locally after a gesture. Muting never changes course timing.</p><p id="settings-feedback" role="status">${storageBlocked?'Local storage was rejected. Current memory is intact; export a backup before leaving.':''}</p>`,[{label:'Export backup',action:download},{label:'Import backup',action:()=>els.import.click()},{label:'Close',primary:true,action:()=>{prefs.sound=$('sound-toggle').checked;prefs.reducedMotion=$('motion-toggle').checked;savePrefs();closeModal();renderHome();}}]);}
   function download(){const blob=new Blob([JSON.stringify(exportSave(),null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pulse-foundry-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),0);$('settings-feedback').textContent='Backup exported.';}
-  function releaseInput(){input.held=false;input.pressed=false;input.pointer=null;els.pulse.classList.remove('active');}
-  function press(id){if(!playing||match?.phase!=='playing'||input.pointer!==null)return;audio.arm();input.pointer=id;input.held=true;input.pressed=true;els.pulse.classList.add('active');}
-  function release(id){if(id!==undefined&&input.pointer!==id)return;releaseInput();}
-  function bindPress(node){node.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();node.setPointerCapture?.(e.pointerId);press(e.pointerId);});node.addEventListener('pointerup',e=>{e.preventDefault();release(e.pointerId);});node.addEventListener('pointercancel',e=>release(e.pointerId));node.addEventListener('lostpointercapture',e=>release(e.pointerId));node.addEventListener('contextmenu',e=>e.preventDefault());}
+  function releaseInput(){inputOwners.clear();input.held=false;input.pressed=false;input.pointer=null;els.pulse.classList.remove('active');}
+  function press(id){if(!playing||match?.phase!=='playing'||inputOwners.has(id))return;audio.arm();const wasHeld=inputOwners.size>0;inputOwners.add(id);input.pointer=inputOwners.values().next().value;input.held=true;if(!wasHeld)input.pressed=true;els.pulse.classList.add('active');}
+  function release(id,cancelled=false){if(!inputOwners.delete(id))return;input.held=inputOwners.size>0;input.pointer=inputOwners.values().next().value??null;if(!input.held){els.pulse.classList.remove('active');if(cancelled)input.pressed=false;}}
+  function bindPress(node){node.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();try{node.setPointerCapture?.(e.pointerId);}catch{}press(e.pointerId);});node.addEventListener('pointerup',e=>{e.preventDefault();release(e.pointerId);});node.addEventListener('pointercancel',e=>release(e.pointerId,true));node.addEventListener('lostpointercapture',e=>release(e.pointerId,true));node.addEventListener('contextmenu',e=>e.preventDefault());}
   document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{selectedMode=b.dataset.mode;profile.lastMode=selectedMode;renderHome();save();});els.start.onclick=()=>match&&match.phase==='playing'?continueRun():startRun();els.newRun.onclick=startRun;els.settings.onclick=settings;els.pause.onclick=pause;bindPress(els.stage);bindPress(els.pulse);
-  addEventListener('keydown',e=>{if(playing&&match?.phase==='playing'&&(e.code==='Space'||e.code==='ArrowUp')&&!e.repeat){e.preventDefault();press('key');}});addEventListener('keyup',e=>{if((e.code==='Space'||e.code==='ArrowUp')&&input.pointer==='key'){e.preventDefault();release('key');}});addEventListener('blur',releaseInput);addEventListener('orientationchange',releaseInput);document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause();});
+  addEventListener('keydown',e=>{
+    if(trapGameTab(e,!els.modal.classList.contains('hidden')?els.modal:null))return;
+    if(e.ctrlKey||e.metaKey||e.altKey){for(const owner of [...inputOwners])if(typeof owner==='string')release(owner,true);return;}
+    if(gameKeyBlocked(e))return;
+    if((e.code==='KeyP'||e.code==='Escape')&&!e.repeat){if(!els.modal.classList.contains('hidden')){if(e.code==='Escape'||els.kicker.textContent==='PAUSED'){e.preventDefault();modalBack?.();}}else if(playing){e.preventDefault();pause();}return;}
+    if(!els.modal.classList.contains('hidden')){if(e.code==='KeyR'&&!e.repeat&&match){const retry=[...els.actions.children].find(n=>/^(Retry|Run again|Restart run)$/.test(n.textContent));if(retry){e.preventDefault();retry.click();}}return;}
+    const pulseFocus=e.target===els.pulse,action=['Space','ArrowUp','KeyW'].includes(e.code)||pulseFocus&&['Enter','NumpadEnter'].includes(e.code);
+    if(playing&&match?.phase==='playing'&&action&&(!nativeKeyActivation(e)||pulseFocus)){e.preventDefault();if(!e.repeat)press('key:'+e.code);}
+  });
+  addEventListener('keyup',e=>{if(inputOwners.has('key:'+e.code)){e.preventDefault();release('key:'+e.code);}});
+  addEventListener('blur',()=>{releaseInput();if(playing)pause();});addEventListener('orientationchange',releaseInput);document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause();});
   els.import.onchange=async()=>{const file=els.import.files?.[0];els.import.value='';if(!file)return;let value=null;try{if(file.size>1000000)throw new Error('large');value=JSON.parse(await file.text());}catch{}const ok=importSave(value),feedback=$('settings-feedback');if(feedback)feedback.textContent=ok?'Backup imported.':'That backup was invalid; current progress was kept.';};
   load();renderHome();
   window.GameApp={save,exportSave,importSave,getSummary:summary};
-  window.PulseFoundryDiagnostics={renderer:()=>renderer?.debug()||null,recommend:()=>match?E.recommendedInput(match,match.actors[0]):null,match:()=>match?E.pauseSnapshot(match):null,input:()=>({held:input.held,pointer:input.pointer})};
+  window.PulseFoundryDiagnostics={renderer:()=>renderer?.debug()||null,recommend:()=>match?E.recommendedInput(match,match.actors[0]):null,match:()=>match?E.pauseSnapshot(match):null,input:()=>({held:input.held,pointer:input.pointer,owners:[...inputOwners]})};
   window.dispatchEvent(new Event('game-ready'));
 })();

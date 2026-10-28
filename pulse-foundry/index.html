@@ -39,11 +39,11 @@
     <section id="battle" class="screen battle hidden" aria-label="Pulse Foundry course">
       <header class="hud"><div><b id="course-name">Ignition Walk</b><span id="run-mode">Solo run</span></div><div class="readout"><b id="percent">0%</b><span id="best">BEST 0%</span></div><button id="pause" type="button" aria-label="Pause run">Ⅱ</button></header>
       <div id="stage-shell">
-        <canvas id="stage" tabindex="0" aria-label="One-touch foundry course. Press and hold to jump or fly."></canvas>
+        <canvas id="stage" tabindex="0" aria-label="Foundry course. Space, W or Arrow Up jumps; hold to fly. P or Escape pauses."></canvas>
         <div id="section-callout" class="callout" role="status">PRESS TO JUMP</div>
         <div id="rival-strip" class="rivals" aria-label="Race positions"></div>
       </div>
-      <button id="pulse" class="pulse" type="button" aria-label="Jump or hold to fly"><span>PRESS / HOLD</span><small>Space · Arrow Up · touch</small></button>
+      <button id="pulse" class="pulse" type="button" aria-label="Jump or hold to fly"><span>PRESS / HOLD</span><small>Space / W / ↑ · P / Esc pause · touch</small></button>
     </section>
 
     <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-card"><p id="modal-kicker" class="eyebrow">PAUSED</p><h2 id="modal-title">Foundry paused</h2><div id="modal-body"></div><div id="modal-actions" class="modal-actions"></div></div></div>
