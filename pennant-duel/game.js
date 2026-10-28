@@ -161,40 +161,10 @@
   }
   function showCollection() { renderCollection(); showScreen('collection'); }
   function cardPortrait(card) {
-    const team='#61e5d2', dark='#17233d', light='#fff0c2', color=card.color;
-    if (card.kind === 'spell') {
-      const spell = card.id === 'comet'
-        ? '<path d="M18 58 47 29" stroke="#fff0b0" stroke-width="12" stroke-linecap="round"/><path d="M12 53 39 26" stroke="#ff754f" stroke-width="7" stroke-linecap="round"/><circle cx="51" cy="23" r="15" fill="#ffcb55"/><path d="m43 15 17 16M59 15 43 31" stroke="#fff3b8" stroke-width="4"/>'
-        : card.id === 'tailwind'
-          ? '<path d="M10 28c18-16 28 10 45-2 11-8 16 1 13 8-4 10-19 8-29 8-15 0-18 10-7 16 10 6 23-2 29-9" fill="none" stroke="#d9fff4" stroke-width="7" stroke-linecap="round"/><path d="m55 47 8 2-5 7" fill="none" stroke="#fff0a8" stroke-width="4"/>'
-          : '<path d="M40 13c9 10 13 16 12 25 12-3 20 4 18 13-3 14-23 16-33 8-12 9-29 2-28-10 1-10 11-15 20-12-2-10 3-17 11-24Z" fill="#e89ce8" stroke="#ffe0ff" stroke-width="4"/><circle cx="39" cy="45" r="9" fill="#704071"/>';
-      return '<svg class="card-art" viewBox="0 0 80 72" aria-hidden="true"><rect width="80" height="72" rx="14" fill="#20385a"/><path d="M0 56 80 39v33H0Z" fill="#102442"/>'+spell+'</svg>';
-    }
-    const flying=['kitewing','boltfinch','cloudrays','ramblebee'].includes(card.id);
-    const beast=['nibblers','emberox','ripplefox'].includes(card.id);
-    const golem=['mossguard','ironroot'].includes(card.id);
-    let figure='';
-    if (flying) figure='<ellipse cx="40" cy="61" rx="23" ry="5" fill="#07142666"/><path d="M38 39C23 18 8 21 8 34c0 10 16 15 28 12M42 39c15-21 30-18 30-5 0 10-16 15-28 12" fill="'+color+'" stroke="'+light+'" stroke-width="3"/><ellipse cx="40" cy="39" rx="15" ry="19" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><circle cx="35" cy="34" r="3" fill="'+dark+'"/><circle cx="45" cy="34" r="3" fill="'+dark+'"/><path d="m36 44 4 4 5-5" fill="none" stroke="'+light+'" stroke-width="3"/>'+(card.id==='ramblebee'?'<path d="M28 35h24M28 43h24" stroke="#473622" stroke-width="5"/><path d="m29 23-6-7m28 7 6-7" stroke="#fff0a8" stroke-width="3"/>':'');
-    else if (beast) figure='<ellipse cx="40" cy="63" rx="25" ry="5" fill="#07142666"/><path d="M20 48c0-16 11-26 27-24 13 1 20 10 19 25l-7 9H27Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><path d="M27 54v10m25-10v10" stroke="'+dark+'" stroke-width="7" stroke-linecap="round"/><path d="M24 29 15 20m39 5 10-9" stroke="'+light+'" stroke-width="6" stroke-linecap="round"/><circle cx="34" cy="35" r="3" fill="'+dark+'"/><circle cx="48" cy="35" r="3" fill="'+dark+'"/><path d="M60 43q15-2 11-14" fill="none" stroke="'+color+'" stroke-width="6" stroke-linecap="round"/>';
-    else if (golem) figure='<ellipse cx="40" cy="65" rx="24" ry="5" fill="#07142666"/><path d="M25 28 32 15h17l8 13 9 8-5 25H20l-5-25Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><path d="M27 21h26v22H27Z" fill="'+(card.id==='ironroot'?'#88745c':'#406e51')+'"/><circle cx="34" cy="32" r="3" fill="'+team+'"/><circle cx="47" cy="32" r="3" fill="'+team+'"/><path d="M20 39 10 55m51-16 9 16M29 60l-3 7m26-7 3 7" stroke="'+dark+'" stroke-width="8" stroke-linecap="round"/>';
-    else figure='<ellipse cx="40" cy="65" rx="22" ry="5" fill="#07142666"/><path d="M28 30c0-11 6-17 12-17s13 6 13 17v7H28Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><path d="M22 39c5-7 31-7 37 0l-4 24H26Z" fill="'+color+'" stroke="'+dark+'" stroke-width="4"/><circle cx="35" cy="30" r="3" fill="'+dark+'"/><circle cx="46" cy="30" r="3" fill="'+dark+'"/><path d="M24 44 13 58m43-14 11 14M32 61l-3 7m20-7 3 7" stroke="'+dark+'" stroke-width="7" stroke-linecap="round"/>'+(card.id==='sunshot'||card.id==='twinbow'?'<path d="M11 55q10-12 20 0M49 55q10-12 20 0" fill="none" stroke="'+light+'" stroke-width="3"/>':'<path d="M12 56h18v-18H12Z" fill="#47658b" stroke="'+light+'" stroke-width="3"/>');
-    const gear={
-      dashling:'<path d="m58 16 8 8-22 25-6-6Z" fill="#eef8ee"/><path d="M42 48h13" stroke="#ffc96b" stroke-width="4"/>',
-      mossguard:'<circle cx="20" cy="18" r="7" fill="#7da95b"/><circle cx="60" cy="18" r="6" fill="#91ba68"/>',
-      sunshot:'<path d="M59 17q18 17 0 34" fill="none" stroke="#ffe0a0" stroke-width="3"/><path d="m58 17 3 34" stroke="#fff5d0" stroke-width="2"/>',
-      nibblers:'<path d="m24 25-9-11 3 19m39-8 9-11-3 19" fill="#bde65e" stroke="#27324a" stroke-width="3"/>',
-      kitewing:'<path d="m36 45 4 5 6-7" fill="none" stroke="#fff0b8" stroke-width="4"/>',
-      boltfinch:'<path d="m36 41 8 0-4 7Z" fill="#f2e3a9"/><path d="m25 19 5-9m25 9-5-9" stroke="#b99cff" stroke-width="4"/>',
-      emberox:'<path d="M24 27 12 15m44 12 12-12" stroke="#f0d9a5" stroke-width="7" stroke-linecap="round"/>',
-      ripplefox:'<path d="M57 48q17 3 9 17M53 44q20-4 20 10" fill="none" stroke="#dff7ef" stroke-width="5" stroke-linecap="round"/>',
-      ironroot:'<path d="M27 21h26M24 46h32" stroke="#c2b28d" stroke-width="4"/><circle cx="21" cy="35" r="3" fill="#61e5d2"/>',
-      cloudrays:'<circle cx="25" cy="17" r="4" fill="#dffff9"/><circle cx="40" cy="12" r="4" fill="#dffff9"/><circle cx="55" cy="17" r="4" fill="#dffff9"/>',
-      lantern:'<path d="M58 22v28" stroke="#8b673d" stroke-width="4"/><rect x="51" y="13" width="14" height="17" rx="3" fill="#ffe88b" stroke="#fff3bf" stroke-width="3"/>',
-      ramblebee:'<path d="M29 34h23M29 44h23" stroke="#4a3826" stroke-width="5"/>',
-      twinbow:'<path d="M9 52q10-14 20 0m22 0q10-14 20 0" fill="none" stroke="#ffd9f0" stroke-width="3"/>'
-    }[card.id]||'';
-    return '<svg class="card-art" viewBox="0 0 80 72" aria-hidden="true"><rect width="80" height="72" rx="14" fill="#294566"/><circle cx="64" cy="12" r="20" fill="'+color+'" opacity=".2"/><path d="M0 56 80 39v33H0Z" fill="#102442"/>'+figure+gear+'</svg>';
+    const index=E.cards.findIndex(item=>item.id===card.id),column=index%4,row=Math.floor(index/4);
+    return '<span class="card-art painted-portrait" aria-hidden="true" style="--portrait-x:'+(column/3*100)+'%;--portrait-y:'+(row/3*100)+'%"></span>';
   }
+
   function renderCollection() {
     els['arena-list'].innerHTML = E.arenas.map((arena,index) => {
       const unlocked = index <= profile.unlockedArena, current = index === profile.selectedArena;
@@ -303,6 +273,7 @@
     const enemyCrowns=match.towers.filter((tower)=>tower.side==='player'&&!tower.alive).reduce((total,tower)=>total+(tower.type==='base'?3:1),0);
     els['battle-score'].textContent='◆ '+playerCrowns+' · '+enemyCrowns+' ◆';
     els['battle-score'].setAttribute('aria-label','Tower score: you '+playerCrowns+', rival '+enemyCrowns);
+    const phase=E.energyMultiplier(match);els['mode-name'].textContent=(match.mode==='draft'?'Draft':match.mode==='frenzy'?'Frenzy':'Classic')+(match.overtime?' · sudden death':'')+(phase>1?' · '+phase+'× spark':'');
     const energy=match.energy.player; els['energy-number'].textContent=Math.floor(energy); els['energy-track'].setAttribute('aria-label','Energy: '+energy.toFixed(1)+' of '+E.MAX_ENERGY);
     Array.from(els['energy-track'].children).forEach((segment,index)=>{segment.classList.toggle('full',energy>=index+1);segment.classList.toggle('partial',energy>index&&energy<index+1);segment.style.setProperty('--fill',Math.max(0,Math.min(1,energy-index))*100+'%');});
     renderHand(false);
@@ -358,8 +329,8 @@
       const pillWidth=Math.max(28,context.measureText(text).width+10);context.fillStyle='#081426e8';context.strokeStyle=team;context.lineWidth=1.5;
       context.beginPath();context.roundRect(x-pillWidth/2,y-7,pillWidth,14,7);context.fill();context.stroke();context.fillStyle='#ffffff';context.fillText(text,x,y+.3);
     };
-    match.towers.forEach((tower)=>label(tower,tower.type==='base'?2.08:1.91,true));
-    match.units.forEach((unit)=>label(unit,unit.flying?1.75:1.35,false));
+    match.towers.forEach((tower)=>label(tower,tower.type==='base'?2.45:2.14,true));
+    match.units.forEach((unit)=>label(unit,(unit.flying?.66:0)+.35+1.85*Math.max(.74,E.cardMap[unit.cardId].size/34),false));
   }
   function displayArea(width,height){return Math.max(1,width*height);}
   function drawArena() {
@@ -391,7 +362,7 @@
     else if(golem){limb(-r*.52,.1,-r*.72,r*.72,12,dark);limb(r*.52,.1,r*.72,r*.72,12,dark);limb(-r*.25,r*.48,-r*.35,r*.95,13,dark);limb(r*.25,r*.48,r*.35,r*.95,13,dark);ctx.fillStyle=card.color;ctx.strokeStyle=team;ctx.lineWidth=5;roundedRect(-r*.7,-r*.55,r*1.4,r*1.3,r*.22);ctx.fill();ctx.stroke();ctx.fillStyle=card.id==='ironroot'?'#665743':'#365d45';roundedRect(-r*.42,-r*.72,r*.84,r*.62,r*.15);ctx.fill();ctx.fillStyle=team;ctx.fillRect(-r*.25,-r*.46,r*.15,6);ctx.fillRect(r*.1,-r*.46,r*.15,6);}
     else{const stride=Math.sin(u.walk||0)*r*.18;limb(-r*.25,r*.25,-r*.32+stride,r*.9,10,dark);limb(r*.25,r*.25,r*.32-stride,r*.9,10,dark);limb(-r*.48,-.05,-r*.7,r*.42,9,dark);limb(r*.48,-.05,r*.72+attack,r*.3-attack,9,dark);ctx.fillStyle=card.color;ctx.strokeStyle=team;ctx.lineWidth=4;roundedRect(-r*.55,-r*.35,r*1.1,r*.95,r*.24);ctx.fill();ctx.stroke();ctx.fillStyle=dark;ctx.beginPath();ctx.arc(0,-r*.54,r*.48,0,Math.PI*2);ctx.fill();ctx.fillStyle=card.color;ctx.beginPath();ctx.arc(0,-r*.58,r*.38,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff3c6';ctx.beginPath();ctx.arc(-r*.14,-r*.62,3.5,0,Math.PI*2);ctx.arc(r*.14,-r*.62,3.5,0,Math.PI*2);ctx.fill();if(card.id==='sunshot'||card.id==='twinbow'){ctx.strokeStyle='#ffe9ad';ctx.lineWidth=4;ctx.beginPath();ctx.arc(r*.78,r*.1,r*.35,1.8,4.5);ctx.stroke();}else{ctx.fillStyle='#496786';ctx.strokeStyle='#e7f7ff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(-r*.74,r*.12,r*.35,0,Math.PI*2);ctx.fill();ctx.stroke();}}
     if(u.hit>0){ctx.globalAlpha=Math.min(1,u.hit*5);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,r*.75,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
-  function drawUnit(u){const card=E.cardMap[u.cardId];ctx.save();ctx.translate(u.x,u.y);ctx.rotate((u.heading||-Math.PI/2)+Math.PI/2);drawUnitModel(card,u.side,u,u.deploy>0?.62:1);ctx.restore();if(u.deploy>0){ctx.strokeStyle=u.side==='player'?'#9dfff0':'#ffb0a9';ctx.lineWidth=5;ctx.beginPath();ctx.arc(u.x,u.y,u.radius*1.8,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-u.deploy/.58));ctx.stroke();}if(u.slow>0){ctx.strokeStyle='#f2a4f2';ctx.lineWidth=5;ctx.beginPath();ctx.arc(u.x,u.y,u.radius+12,0,Math.PI*2);ctx.stroke();}hpBar(u,u.radius*2.6,u.radius+27);}
+  function drawUnit(u){const card=E.cardMap[u.cardId];ctx.save();ctx.translate(u.x,u.y);ctx.rotate((u.heading||-Math.PI/2)+Math.PI/2);drawUnitModel(card,u.side,u,u.deploy>0?.62:1);ctx.restore();if(u.deploy>0){ctx.strokeStyle=u.side==='player'?'#9dfff0':'#ffb0a9';ctx.lineWidth=5;ctx.beginPath();ctx.arc(u.x,u.y,u.radius*1.8,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-u.deploy/(match.rulesVersion===2?1:.58)));ctx.stroke();}if(u.slow>0){ctx.strokeStyle='#f2a4f2';ctx.lineWidth=5;ctx.beginPath();ctx.arc(u.x,u.y,u.radius+12,0,Math.PI*2);ctx.stroke();}hpBar(u,u.radius*2.6,u.radius+27);}
   function drawProjectile(p){ctx.save();ctx.strokeStyle=p.color;ctx.lineWidth=p.splash?8:5;ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(p.x,p.y+18);ctx.lineTo(p.x,p.y-18);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle='#fff6cf';ctx.shadowColor=p.color;ctx.shadowBlur=prefs.reducedEffects?0:22;ctx.beginPath();ctx.arc(p.x,p.y,p.splash?11:8,0,Math.PI*2);ctx.fill();ctx.restore();}
   function drawEffect(effect){ctx.save();const life=Math.max(0,effect.life/effect.maxLife);ctx.globalAlpha=life;if(effect.kind==='rubble'){ctx.fillStyle=effect.color;for(let i=0;i<9;i++){const a=i*2.39,d=(1-life)*effect.radius*1.8;ctx.save();ctx.translate(effect.x+Math.cos(a)*d,effect.y+Math.sin(a)*d);ctx.rotate(a);ctx.fillRect(-10,-8,20,16);ctx.restore();}}else if(effect.kind==='defeat'){ctx.fillStyle=effect.color;for(let i=0;i<7;i++){const a=i*.9;ctx.beginPath();ctx.arc(effect.x+Math.cos(a)*(1-life)*45,effect.y+Math.sin(a)*(1-life)*45,5+life*5,0,Math.PI*2);ctx.fill();}}else{ctx.strokeStyle=effect.color;ctx.lineWidth=18*(1-life)+4;ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius*(1-life*.4),0,Math.PI*2);ctx.stroke();}ctx.restore();}
   function drawDragGhost(){const card=E.cardMap[dragPreview.id],p=dragPreview.world;ctx.save();ctx.translate(p.x,p.y-(card.kind==='unit'?70:0));if(card.kind==='unit')drawUnitModel(card,'player',{walk:match.time*5,flying:card.flying,id:'ghost'},.78);else{ctx.strokeStyle=card.color;ctx.lineWidth=12;ctx.beginPath();ctx.arc(0,0,card.radius*.55,0,Math.PI*2);ctx.stroke();}ctx.restore();}

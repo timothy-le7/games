@@ -127,3 +127,9 @@ h3 { margin: 24px 0 8px; }
   .hand-card b { font-size:9px; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
+
+/* Original painted crew portraits are packed locally for instant/offline hands. */
+.painted-portrait { display:block; width:100%; aspect-ratio:1; background-image:url('./assets/crew-portraits-v1.png'); background-size:400% 400%; background-position:var(--portrait-x) var(--portrait-y); background-repeat:no-repeat; border-radius:10px; box-shadow:inset 0 0 0 1px #ffffff30; }
+.hand-card .painted-portrait { border-radius:9px 9px 4px 4px; height:auto; max-height:none; }
+.library-card .painted-portrait,.draft-card .painted-portrait { margin:0 auto 5px; }
+#next-card-art .painted-portrait { border-radius:7px; }

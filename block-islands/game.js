@@ -158,7 +158,7 @@
   function welcome(recovered) {
     const continued = profiles.campaign.completed.length || profiles.campaign.time > 1;
     const rendererNote = V ? '' : '<p class="tiny"><strong>3D view is loading.</strong> This build needs its local voxel renderer before play can begin.</p>';
-    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD.</div><div><strong>2 · Look</strong>Drag the open right side of the view.</div><div><strong>3 · Mine</strong>Hold Mine on a block in the crosshair.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
+    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD. Push fully forward to run; Shift runs on a keyboard.</div><div><strong>2 · Look</strong>Drag the open right side of the view.</div><div><strong>3 · Mine</strong>Hold Mine on a block in the crosshair.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Space jumps · 1–5 hotbar · I crafting · F5 camera. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
     bind('startButton', () => activateMode('campaign')); bind('creativeButton', () => activateMode('creative'));
   }
   function activateMode(mode) {
@@ -432,7 +432,7 @@
     applyJump();
     const forward = (input.keys.has('w') || input.keys.has('arrowup') ? 1 : 0) - (input.keys.has('s') || input.keys.has('arrowdown') ? 1 : 0) - input.joy.y;
     const sideways = (input.keys.has('d') || input.keys.has('arrowright') ? 1 : 0) - (input.keys.has('a') || input.keys.has('arrowleft') ? 1 : 0) + input.joy.x;
-    const length = Math.hypot(forward, sideways) || 1, speed = isInWater() ? 2 : 3.55;
+    const length = Math.max(1,Math.hypot(forward, sideways)), sprint=input.keys.has('shift')||input.joy.y<-.93, sneak=input.keys.has('control'), speed = isInWater() ? 2 : sneak?1.35:sprint&&forward>0?5.1:3.55;
     if (forward || sideways) {
       const f = forward / length * speed * dt, s = sideways / length * speed * dt;
       // The renderer's contract is yaw 0 → -Z and positive yaw → -X.
@@ -700,7 +700,10 @@
     if (key === 'e' && down && !event.repeat) { beginMine({ preventDefault() {}, stopPropagation() {}, pointerId: -1, currentTarget: $('mineButton') }); return; }
     if (key === 'q' && down && !event.repeat) { placeTarget(); return; }
     if (key === 'f' && down && !event.repeat) { attack(); return; }
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) down ? input.keys.add(key) : input.keys.delete(key);
+    if(down&&!event.repeat&&key==='f5'){event.preventDefault();$('cameraButton').click();return;}
+    if(down&&!event.repeat&&key==='i'){craftMenu();return;}
+    if(down&&/^[1-5]$/.test(key)){const slot=$('hotbar').querySelectorAll('[data-block]')[Number(key)-1];if(slot&&!slot.disabled)slot.click();return;}
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright','shift','control'].includes(key)) down ? input.keys.add(key) : input.keys.delete(key);
   }
   function entities() {
     return state.enemies.filter(e => e.alive).map(e => ({
@@ -744,7 +747,7 @@
           // retracted camera can be close to the player, but silently
           // switching the rendering to an empty first-person-looking frame
           // makes the mobile camera control misleading.
-          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, opacity: avatarOpacity, walk: motionAllowed() && (Math.hypot(input.joy.x, input.joy.y) + input.keys.size) ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 } : null,
+          player: avatarVisible ? { x: pose.x, y: pose.y - EYE, z: pose.z, heading: pose.yaw, look: pose.pitch, opacity: avatarOpacity, walk: motionAllowed() && (Math.hypot(input.joy.x, input.joy.y)>0||['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].some(key=>input.keys.has(key))) ? state.time * .9 : 0, airborne: !pose.grounded, held: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 } : null,
           held: camera.third ? null : { material: mining ? 'tool' : (state.inventory[selectedBlock] > 0 ? selectedBlock : null), tool: currentTool(), swing: motionAllowed() ? Math.max(mining, clamp((toolSwingUntil - now) / 220, 0, 1)) : 0 }
         });
         renderNeeded = false;
