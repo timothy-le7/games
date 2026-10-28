@@ -252,10 +252,10 @@
         if(abs(material-12.0)<.5) surfaceUv+=vec2(sin((vUv.y+uTime*.21)*15.0),cos((vUv.x-uTime*.17)*13.0))*.018;
         vec3 color=sampleMaterial(material,surfaceUv); vec3 stable=sampleMaterial(material,vec2(.5));
         color=mix(color,stable,smoothstep(26.0,82.0,distanceToCamera)*.58);
-        if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); color=mix(soil,color,smoothstep(.76,.98,vUv.y)); }
+        if(material<.5 && abs(normal.y)<.5){ vec3 soil=sampleMaterial(1.0,vUv); float fringe=.76+floor(sin(floor(vUv.x*16.0)*17.3)*2.0)/16.0; color=mix(soil,color,step(fringe,vUv.y)); }
         if(abs(material-4.0)<.5 && normal.y>.5){ float ring=max(abs(vUv.x-.5),abs(vUv.y-.5)); color+=vec3(mod(floor(ring*17.0),2.0)*.09-.045); }
         if(abs(material-5.0)<.5){ float gaps=mod(floor(vUv.x*8.0)+floor(vUv.y*8.0)*3.0,9.0); color*=mix(.66,1.0,step(1.0,gaps)); color+=vec3(.012,.045,.006); color=mix(color,vec3(.34,.67,.73),biome(5.0)*.62); }
-        if(abs(material-12.0)<.5) color+=vec3(.015,.10,.15)*sin((vUv.x+uTime*.34)*19.0);
+        if(abs(material-12.0)<.5){float ripple=sin((vWorld.x+uTime*.45)*4.0)+sin((vWorld.z-uTime*.32)*6.0); color+=vec3(.015,.055,.075)*ripple; color+=vec3(.16,.23,.25)*pow(max(0.0,sin(vWorld.x*3.0+vWorld.z*5.0+uTime)),16.0);}
         vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)), upward=max(.0,normal.y); float ao=mix(.58,1.0,clamp(vOcclusion/3.0,0.0,1.0));
         vec3 coolAmbient=mix(vec3(.14,.19,.29),vec3(.31,.42,.53),uDaylight); vec3 warmKey=vec3(1.0,.77,.52)*(.15+.85*uDaylight)*diffuse; vec3 skyLift=vec3(.20,.32,.40)*upward*(.10+.18*uDaylight);
         vec3 climate=vec3(1.0); climate=mix(climate,vec3(.82,.93,1.12),biome(5.0)); climate=mix(climate,vec3(1.14,.92,.66),biome(6.0)); climate=mix(climate,vec3(1.16,.62,.45),max(biome(7.0),biome(8.0))); climate=mix(climate,vec3(.73,.82,.91),biome(2.0)); climate=mix(climate,vec3(.78,.73,1.16),biome(11.0));
@@ -313,27 +313,30 @@
     const noise = (x, y, material) => ((x * 73) ^ (y * 151) ^ (material * 197)) & 15;
     for (let material = 0; material < MATERIALS.length; material++) for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
       const offset = ((y * side * MATERIALS.length) + material * side + x) * 4, base = colors[material];
-      let pattern = noise(x, y, material) < 3 ? -9 : noise(x, y, material) > 13 ? 8 : 0;
-      if (material === 0) pattern += (y < 3 && (x === 2 || x === 11) ? 15 : 0) + (y > 10 && x % 5 === 0 ? -8 : 0);
-      if (material === 1) pattern += ((x === 3 || x === 12) && y % 5 < 3 ? 13 : 0) + (y === 8 ? -6 : 0);
-      if (material === 2) pattern += ((x > 3 && x < 7 && y > 3 && y < 7) || (x > 10 && y > 9) ? 15 : 0) + ((x === 8 || y === 12) ? -8 : 0);
-      if (material === 3) pattern += (x % 6 === 1 && y % 5 === 2 ? 13 : 0);
-      if (material === 4) pattern += (x % 5 < 2 ? -18 : x % 5 === 3 ? 12 : 0);
-      if (material === 5) pattern += ((x > 2 && x < 6 && y > 2 && y < 7) || (x > 9 && y > 8) ? 13 : -4);
-      if (material === 6) pattern += (y === 3 || y === 11 ? 15 : 0) + (x === 2 || x === 13 ? -10 : 0);
-      if (material === 7) pattern += ((x - 7) * (x - 7) + (y - 7) * (y - 7) < 17 ? 49 : 0);
-      if (material === 8) pattern += (x === y || x + y === 15 ? 18 : 0);
-      if (material === 9 || material === 11) pattern += (x === 7 || y === 7 ? 31 : 0);
-      if (material === 10) pattern += ((x === 5 || x === 11) && y % 4 ? -18 : 0);
-      if (material === 12) pattern += (y === 4 || y === 11 ? 17 : -3);
-      if (material === 13) pattern += (x === 5 || x === 10 ? 25 : -4);
-      if (material === 15) pattern += (x === 7 && y < 12 ? 31 : -4);
-      if (material === 16) pattern += ((x > 4 && x < 11 && y > 4 && y < 11) ? 34 : -7);
-      if (material === 18) pattern += (y < 5 ? 12 : 0);
-      if (material === 19) pattern += (x === 2 || x === 13 ? 18 : 0);
-      if (material === 20) pattern += (x === 6 || y === 4 ? 26 : 0);
-      if (material === 21) pattern += (x % 4 === 0 ? -17 : 0);
-      if (material === 22) pattern += ((x === 4 || x === 11 || y === 6) ? 22 : -4);
+      // Authored 16px materials: clusters, seams and grain instead of a
+      // uniform noise overlay. Coordinates remain deterministic across saves.
+      const grain=noise(x,y,material),cluster=noise(x>>1,y>>1,material);
+      let pattern=(grain<3?-6:grain>13?7:0)+(cluster<4?-9:cluster>12?8:0);
+      if(material===0) pattern+=(noise(x>>2,y>>2,3)<5?-13:8)+(grain===5?14:0);
+      if(material===1) pattern+=((x+3*y)%13<2?18:0)+(cluster<3?-12:0);
+      if(material===2){const row=y>>2,edge=(x+(row%2)*5)%9;pattern+=(y%4===0&&edge<7?-20:0)+(edge===0&&y%4<3?-17:0)+(y%4===1&&edge>1?9:0);}
+      if(material===3)pattern+=(grain<4?12:0)+(y%4===0&&x%6<3?-8:0);
+      if(material===4)pattern+=((x+((y>>2)%3))%7===0?-29:0)+(x%5<2?12:-5);
+      if(material===5)pattern+=(noise(x>>2,y>>2,5)<7?-24:17)+(x%4===0&&y%4===0?-16:0);
+      if(material===6){const row=y>>2,seam=(x+(row%2)*7)%16;pattern+=(y%4===0?-31:y%4===1?13:0)+(seam===0?-19:0)+(x%7===3&&y%4>1?-7:0);}
+      if(material===7){const nugget=((x>2&&x<6&&y>3&&y<7)||(x>9&&x<13&&y>10&&y<14));pattern+=nugget?46:-5;}
+      if(material===8)pattern+=(x===y||x+y===15?19:0)+(x<3?9:0);
+      if(material===9||material===11)pattern+=((x>4&&x<11&&y>4&&y<11)?29:-5);
+      if(material===10)pattern+=(x%6===0?-22:0)+(y%6===0?-14:0);
+      if(material===12)pattern+=(y===3||y===11?20:0)+(x<6&&y===6?14:0);
+      if(material===13)pattern+=(cluster<5?35:-10)+(grain===7?23:0);
+      if(material===15)pattern+=(x===7&&y<12?31:-4);
+      if(material===16)pattern+=(x>4&&x<11&&y>4&&y<11?34:-7);
+      if(material===18)pattern=(grain<2?-4:0)+(y<3?6:0);
+      if(material===19)pattern+=(x%4===0?-8:0)+(y===2||y===13?13:0);
+      if(material===20)pattern+=(y===3||y===12?17:-3);
+      if(material===21)pattern+=(x%5===0?-17:0)+(y%5===0?-10:0);
+      if(material===22)pattern+=(x===4||x===11||y===6?22:-4);
       bytes[offset] = clamp(base[0] + pattern, 0, 255); bytes[offset + 1] = clamp(base[1] + pattern, 0, 255); bytes[offset + 2] = clamp(base[2] + pattern, 0, 255); bytes[offset + 3] = 255;
     }
     return { pixels: bytes, width: side * MATERIALS.length, height: side };
@@ -441,7 +444,10 @@
       drawCube(mvp, camera, daylight, time, modelBox(eye[0] - side[0] * .15, eye[1], eye[2] - side[2] * .15, .12, .12, .08, yaw), team[2], attack * .16);
     }
     function drawHeld(mvp, camera, daylight, time, frame, right, up, look) {
-      const held = frame.held; if (!held || !held.material) return;
+      const held = frame.held; if (!held) return;
+      const armAt=[camera[0]+look[0]*.82+right[0]*.34-up[0]*.36,camera[1]+look[1]*.82+right[1]*.34-up[1]*.36,camera[2]+look[2]*.82+right[2]*.34-up[2]*.36];
+      drawCube(mvp,camera,daylight,time,modelBasis(armAt,right,up,[-look[0],-look[1],-look[2]],[.18,.31,.20]),'skin',0);
+      if(!held.material)return;
       // Keep the camera-relative model inside a portrait phone's narrower
       // horizontal field of view. This is a real 3D object, never a HUD decal.
       const swing = clamp(Number(held.swing) || 0, 0, 1), position = [camera[0] + look[0] * (1.45 - swing * .12) + right[0] * .18 - up[0] * (.62 + swing * .07), camera[1] + look[1] * (1.45 - swing * .12) + right[1] * .18 - up[1] * (.62 + swing * .07), camera[2] + look[2] * (1.45 - swing * .12) + right[2] * .18 - up[2] * (.62 + swing * .07)];
@@ -481,9 +487,14 @@
       const leftArm = limb(offset([x, y + 1.00, z], side, -.34), -stride * .72, .47, .14, 'cloth');
       const rightArm = limb(offset([x, y + 1.00, z], side, .34), stride * .72 - swing * 1.10, .47, .14, 'cloth');
       const head = [x, y + 1.28, z], headGaze = forward(yaw, clamp(Number(player.look) || 0, -.55, .55) * .45), headUp = normalize(cross(side, headGaze));
-      box(head, side, headUp, headGaze, [.44, .43, .36], 'skin');
-      const face = offset(head, headGaze, .205);
-      box(offset(face, side, .10), side, headUp, headGaze, [.07, .07, .04], 'leather'); box(offset(face, side, -.10), side, headUp, headGaze, [.07, .07, .04], 'leather');
+      box(head, side, headUp, headGaze, [.48, .43, .42], 'skin');
+      const face = offset(head, headGaze, .225);
+      // White eye sockets, dark pupils and a projecting pixel nose retain an
+      // original explorer face without a licensed character skin.
+      for(const sign of [-1,1]){box(offset(face,side,sign*.105),side,headUp,headGaze,[.105,.075,.025],'ice');box(offset(offset(face,side,sign*.105),headGaze,.018),side,headUp,headGaze,[.045,.060,.025],'leather');}
+      box(offset(offset(face,headUp,-.055),headGaze,.025),side,headUp,headGaze,[.075,.07,.07],'skin');
+      box(offset(offset(face,headUp,-.13),headGaze,.01),side,headUp,headGaze,[.09,.025,.025],'leather');
+      box(offset(head,headGaze,-.20),side,headUp,headGaze,[.49,.34,.06],'leather');
       box(offset(head, headUp, .22), side, headUp, headGaze, [.46, .13, .40], 'leather');
       box(offset(head, headUp, -.15), side, headUp, headGaze, [.46, .08, .40], 'scarf');
       const glove = rightArm.hand;

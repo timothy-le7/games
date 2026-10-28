@@ -84,7 +84,7 @@
     const mode = ['classic','frenzy','draft'].includes(options.mode) ? options.mode : 'classic';
     const arena = clamp(Number.isInteger(options.arena) ? options.arena : 0, 0, arenas.length - 1);
     const state = {
-      version: VERSION, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
+      version: VERSION, rulesVersion: 2, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
       rng: (options.seed >>> 0) || 19870621, nextId: 1, accumulator: 0, energy: { player: 5, enemy: 5 },
       units: [], projectiles: [], effects: [], towers: makeTowers(),
       decks: { player: [], enemy: [] }, hands: { player: [], enemy: [] }, queues: { player: [], enemy: [] },
@@ -139,7 +139,7 @@
       damage: card.damage, speed: card.speed, range: card.range,
       cooldown: card.cooldown, attackTimer: random(state) * .12, targetType: card.target, projectile: card.projectile || 0,
       flying: !!card.flying, buildingsOnly: !!card.buildingsOnly, splash: card.splash || 0, aura: card.aura || 0,
-      multi: card.multi || 1, radius: card.size, slow: 0, haste: 0, deploy: .58, heading: side === 'player' ? -Math.PI / 2 : Math.PI / 2,
+      multi: card.multi || 1, radius: card.size, slow: 0, haste: 0, deploy: state.rulesVersion === 2 ? 1 : .58, heading: side === 'player' ? -Math.PI / 2 : Math.PI / 2,
       walk: 0, attackAnim: 0, hit: 0, alive: true
     });
   }
@@ -409,13 +409,19 @@
     state.time -= dt;
     if (state.time <= 0) {
       const p = scoreSide(state,'player'), e = scoreSide(state,'enemy');
-      if (!state.overtime && p.destroyed === e.destroyed) { state.overtime = true; state.time = 60; state.overtimeCrowns={player:p.destroyed,enemy:e.destroyed};pushEvent(state,'overtime'); }
+      if (!state.overtime && p.destroyed === e.destroyed) { state.overtime = true; state.time = state.rulesVersion === 2 ? 120 : 60; state.overtimeCrowns={player:p.destroyed,enemy:e.destroyed};pushEvent(state,'overtime'); }
       else conclude(state, state.overtime ? 'tiebreak' : 'time');
     }
   }
 
+  // Persist the ruleset with the match: an installed update must not alter an
+  // interrupted battle's economy or remaining overtime.
+  function energyMultiplier(state) {
+    if (state.overtime) return state.rulesVersion === 2 && state.time <= 60 ? 3 : 2;
+    return Math.max(state.mode === 'frenzy' ? 2 : 1, state.rulesVersion === 2 && state.time <= 60 ? 2 : 1);
+  }
   function fixedUpdate(state, dt) {
-    const regen = state.mode === 'frenzy' || state.overtime ? 1.64 : .82;
+    const regen = state.rulesVersion === 2 ? energyMultiplier(state) / 2.8 : energyMultiplier(state) * .82;
     state.energy.player = clamp(state.energy.player + regen * dt, 0, MAX_ENERGY);
     state.energy.enemy = clamp(state.energy.enemy + regen * dt, 0, MAX_ENERGY);
     updateUnits(state,dt); updateTowers(state,dt); updateProjectiles(state,dt);
@@ -439,6 +445,7 @@
 
   function validateSnapshot(value) {
     if (!value || typeof value !== 'object' || value.version !== VERSION) return false;
+    if (value.rulesVersion != null && ![1,2].includes(value.rulesVersion)) return false;
     if (!['classic','frenzy','draft'].includes(value.mode) || !Number.isInteger(value.arena) || value.arena < 0 || value.arena >= arenas.length) return false;
     if (!['playing','ended'].includes(value.phase) || !Number.isFinite(value.time) || value.time < -1 || value.time > 181) return false;
     if (value.overtimeCrowns != null && (!value.overtimeCrowns || !['player','enemy'].every((side)=>Number.isInteger(value.overtimeCrowns[side])&&value.overtimeCrowns[side]>=0&&value.overtimeCrowns[side]<=5))) return false;
@@ -461,6 +468,7 @@
   function restore(value) {
     if (!validateSnapshot(value)) throw new Error('Invalid Pennant Duel match snapshot');
     const state = copy(value);
+    state.rulesVersion = value.rulesVersion || 1;
     for (const tower of state.towers) {
       tower.recoil = Number.isFinite(tower.recoil) ? tower.recoil : 0;
       tower.hit = Number.isFinite(tower.hit) ? tower.hit : 0;
@@ -478,5 +486,5 @@
     return state;
   }
 
-  return { VERSION, WIDTH, HEIGHT, RIVER_TOP, RIVER_BOTTOM, STEP, MAX_ENERGY, LANES, cards, cardMap, arenas, starterDeck, createMatch, playCard, legalPlacement, tick, aiStep, scoreSide, snapshot, restore, validateSnapshot };
+  return { VERSION, WIDTH, HEIGHT, RIVER_TOP, RIVER_BOTTOM, STEP, MAX_ENERGY, LANES, cards, cardMap, arenas, starterDeck, createMatch, playCard, legalPlacement, tick, energyMultiplier, aiStep, scoreSide, snapshot, restore, validateSnapshot };
 });

@@ -1371,8 +1371,8 @@ function drawTile(t,staticWater=false){
  const p=iso(t.x,t.y),x=p.x,y=p.y,known=seen(t),tribe=TRIBES[t.biome],water=['water','ocean'].includes(t.terrain),color=!known?'#d8e2e7':t.frozen?'#bfe8fa':water?(t.terrain==='ocean'?'#2865ad':'#59b5e4'):tribe.land;
  const depth=13;if(t.x===game.size-1)polygon([[x,y+TH/2],[x+TW/2,y],[x+TW/2,y+depth],[x,y+TH/2+depth]],known?(water?'#258cbe':'#a07340'):'#99b0ef');
  if(t.y===game.size-1)polygon([[x-TW/2,y],[x,y+TH/2],[x,y+TH/2+depth],[x-TW/2,y+depth]],known?(water?'#1c9bb4':'#79522e'):'#a8baf0');
- const corners=[[x,y-TH/2],[x+TW/2,y],[x,y+TH/2],[x-TW/2,y]];polygon(corners,color,known?(water?'#163f5368':'#33483d73'):null,1.25);if(!known)return;
- const center=[x+(t.variant-2)*3,y+(t.variant%3-1)*3];polygon([corners[0],corners[1],center],water?'#c9edf018':tribe.shade+'54');polygon([corners[2],corners[3],center],water?'#0e566214':'#f2eadb18');
+ const corners=[[x,y-TH/2],[x+TW/2,y],[x,y+TH/2],[x-TW/2,y]];polygon(corners,color,known?(water?'#1f67918c':'#315c4a85'):null,1.15);if(!known)return;
+ const center=[x,y];polygon([corners[0],corners[1],center],water?'#c9edf018':tribe.shade+'26');polygon([corners[2],corners[3],center],water?'#0e566214':'#fff8db12');
  drawGroundMaterial(t,p,corners);
  if(!water){ctx.fillStyle='#263f3427';for(const [dx,dy]of [[-23,-3],[18,5],[(t.variant-2)*7,8]]){ctx.beginPath();ctx.arc(x+dx,y+dy,1.2,0,Math.PI*2);ctx.fill()}}
  if(!water&&!t.frozen)for(const [dx,dy,a,b]of [[0,-1,corners[0],corners[1]],[1,0,corners[1],corners[2]],[0,1,corners[2],corners[3]],[-1,0,corners[3],corners[0]]]){const n=tileAt(t.x+dx,t.y+dy);if(n&&seen(n)&&waterTile(n)&&!n.frozen){line([a,b],'#f4f0d2',2.4);line([[a[0],a[1]+2],[b[0],b[1]+2]],'#8d704a',1.3)}}
@@ -1426,9 +1426,24 @@ function drawCity(c){
  if(c.level>=2){for(const [x,y] of [[-14,8],[13,10]]){polygon([[x-5,y],[x,y-3],[x+5,y],[x,y+3]],b.light,b.dark,.65);ellipse(x,y-1,1.35,1,'#f7e5a0')}}
  if(c.walls){box(0,-5,29,25,9,'#d4d2c4','#8e9b94','#b3b9ad');for(const x of [-23,-8,8,23])box(x,-10,4,5,8,'#dedacb','#8e9b94','#b8beb1')}
  hut(-21,3,b.dark,b.color,c.level>=2?.62:.48);hut(20,5,b.dark,b.color,c.level>=3?.62:.46);
- const h=18+Math.min(5,c.level)*2.5;box(0,-7,12,15,h,'#e4dfca','#9eaaa2','#c8cdc0');
- polygon([[-15,-h-7],[0,-h-20],[16,-h-7],[0,-h+1]],b.color,'#4c5c58',1.1);polygon([[-15,-h-7],[0,-h-20],[0,-h+1]],b.dark);
- polygon([[-4,9],[-4,-5],[2,-9],[7,-5],[7,10]],'#526e70');ctx.fillStyle='#f5e5b4';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
+ const h=18+Math.min(5,c.level)*2.5;
+ const dome=['dune','caravan'].includes(key),pagoda=['ridge','oak'].includes(key),spire=['frost','pine','highland'].includes(key),columns=['marble','sunfield'].includes(key),organic=['wildwood','hive'].includes(key),stilt=['coast','river','reef'].includes(key);
+ box(0,-7,12,15,h,'#f3ecd9','#aeb6aa','#dedfcb');
+ if(dome){
+  ellipse(0,-h-8,15,9,b.dark);polygon([[-15,-h-8],[-11,-h-17],[0,-h-25],[11,-h-17],[15,-h-8],[0,-h]],b.color);polygon([[-15,-h-8],[-11,-h-17],[0,-h-25],[0,-h]],b.dark);ellipse(0,-h-25,2,2,'#f5d87c');
+ }else if(pagoda){
+  for(const [rise,w]of [[0,18],[10,14]]){polygon([[-w,-h-rise-6],[-5,-h-rise-13],[0,-h-rise-18],[6,-h-rise-13],[w,-h-rise-6],[0,-h-rise+1]],b.color,b.dark,.65);line([[-w,-h-rise-6],[0,-h-rise+1],[w,-h-rise-6]],b.light,1.5)}
+ }else if(columns){
+  for(const dx of [-10,-3,4,11])box(dx,1,2.4,3,h-5,'#fff5d7','#b6baa8','#eee9cf');polygon([[-17,-h-6],[0,-h-20],[18,-h-6],[0,-h+2]],b.light,b.dark,.7);polygon([[-17,-h-6],[0,-h-20],[0,-h+2]],b.color);
+ }else if(organic){
+  mushroom(0,-h+8,35,b.color);for(const dx of [-9,9])ellipse(dx,-h-12,2.2,1.3,b.light);
+ }else if(stilt){
+  for(const dx of [-11,10])line([[dx,10],[dx,17]],'#8c7757',2.5);polygon([[-20,-h-7],[0,-h-22],[20,-h-7],[0,-h+3]],b.color,b.dark,.7);line([[-20,-h-7],[0,-h+3],[20,-h-7]],'#f2dfa8',2);for(const dx of [-12,-6,0,6,12])line([[dx,-h-14+Math.abs(dx)*.35],[dx,-h+1+Math.abs(dx)*-.35]],b.light,.8);
+ }else{
+  polygon([[-15,-h-7],[0,-h-(spire?30:20)],[16,-h-7],[0,-h+1]],b.color,'#4c5c58',.8);polygon([[-15,-h-7],[0,-h-(spire?30:20)],[0,-h+1]],b.dark);
+  if(key==='iron')for(const dx of [-8,0,8])box(dx,-h-6,3,4,6,b.light,b.dark,b.color);
+ }
+ polygon([[-4,9],[-4,-5],[2,-9],[7,-5],[7,10]],'#526e70');ctx.fillStyle='#ffedb5';ctx.fillRect(-7,-h+2,3,5);ctx.fillRect(4,-h+4,3,5);
  if(c.level>=3){polygon([[-27,11],[-18,7],[-9,11],[-18,15]],b.light,b.dark,.75);line([[-18,11],[-18,3]],'#72817b',1.5);polygon([[-18,3],[-8,6],[-18,10]],b.color,b.dark,.7)}
  if(c.level>=4)for(const dx of [-24,24]){box(dx,-3,5,7,h-4,b.light,b.dark,b.color);polygon([[dx-7,-h+3],[dx,-h-7],[dx+7,-h+3]],b.color)}
  const mastX=c.capital?0:23,mastTop=-h-(c.capital?40:24);line([[mastX,-h-4],[mastX,mastTop]],'#556c6b',1.8);polygon([[mastX,mastTop],[mastX+15,mastTop+4],[mastX,mastTop+12]],b.color,b.dark,1);paintFactionEmblem(key,mastX+5,mastTop+5,c.capital?8:6,contrastInk(b.color));ctx.restore();
@@ -1464,7 +1479,7 @@ function drawUnit(u){
  if(['rider','knight','amphibian','wildguard'].includes(u.type)){polygon([[-15,3],[-11,-7],[8,-6],[13,1],[9,11],[-11,10]],'#c4ad85');polygon([[7,-5],[8,-17],[14,-18],[18,-11],[13,-7],[13,3]],'#e1cba4');line([[-10,7],[-10,15]],'#9b876d',3);line([[8,7],[8,15]],'#9b876d',3);ctx.translate(-2,-9)}
  if(u.type==='catapult'){polygon([[-18,5],[0,-4],[18,5],[0,13]],'#ae8f5c');line([[-11,7],[0,-18],[12,7]],'#d5b77d',4);line([[-4,-14],[15,-29]],'#8c724b',4);ellipse(-11,10,5,5,'#526b71');ellipse(12,10,5,5,'#526b71');polygon([[12,-32],[20,-31],[22,-25],[16,-23]],'#aeb9b6');ctx.restore();return}
  if(u.type==='battlesled'){polygon([[-20,7],[0,-3],[21,7],[0,15]],'#d1e7ec');line([[-18,12],[14,17]],b.dark,3);ctx.translate(0,-5)}
- const step=u.anim?.kind==='move'&&!reducedMotion.matches?Math.sin((drawTime-u.anim.start)*.035)*2:0;line([[-5,1],[-6+step,11]],b.dark,6);line([[5,1],[6-step,11]],b.dark,6);line([[-8,-10],[-13,-1]],b.dark,5);line([[8,-10],[13,-1]],b.dark,5);box(0,-13,10,9,16,b.color,b.dark,b.light);paintFactionEmblem(faction(u.owner).tribe,0,-13,8,contrastInk(b.color));
+ const step=u.anim?.kind==='move'&&!reducedMotion.matches?Math.sin((drawTime-u.anim.start)*.035)*2:0;line([[-4,1],[-5+step,10]],b.dark,4.8);line([[4,1],[5-step,10]],b.dark,4.8);box(-5+step,8,3,3,3,b.dark,b.dark,'#394b53');box(5-step,8,3,3,3,b.dark,b.dark,'#394b53');line([[-7,-11],[-11,-2]],b.dark,4);line([[7,-11],[11,-2]],b.dark,4);ellipse(-11,-1,2.5,2.7,'#e8c6a1');ellipse(11,-1,2.5,2.7,'#e8c6a1');box(0,-13,8.5,8,16,b.color,b.dark,b.light);line([[-7,1],[0,4],[7,1]],'#665e50',1.8);paintFactionEmblem(faction(u.owner).tribe,0,-13,8,contrastInk(b.color));
  ellipse(0,-25,8.5,9.5,'#e8c6a1');ctx.beginPath();ctx.arc(0,-27,9.5,Math.PI,Math.PI*2);ctx.fillStyle=def.defense>=3?'#748990':b.dark;ctx.fill();if(def.icon==='bow'){polygon([[-9,-27],[0,-38],[9,-27],[4,-29],[0,-25],[-4,-29]],b.dark);line([[-6,-29],[0,-34],[6,-29]],b.light,1.5)}else if(def.icon==='rider'){polygon([[-4,-36],[0,-43],[5,-35],[2,-29]],b.light)}else if(def.defense>=3){line([[-9,-26],[9,-26]],b.light,2);line([[0,-36],[0,-26]],b.light,1.5)}else line([[-8,-27],[8,-27]],b.light,1.6);
  ellipse(-3,-24,1.2,1.4,'#314b58');ellipse(3,-24,1.2,1.4,'#314b58');line([[-2,-20],[2,-20]],'#9d6d58',1);
  if(def.convert||def.swarm){line([[13,3],[13,-25]],'#ac9569',2);polygon([[8,-26],[18,-26],[16,-20],[10,-20]],b.color)}
