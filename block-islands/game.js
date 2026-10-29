@@ -22,7 +22,7 @@
   let mineHold = null, mining = 0, audioContext = null, lastDamage = 0, toolSwingUntil = 0, feedbackTimer = 0;
   let jumpUntil = 0, lastGroundedAt = -Infinity, hasStarted = false;
   const mineOwners = new Set();
-  let overlayBack = null, releasingMouseForPanel = false;
+  let overlayBack = null, releasingMouseForPanel = false, graphicsLost = false;
   // Browser/IME shortcuts and native form/button activation keep their own keys.
   function gameKeyBlocked(event) {
     const form=event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
@@ -199,7 +199,7 @@
   function button(id, text, cls) { return '<button id="' + id + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>'; }
   function bind(id, fn) { const node = $(id); if (node) node.addEventListener('click', fn); }
   function open(html,back=close) { overlayBack=back; renderNeeded = true; clearInputs();if(document.pointerLockElement===canvas){releasingMouseForPanel=true;document.exitPointerLock?.();} panel.innerHTML = html; overlay.classList.add('open'); running = false;panel.querySelector('button,input,select')?.focus({preventScroll:true}); }
-  function close() { overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now();canvas.focus({preventScroll:true}); }
+  function close() { if(graphicsLost){say('The 3D view is recovering. Resume when it returns.');return;} overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now();canvas.focus({preventScroll:true}); }
 
   function welcome(recovered) {
     const continued = profiles.campaign.completed.length || profiles.campaign.time > 1;
@@ -214,6 +214,7 @@
   function menu() {
     const offline = document.querySelector('[data-game-offline-status]')?.textContent || 'Offline status will appear after the local game is cached.';
     open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>' + (prefs.camera === 'first' ? 'First-person' : 'Rear third-person') + ' view · meaningful actions save automatically.</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('modeButton', state.creative ? 'Return to campaign' : profiles.creative ? 'Open creative sandbox' : 'Start creative sandbox', 'secondary') + button('settingsButton', 'Controls and accessibility', 'secondary') + button('exportButton', 'Export both saves', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(offline) + '</p>');
+    $('resumeButton').disabled=graphicsLost; if(graphicsLost)panel.insertAdjacentHTML('beforeend','<p id=renderRecovery role=status>The 3D view is recovering. Play is paused; your progress is kept.</p>');
     bind('resumeButton', close); bind('stagesButton', stages); bind('modeButton', () => activateMode(state.creative ? 'campaign' : 'creative')); bind('settingsButton', settings); bind('exportButton', downloadSave); bind('importButton', () => $('importInput').click());
     if (typeof window.GamesPWARefreshControls === 'function') window.GamesPWARefreshControls();
     else bind('installButton', () => { say('Safari: Share → Add to Home Screen → Add. Offline is ready only after caching finishes.'); close(); });
@@ -828,7 +829,8 @@
   $('importInput').addEventListener('change', event => { const file = event.target.files && event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { importSave(JSON.parse(String(reader.result))); } catch (_) { say('That file is not valid JSON. Your current journey is unchanged.'); } close(); }; reader.readAsText(file); event.target.value = ''; });
   window.addEventListener('resize', () => { clearInputs(); resize(); }); window.addEventListener('orientationchange', clearInputs); window.addEventListener('blur',()=>{clearInputs();if(running&&hasStarted){durableSave();menu();}});
   document.addEventListener('visibilitychange', () => { if(document.hidden){clearInputs();durableSave();if(running&&hasStarted)menu();} else lastTime = performance.now(); }); window.addEventListener('pagehide', durableSave);
-  canvas.addEventListener('webglcontextrestored', () => { renderNeeded = true; });
+  canvas.addEventListener('webglcontextlost',()=>{graphicsLost=true;clearInputs();if(hasStarted){durableSave();if(running)menu();}if($('resumeButton'))$('resumeButton').disabled=true;if(overlay.classList.contains('open')&&!$('renderRecovery'))panel.insertAdjacentHTML('beforeend','<p id=renderRecovery role=status>The 3D view is recovering. Play is paused; your progress is kept.</p>');});
+  canvas.addEventListener('webglcontextrestored',()=>{graphicsLost=false;renderNeeded=true;if($('resumeButton'))$('resumeButton').disabled=false;if($('renderRecovery'))$('renderRecovery').textContent='The 3D view is restored. Resume when ready.';});
   reducedMotion.addEventListener?.('change', applyPrefs);
   applyPrefs(); loadStage(); updateUI(); welcome(loaded.recovered); requestAnimationFrame(loop);
 })();
