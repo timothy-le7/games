@@ -63,7 +63,7 @@
   let prefs = loadPrefs();
   let match = profile.activeMatch ? safeRestore(profile.activeMatch) : null;
   let selectedCard = null;
-  let paused = true;
+  let paused = true, graphicsLost = false;
   let lastFrame = performance.now();
   let saveDueAt = 0;
   let lastPersistedAt = performance.now();
@@ -240,11 +240,13 @@
     match = E.createMatch({ mode, arena: profile.selectedArena, deck, seed });
     profile.activeMatch = E.snapshot(match); selectedCard = null; paused = false; impactSeen = 0;
     saveNow(); showScreen('battle'); setupBattleHeader(); renderHand(true); lastFrame = performance.now();
+    if(graphicsLost){pauseBattle();return;}
     if (!profile.tutorialDone) showTutorial('Pick a card below, then tap or drag it onto your half of the arena.');
     els['game-canvas'].focus({ preventScroll: true });
     chirp(420,.08,'triangle');
   }
   function resumeMatch() {
+    if(graphicsLost){toast('The 3D view is recovering. Resume when it returns.');return;}
     if (!match || match.phase !== 'playing') return launchMatch(profile.lastMode === 'draft' ? 'classic' : profile.lastMode, profile.deck);
     paused = false; showScreen('battle'); setupBattleHeader(); renderHand(true); lastFrame = performance.now();els['game-canvas'].focus({preventScroll:true});
   }
@@ -305,7 +307,7 @@
   function frame(now) {
     const elapsed=Math.min(.25,(now-lastFrame)/1000); lastFrame=now;
     if (match && currentScreen()==='battle') {
-      if (!paused && !document.hidden && match.phase==='playing') E.tick(match,elapsed);
+      if (!paused && !graphicsLost && !document.hidden && match.phase==='playing') E.tick(match,elapsed);
       updateBattleUI(); draw();
       if (match.phase==='ended' && !paused) finishMatch();
       if (saveDueAt && now >= saveDueAt) { saveDueAt=0; lastPersistedAt=now; saveNow(); }
@@ -414,7 +416,7 @@
   function drawDragGhost(){const card=E.cardMap[dragPreview.id],p=dragPreview.world;ctx.save();ctx.translate(p.x,p.y-(card.kind==='unit'?70:0));if(card.kind==='unit')drawUnitModel(card,'player',{walk:match.time*5,flying:card.flying,id:'ghost'},.78);else{ctx.strokeStyle=card.color;ctx.lineWidth=12;ctx.beginPath();ctx.arc(0,0,card.radius*.55,0,Math.PI*2);ctx.stroke();}ctx.restore();}
 
   function pauseBattle() { if (!match || match.phase!=='playing') return; paused=true;cancelDrag();keyboardAiming=false; saveNow(); showModal('PAUSED','Take a breather','<p>Your match is saved on this browser. Leaving safely keeps this exact battle.</p>',[
-    {label:'Resume',primary:true,action:()=>{closeModal();paused=false;lastFrame=performance.now();els['game-canvas'].focus({preventScroll:true});}},
+    {label:'Resume',primary:true,action:()=>{if(graphicsLost)return;closeModal();paused=false;lastFrame=performance.now();els['game-canvas'].focus({preventScroll:true});}},
     {label:'Settings',action:showSettings},
     {label:'Main menu',action:()=>{closeModal();showHome();}}
   ]); }
@@ -428,7 +430,7 @@
   }
   function downloadSave(){const blob=new Blob([JSON.stringify(exportSave(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pennant-duel-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
   function showConfirm(title,body,confirm,action){showModal('CONFIRM',title,'<p>'+body+'</p>',[{label:confirm,primary:true,action},{label:'Keep current battle',action:closeModal}]);}
-  function showModal(kicker,title,body,actions){els['modal-kicker'].textContent=kicker;els['modal-title'].textContent=title;els['modal-body'].innerHTML=body;els['modal-actions'].innerHTML='';actions.forEach((item)=>{const button=document.createElement('button');button.type='button';button.textContent=item.label;if(item.primary)button.className='primary';button.onclick=item.action;els['modal-actions'].append(button);});modalBack=actions.find(item=>['Resume','Cancel','Done','Close','Okay','Got it','Continue','Main menu','Keep current battle','Back to pause'].includes(item.label))?.action||null;els.modal.classList.remove('hidden');els['modal-actions'].querySelector('button')?.focus({preventScroll:true});}
+  function showModal(kicker,title,body,actions){els['modal-kicker'].textContent=kicker;els['modal-title'].textContent=title;els['modal-body'].innerHTML=body;els['modal-actions'].innerHTML='';actions.forEach((item)=>{const button=document.createElement('button');button.type='button';button.textContent=item.label;if(item.label==='Resume')button.disabled=graphicsLost;if(item.primary)button.className='primary';button.onclick=item.action;els['modal-actions'].append(button);});modalBack=actions.find(item=>['Resume','Cancel','Done','Close','Okay','Got it','Continue','Main menu','Keep current battle','Back to pause'].includes(item.label))?.action||null;els.modal.classList.remove('hidden');els['modal-actions'].querySelector('button')?.focus({preventScroll:true});}
   function closeModal(){els.modal.classList.add('hidden');if(currentScreen()==='battle')els['game-canvas'].focus({preventScroll:true});else els['continue-button'].focus({preventScroll:true});}
   function toast(message){els.toast.textContent=message;els.toast.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>els.toast.classList.add('hidden'),1500);}
   function showTutorial(message){els['tutorial-tip'].textContent=message;els['tutorial-tip'].classList.remove('hidden');}
@@ -452,6 +454,8 @@
   els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)cancelDrag(event.pointerId);});
   els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&!pointerDrag&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
   els['pause-button'].addEventListener('click',pauseBattle);
+  els['game-canvas'].addEventListener('webglcontextlost',()=>{graphicsLost=true;cancelDrag();keyboardAiming=false;if(match?.phase==='playing'&&currentScreen()==='battle'){if(!paused)pauseBattle();saveNow();}for(const node of els['modal-actions'].children)if(node.textContent==='Resume')node.disabled=true;if(!els.modal.classList.contains('hidden')&&!document.getElementById('render-recovery'))els['modal-body'].insertAdjacentHTML('beforeend','<p id=render-recovery role=status>The 3D view is recovering. Play is paused; your progress is kept.</p>');toast('3D view interrupted. Play is paused while it recovers.');});
+  els['game-canvas'].addEventListener('webglcontextrestored',()=>{graphicsLost=false;for(const node of els['modal-actions'].children)if(node.textContent==='Resume')node.disabled=false;if(document.getElementById('render-recovery'))document.getElementById('render-recovery').textContent='The 3D view is restored. Resume when ready.';toast('3D view restored. Resume when ready.');});
   els['import-file'].addEventListener('change',async()=>{const file=els['import-file'].files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(!importSave(value))throw new Error('invalid');showModal('IMPORTED','Save restored','<p>Your validated Pennant Duel progress is ready.</p>',[{label:'Continue',primary:true,action:closeModal}]);}catch(_){showModal('IMPORT STOPPED','That save is not valid','<p>Nothing was changed. Choose an unedited Pennant Duel export file.</p>',[{label:'Okay',primary:true,action:closeModal}]);}finally{els['import-file'].value='';}});
   document.addEventListener('keydown',event=>{
     if(trapGameTab(event,!els.modal.classList.contains('hidden')?els.modal:null)||gameKeyBlocked(event))return;
