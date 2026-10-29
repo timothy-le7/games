@@ -240,7 +240,7 @@
       void main(){ vec4 world=uModel*vec4(aPosition,1.0); vWorld=world.xyz; vNormal=normalize(mat3(uModel)*aNormal); vUv=aUv; vMaterial=uMaterialOverride>=0.0?uMaterialOverride:aMaterial; vOcclusion=aOcclusion; gl_Position=uMvp*world; }
     `;
     const fragment = `
-      precision mediump float;
+      precision highp float;
       uniform sampler2D uAtlas; uniform vec3 uCamera; uniform float uDaylight; uniform float uTime; uniform float uOverlay; uniform float uBiome; uniform float uOpacity;
       varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial; varying float vOcclusion;
       vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
@@ -256,10 +256,20 @@
         if(abs(material-4.0)<.5 && normal.y>.5){ float ring=max(abs(vUv.x-.5),abs(vUv.y-.5)); color+=vec3(mod(floor(ring*17.0),2.0)*.09-.045); }
         if(abs(material-5.0)<.5){ float gaps=mod(floor(vUv.x*8.0)+floor(vUv.y*8.0)*3.0,9.0); color*=mix(.66,1.0,step(1.0,gaps)); color+=vec3(.012,.045,.006); color=mix(color,vec3(.34,.67,.73),biome(5.0)*.62); }
         if(abs(material-12.0)<.5){float ripple=sin((vWorld.x+uTime*.45)*4.0)+sin((vWorld.z-uTime*.32)*6.0); color+=vec3(.015,.055,.075)*ripple; color+=vec3(.16,.23,.25)*pow(max(0.0,sin(vWorld.x*3.0+vWorld.z*5.0+uTime)),16.0);}
+        vec3 view=normalize(uCamera-vWorld);float detail=1.0-smoothstep(12.0,40.0,distanceToCamera);
+        float hard=max(1.0-step(.5,abs(material-2.0)),max(1.0-step(.5,abs(material-7.0)),1.0-step(.5,abs(material-22.0))));
+        vec3 micro=vec3(sin(vWorld.z*39.0+vWorld.y*19.0),sin(vWorld.x*37.0),cos(vWorld.y*31.0+vWorld.x*23.0));
+        normal=normalize(normal+micro*.035*hard*detail);
+        if(abs(material-12.0)<.5)normal=normalize(normal+vec3(sin(vWorld.x*4.0+uTime)*.12,0.0,cos(vWorld.z*5.0-uTime)*.12));
         vec3 sun=normalize(vec3(-.45,.82,.36)); float diffuse=max(0.0,dot(normal,sun)), upward=max(.0,normal.y); float ao=mix(.58,1.0,clamp(vOcclusion/3.0,0.0,1.0));
         vec3 coolAmbient=mix(vec3(.14,.19,.29),vec3(.31,.42,.53),uDaylight); vec3 warmKey=vec3(1.0,.77,.52)*(.15+.85*uDaylight)*diffuse; vec3 skyLift=vec3(.20,.32,.40)*upward*(.10+.18*uDaylight);
         vec3 climate=vec3(1.0); climate=mix(climate,vec3(.82,.93,1.12),biome(5.0)); climate=mix(climate,vec3(1.14,.92,.66),biome(6.0)); climate=mix(climate,vec3(1.16,.62,.45),max(biome(7.0),biome(8.0))); climate=mix(climate,vec3(.73,.82,.91),biome(2.0)); climate=mix(climate,vec3(.78,.73,1.16),biome(11.0));
-        color*=((coolAmbient+warmKey+skyLift)*ao)*climate; float fog=smoothstep(42.0,104.0,distanceToCamera); vec3 fogColor=mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight);
+        color*=((coolAmbient+warmKey+skyLift)*ao)*climate;
+        float polished=max(1.0-step(.5,abs(material-12.0)),max(1.0-step(.5,abs(material-8.0)),1.0-step(.5,abs(material-22.0))));
+        float spec=pow(max(0.0,dot(normal,normalize(sun+view))),mix(12.0,72.0,polished));
+        color+=vec3(1.0,.93,.77)*spec*mix(.025,.42,polished)*uDaylight*ao;
+        if(abs(material-5.0)<.5)color+=vec3(.07,.11,.018)*max(dot(-normal,sun),0.0)*uDaylight;
+        color=pow(max(color,vec3(0.0)),vec3(.96));float fog=smoothstep(42.0,104.0,distanceToCamera); vec3 fogColor=mix(vec3(.055,.11,.18),vec3(.47,.76,.83),uDaylight);
         fogColor=mix(fogColor,vec3(.71,.87,.98),biome(5.0)); fogColor=mix(fogColor,vec3(.87,.61,.37),biome(6.0)); fogColor=mix(fogColor,vec3(.27,.13,.18),max(biome(7.0),biome(8.0))); fogColor=mix(fogColor,vec3(.14,.22,.33),biome(2.0)); fogColor=mix(fogColor,vec3(.38,.30,.63),biome(11.0)); color=mix(color,fogColor,fog);
         if(abs(material-9.0)<.5) color+=vec3(.17,.08,.31)*(.55+.45*sin(uTime*2.1+vWorld.y));
         if(abs(material-11.0)<.5) color+=vec3(.31,.20,.04)*(.65+.35*sin(uTime*1.6));
@@ -282,10 +292,21 @@
         color=mix(color,mix(vec3(.10,.025,.04),vec3(.38,.10,.07),uDaylight),max(biome(7.0),biome(8.0)));
         color=mix(color,mix(vec3(.02,.04,.09),vec3(.12,.22,.31),uDaylight),biome(2.0));
         color=mix(color,mix(vec3(.05,.03,.16),vec3(.24,.20,.52),uDaylight),biome(11.0));
-        vec2 sunPos=vec2(.78,mix(.30,.74,uDaylight)); float sun=smoothstep(.055,.035,length(vUv-sunPos));
-        color=mix(color,vec3(1.0,.86,.48),sun*max(.18,uDaylight));
-        vec2 cloud=vec2(fract(vUv.x+.035*uTime)-.5,vUv.y-.76); float band=step(box(cloud,vec2(.17,.018)),0.0)+step(box(cloud-vec2(.18,.035),vec2(.11,.014)),0.0);
-        color=mix(color,mix(vec3(.24,.31,.40),vec3(.92,.95,.91),uDaylight),band*.42);
+        vec2 sunPos=vec2(.78,mix(.30,.74,uDaylight));float radial=length((vUv-sunPos)*vec2(1.0,1.25)),sun=1.0-smoothstep(.026,.031,radial);
+        float openSky=1.0-max(biome(2.0),max(biome(7.0),biome(8.0)))*.8;
+        color+=vec3(.32,.22,.10)*exp(-radial*9.0)*uDaylight*openSky;
+        color=mix(color,vec3(1.0,.94,.71),sun*max(.18,uDaylight)*openSky);
+        color=mix(color,vec3(.80,.85,.83),pow(1.0-vUv.y,3.0)*uDaylight*.28*openSky);
+        for(int layer=0;layer<3;layer++){
+          float f=float(layer),drift=uTime*(.002+f*.0015),row=.58+f*.12;
+          vec2 p=vec2(fract(vUv.x*(1.1+f*.3)+drift+f*.37)-.5,vUv.y-row);
+          float body=min(box(p,vec2(.17-f*.02,.021)),min(box(p-vec2(.055,.027),vec2(.10,.019)),box(p+vec2(.115,-.019),vec2(.08,.014))));
+          float opacity=(1.0-smoothstep(-.001,.004,body))*(.5+f*.12)*openSky;
+          vec3 cloudColor=mix(vec3(.16,.23,.33),mix(vec3(.72,.79,.82),vec3(1.0,.98,.91),smoothstep(-.03,.035,p.y)),uDaylight);
+          color=mix(color,cloudColor,opacity);
+        }
+        vec2 starCell=floor(vUv*vec2(150.0,220.0));float star=step(.997,fract(sin(dot(starCell,vec2(127.1,311.7)))*43758.5));
+        color+=star*(1.0-uDaylight)*smoothstep(.3,.7,vUv.y)*.4;
         float aurora=biome(11.0)*smoothstep(.36,.82,vUv.y)*(.5+.5*sin(vUv.x*19.0+uTime*.4)); color=mix(color,vec3(.38,.92,.73),aurora*.34);
         gl_FragColor=vec4(color,1.0);
       }`;
@@ -339,7 +360,15 @@
       if(material===22)pattern+=(x===4||x===11||y===6?22:-4);
       bytes[offset] = clamp(base[0] + pattern, 0, 255); bytes[offset + 1] = clamp(base[1] + pattern, 0, 255); bytes[offset + 2] = clamp(base[2] + pattern, 0, 255); bytes[offset + 3] = 255;
     }
-    return { pixels: bytes, width: side * MATERIALS.length, height: side };
+    // Preserve the orthogonal 16px pattern at distance; 32px close surfaces
+    // add stone pores, end-grain flecks and cloth stitches without image assets.
+    const fineSide=32,fine=new Uint8Array(fineSide*fineSide*MATERIALS.length*4);
+    for(let m=0;m<MATERIALS.length;m++)for(let y=0;y<fineSide;y++)for(let x=0;x<fineSide;x++){
+      const from=((y>>1)*side*MATERIALS.length+m*side+(x>>1))*4,to=(y*fineSide*MATERIALS.length+m*fineSide+x)*4;
+      const grain=((x*71+y*37+m*43)%19-9)*.43,edge=(y%8===2&&[2,6,10,22].includes(m))?4:0;
+      for(let k=0;k<3;k++)fine[to+k]=clamp(bytes[from+k]+grain+edge,0,255);fine[to+3]=255;
+    }
+    return { pixels: fine, width: fineSide * MATERIALS.length, height: fineSide };
   }
 
   function createRenderer(canvas) {

@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:tower-duel:";
-const RELEASE = "e686fce9c788975108f2";
+const RELEASE = "312a11f9015001c26b6a";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/crew-portraits-v1.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./style.css","./tower-renderer.js"];
 
