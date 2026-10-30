@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:rivet-rumble:";
-const RELEASE = "1eaf343c2a4cc4b1d5dd";
+const RELEASE = "0a763a5178e1d1d3a7d8";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
 
@@ -11,7 +11,8 @@ self.addEventListener('install', event => {
     const cache = await caches.open(CACHE_NAME);
     try {
       // addAll either obtains every required local asset or the partial cache is removed.
-      await cache.addAll(ASSETS);
+      const requests = ASSETS.map(asset => new Request(new URL(asset, self.registration.scope), { cache: 'reload' }));
+      await cache.addAll(requests);
     } catch (error) {
       await caches.delete(CACHE_NAME);
       throw error;
