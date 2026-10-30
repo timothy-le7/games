@@ -19,27 +19,32 @@
     <section id="hud" class="hud hidden" aria-label="Match status">
       <div class="score-strip"><div><span class="team blue"></span><strong id="blueScore">0</strong><small id="blueLabel">BLUE</small></div><div id="matchClock">1:18</div><div><strong id="redScore">0</strong><small id="redLabel">RED</small><span class="team red"></span></div></div>
       <div class="player-readout"><div class="health"><i id="healthFill"></i></div><span id="ammoReadout">4 bolts</span><span id="specialReadout">Special charging</span></div>
+      <div id="modeObjective" class="objective-readout"></div><div id="powerReadout" class="power-readout"></div><div id="ammoCells" class="ammo-cells" aria-label="Ammo slots"></div><canvas id="minimap" class="minimap" width="192" height="132" aria-label="Arena overview; only visible enemies are shown"></canvas><div id="combatNotice" class="combat-notice" role="status" aria-live="polite"></div>
       <button id="pauseButton" class="round-button" type="button" aria-label="Pause match">Ⅱ</button>
     </section>
+    <div id="worldLabels" aria-hidden="true"></div>
     <section id="controls" class="controls hidden" aria-label="Touch controls">
       <div id="moveStick" class="stick-zone" aria-label="Move robot"><i></i></div>
       <div id="aimPad" class="aim-zone" aria-label="Drag to aim and release to fire"><i></i></div>
       <button id="quickFire" class="quick-fire" type="button" aria-label="Quick fire nearest visible rival">AUTO FIRE</button>
+      <button id="gadgetButton" class="gadget-button" type="button"><span>GADGET</span><small id="gadgetReadout">READY · E</small></button>
       <button id="specialButton" class="special-button" type="button" aria-label="Use charged special">SPECIAL</button>
     </section>
     <section id="menu" class="panel menu-panel" aria-labelledby="menuTitle">
       <p class="eyebrow">LOCAL CPU SPORT</p>
       <h1 id="menuTitle">Rivet <em>Rumble</em></h1>
-      <p class="lede">Mechanical crews compete in a pocket-sized working foundry. Every rival here is an offline CPU using the same tools, walls, ammo and damage rules as you.</p>
-      <p class="tutorial"><strong>Hands on:</strong> move with the left thumb; drag the right thumb and release to fire. AUTO FIRE only targets a visible rival. Desktop: WASD/arrows move; aim with the pointer and hold left click to fire, or hold F for quick fire. Q/Space or right click uses Special. P/Escape pauses. Tab and Enter operate menus.</p>
+      <p class="lede">Six machines. Six battlegrounds. Fair offline CPU crews. Pick your loadout and fight for the objective.</p>
+      <div class="launch-controls"><button id="startButton" class="start-button" type="button">Start Foundry Hold</button>
+      <button id="newMatchButton" class="start-button hidden" type="button">Start new match with selected crew</button></div>
+      <details class="tutorial"><summary>Move · Aim · Fire · Gadget <span>Controls + match rules</span></summary><p>Left stick to move; drag and release the right stick to aim/fire. AUTO FIRE targets visible rivals. SPECIAL uses your hit-charged ability; GADGET uses your machine’s reusable cooldown tool. Desktop: WASD/arrows move, pointer/left click fire, F quick fire, Q/Space/right click Special, E/G Gadget, P/Escape pause. Ammo refills one slot at a time. Stop attacking and avoid damage for 3 seconds to repair. Brush conceals distant opponents until they attack; water blocks movement but not shots.</p></details>
       <div class="mode-row" id="modeRow" role="group" aria-label="Mode"></div>
+      <div class="choice-label">CPU difficulty</div><div class="difficulty-row" id="difficultyRow" role="group" aria-label="CPU difficulty"></div><p id="difficultyNote" class="difficulty-note"></p>
       <div class="choice-label">Choose a machine</div>
       <div class="roster" id="roster" aria-label="Fighter roster"></div>
       <div class="choice-label">Arena <span id="arenaName"></span></div>
       <div class="arena-row" id="arenaRow" role="group" aria-label="Arena"></div>
+      <div id="loadout" class="loadout"></div><p id="savedMatchNote" class="saved-match-note"></p>
       <p id="fighterNote" class="fighter-note"></p>
-      <button id="startButton" class="start-button" type="button">Start Foundry Hold</button>
-      <button id="newMatchButton" class="start-button hidden" type="button">Start new match with selected crew</button>
       <div class="menu-actions"><button id="settingsButton" type="button">Settings &amp; saves</button><button data-install-game type="button">Install / offline help</button><a data-all-games href="../">All games</a></div>
       <span data-game-offline-status class="offline-status" role="status"></span>
       <p id="menuNotice" class="notice" role="status" aria-live="polite"></p>
