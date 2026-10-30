@@ -64,11 +64,27 @@
     [[9.5,4,3,3],[19.5,15,3,3],[3,6,2,3],[27,13,2,3]],
     [[10,15,4,2],[18,5,4,2],[2,5,3,3],[27,14,3,3]]
   ];
-  const arenas = arenaTemplates.map((a,index) => Object.assign({}, a, {
+  const legacyArenas = arenaTemplates.map((a,index) => Object.assign({}, a, {
     pads:[{id:'launch-blue',x:9,z:18.2,toX:11,toZ:10},{id:'launch-red',x:23,z:3.8,toX:index===1?20:21,toZ:index===1?13.2:12}],
     brush:brushLayouts[index].map((b,i)=>({id:'brush'+i,x:b[0],z:b[1],w:b[2],h:b[3]})),
     obstacles:a.obstacles.map((o,i)=>({id:'wall'+i,x:o[0],z:o[1],w:o[2],h:o[3],kind:o[4]==='water'?'water':'cover',destructible:o[4]===true,hp:o[4]===true?96:1000000000}))
   }));
+  // Keep released geometry immutable: a resumed battle must not acquire new walls.
+  // These original paired cover clusters add flanks without sealing the central well.
+  const coverExtensions = [
+    [[12,2,2,1.2],[18,18.8,2,1.2],[3,8.8,2,1.4],[27,11.8,2,1.4],[13,14.8,3,1.2],[16,6,3,1.2],[9.5,11.8,1.2,2.2],[21.3,8,1.2,2.2]],
+    [[3,13.5,3,1.3],[26,7.2,3,1.3],[9,9.8,1.2,2],[21.8,10.2,1.2,2],[4,2.2,2,1.2],[26,18.6,2,1.2],[10,16,2,1.2],[20,4.8,2,1.2]],
+    [[3,5,2,1.2],[27,15.8,2,1.2],[12,2.4,3,1.2],[17,18.4,3,1.2],[9,13,1.4,2],[21.6,7,1.4,2],[14.6,9,2.8,1,true],[14.6,12,2.8,1,true]],
+    [[4,3.8,2,1.2],[26,17,2,1.2],[10,15.8,3,1.2],[19,5,3,1.2],[7,10.5,1.5,2],[23.5,9,1.5,2],[14.5,6.5,3,1.2],[14.5,14.3,3,1.2]],
+    [[2,4,3,1.3],[27,16.7,3,1.3],[2,18,2,1.1],[28,2.9,2,1.1],[11,18.8,2,1.2],[19,2,2,1.2],[15,8,2,1.2],[15,12.8,2,1.2]],
+    [[2,7,2,1.3],[28,13.7,2,1.3],[12,2.4,2,1.3],[18,18.3,2,1.3],[7,13.8,2,1.2],[23,7,2,1.2],[14,7.7,1.4,2],[16.6,12.3,1.4,2]]
+  ];
+  const arenas = legacyArenas.map((a,index)=>{
+    const arena=copy(a);
+    for(const o of coverExtensions[index])arena.obstacles.push({id:'wall'+arena.obstacles.length,x:o[0],z:o[1],w:o[2],h:o[3],kind:'cover',destructible:o[4]===true,hp:o[4]===true?96:1000000000});
+    for(const b of [[2,17,3,2],[27,3,3,2],[12,3.5,3,1.6],[17,16.9,3,1.6]])arena.brush.push({id:'brush'+arena.brush.length,x:b[0],z:b[1],w:b[2],h:b[3]});
+    return arena;
+  });
   const modes = {
     foundry:{name:'Foundry Hold',description:'Three robots hold the central energy well. First to 70, or lead when the clock stops.',limit:78},
     last:{name:'Last Rivet',description:'Eight independent robots outlast a tightening coolant ring. Collect power cells and fight for survival.',limit:96},
@@ -79,11 +95,17 @@
     const f=Object.hasOwn(fighterMap,fighterId)?fighterMap[fighterId]:fighters[0];
     return {id,label:label||f.name,team,fighter:f.id,x,z,prevX:x,prevZ:z,vx:0,vz:0,heading:team==='blue'?-Math.PI/2:Math.PI/2,radius:.62,hp:f.hp,maxHp:f.hp,ammo:f.ammo,reload:0,shot:0,special:0,alive:true,death:0,spawn:.9,cpu:!!cpu,walk:0,recoil:0,hit:0,dash:0,dashAngle:0,dashHits:[],jump:null,jumpLock:0,airY:0,prevAirY:0,score:0,power:0,cores:0,gadget:0,shield:0,haste:0,reveal:0,lastCombat:0,ai:{think:0,path:[],at:0,target:null,goal:null,stuck:0,lastX:x,lastZ:z,fire:false,reloading:false,recover:false},intent:{x:0,z:0,heading:0,range:f.range,fire:false,special:false,gadget:false}};
   }
-  function cloneArena(index) {const source=arenas[clamp(index|0,0,arenas.length-1)];return {...source,brush:copy(source.brush),obstacles:copy(source.obstacles)};}
+  function arenaForLayout(index,layoutVersion=4) {
+    if(![1,2,3,4].includes(layoutVersion)||!Number.isInteger(index)||index<0||index>=arenas.length||layoutVersion===1&&index>2)throw Error('Unknown arena layout.');
+    const arena=copy((layoutVersion===4?arenas:legacyArenas)[index]);
+    if(layoutVersion<3)arena.pads=[];
+    if(layoutVersion===1&&index===2){Object.assign(arena.obstacles[2],{x:13.1,z:9.8,w:5.8,h:1.8});Object.assign(arena.obstacles[3],{x:13.1,z:13,w:5.8,h:1.8});}
+    return arena;
+  }
   function createMatch(options) {
     options=options||{};const mode=Object.hasOwn(modes,options.mode)?options.mode:'foundry';
-    const state={version:VERSION,layoutVersion:3,mode,difficulty:Object.hasOwn(difficulties,options.difficulty)?options.difficulty:'standard',arena:clamp(options.arena|0,0,arenas.length-1),rng:(options.seed>>>0)||0x6d2b79f5,phase:'playing',result:null,endReason:'',tick:0,elapsed:0,accumulator:0,nextId:1,arenaData:null,entities:[],projectiles:[],effects:[],fields:[],events:[],pickups:[],supplyAt:8,coreAt:1.6,holdTeam:null,holdLeft:10,score:{blue:0,red:0},zoneTick:0,ring:17.3,matchLimit:modes[mode].limit,resultCount:0,stats:{shots:0,hits:0,wallHits:0,deaths:0,cpuShots:0,stuck:0,gadgets:0,pickups:0}};
-    state.arenaData=cloneArena(state.arena);
+    const state={version:VERSION,layoutVersion:4,mode,difficulty:Object.hasOwn(difficulties,options.difficulty)?options.difficulty:'standard',arena:clamp(options.arena|0,0,arenas.length-1),rng:(options.seed>>>0)||0x6d2b79f5,phase:'playing',result:null,endReason:'',tick:0,elapsed:0,accumulator:0,nextId:1,arenaData:null,entities:[],projectiles:[],effects:[],fields:[],events:[],pickups:[],supplyAt:8,coreAt:1.6,holdTeam:null,holdLeft:10,score:{blue:0,red:0},zoneTick:0,ring:17.3,matchLimit:modes[mode].limit,resultCount:0,stats:{shots:0,hits:0,wallHits:0,deaths:0,cpuShots:0,stuck:0,gadgets:0,pickups:0}};
+    state.arenaData=arenaForLayout(state.arena);
     state.entities.push(entity(state,'player',mode==='last'?'solo-0':'blue',Object.hasOwn(fighterMap,options.fighter)?options.fighter:'spark',16,18.2,false,'You'));
     const pool=fighters.filter(f=>f.id!==state.entities[0].fighter).map(f=>f.id);
     for(let i=pool.length-1;i>0;i--){const j=Math.floor(rng(state)*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
@@ -301,7 +323,7 @@
   function isFiniteNumber(n,min,max){return typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max;}
   function validateLegacySnapshot(value){if(!value||typeof value!=='object'||value.version!==1||!['foundry','last'].includes(value.mode)||!['playing','ended'].includes(value.phase)||!Number.isInteger(value.arena)||value.arena<0||value.arena>=3||!Array.isArray(value.entities)||value.entities.length<6||value.entities.length>8||!Array.isArray(value.projectiles)||value.projectiles.length>180||!Array.isArray(value.fields)||value.fields.length>20||!Array.isArray(value.effects)||value.effects.length>MAX_EFFECTS||!Array.isArray(value.events)||value.events.length>60||!value.arenaData||typeof value.arenaData.id!=='string'||!Array.isArray(value.arenaData.obstacles)||value.arenaData.obstacles.length>20)return false;if(!isFiniteNumber(value.rng,0,4294967295)||!Number.isInteger(value.tick)||value.tick<0||!isFiniteNumber(value.elapsed,0,500)||!isFiniteNumber(value.ring,0,30)||!isFiniteNumber(value.accumulator,0,.5)||!isFiniteNumber(value.matchLimit,1,120)||!Number.isInteger(value.nextId)||value.nextId<1||value.nextId>100000||!value.score||!isFiniteNumber(value.score.blue,0,100)||!isFiniteNumber(value.score.red,0,100))return false;for(const o of value.arenaData.obstacles){if(!o||typeof o.id!=='string'||typeof o.destructible!=='boolean'||!isFiniteNumber(o.x,-1,WIDTH)||!isFiniteNumber(o.z,-1,HEIGHT)||!isFiniteNumber(o.w,.1,WIDTH)||!isFiniteNumber(o.h,.1,HEIGHT)||!isFiniteNumber(o.hp,0,1000000000))return false;}for(const e of value.entities){if(!e||typeof e.id!=='string'||!fighterMap[e.fighter]||typeof e.team!=='string'||typeof e.alive!=='boolean'||!isFiniteNumber(e.x,0,WIDTH)||!isFiniteNumber(e.z,0,HEIGHT)||!isFiniteNumber(e.vx,-40,40)||!isFiniteNumber(e.vz,-40,40)||!isFiniteNumber(e.heading,-20,20)||!isFiniteNumber(e.hp,0,300)||!isFiniteNumber(e.maxHp,1,300)||!isFiniteNumber(e.ammo,0,8)||!isFiniteNumber(e.reload,0,5)||!isFiniteNumber(e.special,0,1)||!isFiniteNumber(e.death,0,5)||!isFiniteNumber(e.spawn,0,5)||!e.intent||!isFiniteNumber(e.intent.x,-1,1)||!isFiniteNumber(e.intent.z,-1,1)||!isFiniteNumber(e.intent.heading,-20,20)||typeof e.intent.fire!=='boolean'||typeof e.intent.special!=='boolean')return false;}for(const p of value.projectiles){if(!p||typeof p.id!=='string'||typeof p.owner!=='string'||typeof p.team!=='string'||!isFiniteNumber(p.x,-2,WIDTH+2)||!isFiniteNumber(p.z,-2,HEIGHT+2)||!isFiniteNumber(p.vx,-40,40)||!isFiniteNumber(p.vz,-40,40)||!isFiniteNumber(p.damage,0,100)||!isFiniteNumber(p.life,0,20)||!Array.isArray(p.hit)||p.hit.length>8)return false;}for(const f of value.fields){if(!f||typeof f.id!=='string'||typeof f.team!=='string'||!isFiniteNumber(f.x,0,WIDTH)||!isFiniteNumber(f.z,0,HEIGHT)||!isFiniteNumber(f.radius,.1,8)||!isFiniteNumber(f.life,0,8)||!isFiniteNumber(f.maxLife,.1,8))return false;}return true;}
   function migrateLegacy(value){
-    const state=copy(value);state.version=VERSION;state.layoutVersion=1;state.difficulty='standard';state.pickups=[];state.supplyAt=state.elapsed+4;state.coreAt=state.elapsed+1.6;state.holdTeam=null;state.holdLeft=10;state.stats.gadgets=0;state.stats.pickups=0;state.arenaData.brush=copy(arenas[state.arena].brush);state.arenaData.pads=[];
+    const state=copy(value);state.version=VERSION;state.layoutVersion=1;state.difficulty='standard';state.pickups=[];state.supplyAt=state.elapsed+4;state.coreAt=state.elapsed+1.6;state.holdTeam=null;state.holdLeft=10;state.stats.gadgets=0;state.stats.pickups=0;state.arenaData.brush=copy(legacyArenas[state.arena].brush);state.arenaData.pads=[];
     state.arenaData.obstacles.forEach(o=>o.kind='cover');state.events=[];
     for(const e of state.entities){Object.assign(e,{power:0,cores:0,gadget:0,shield:0,haste:0,reveal:0,lastCombat:state.elapsed,dashAngle:e.heading,dashHits:[],jump:null,jumpLock:0,airY:0,prevAirY:0,prevX:e.x,prevZ:e.z});e.intent.range=fighterMap[e.fighter].range;e.intent.gadget=false;e.ai.fire=false;e.ai.reloading=false;e.ai.recover=false;
       if(solidAt(state,e.x,e.z,e.radius)){const old={x:e.x,z:e.z};let repaired=false;for(let i=1;i<121;i++){const radius=.2+Math.floor(i/12)*.35,a=i/12*TAU,x=clamp(old.x+Math.cos(a)*radius,1.1,30.9),z=clamp(old.z+Math.sin(a)*radius,1.1,20.9);if(!solidAt(state,x,z,e.radius)){e.x=e.prevX=x;e.z=e.prevZ=z;e.vx=e.vz=0;repaired=true;break;}}if(!repaired){const p=safeSpot(state,e.team,state.entities.indexOf(e)%3);e.x=e.prevX=p.x;e.z=e.prevZ=p.z;e.vx=e.vz=0;}}
@@ -319,7 +341,7 @@
     if(v.phase==='playing'&&(v.result!==null||v.resultCount!==0)||v.phase==='ended'&&(v.result===null||v.resultCount!==1))return false;
     if(!v.score||!number(v.score.blue,0,100)||!number(v.score.red,0,100)||!number(v.supplyAt,0,140)||!number(v.coreAt,0,140)||!number(v.holdLeft,0,10)||![null,'blue','red'].includes(v.holdTeam)||!number(v.zoneTick,0,.6))return false;
     if(!list(v.entities,8)||v.entities.length!==(v.mode==='last'?8:6)||!list(v.projectiles,180)||!list(v.fields,30)||!list(v.effects,MAX_EFFECTS)||!list(v.events,60)||!list(v.pickups,48)||!v.stats||!['shots','hits','wallHits','deaths','cpuShots','stuck','gadgets','pickups'].every(k=>number(v.stats[k],0,1000000)))return false;
-    const arena=copy(arenas[v.arena]);if(![1,2,3].includes(v.layoutVersion)||v.layoutVersion===1&&v.arena>2)return false;if(v.layoutVersion===1&&v.arena===2){Object.assign(arena.obstacles[2],{x:13.1,z:9.8,w:5.8,h:1.8});Object.assign(arena.obstacles[3],{x:13.1,z:13,w:5.8,h:1.8});}if(v.layoutVersion<3)arena.pads=[];if(!v.arenaData||JSON.stringify(v.arenaData.pads)!==JSON.stringify(arena.pads)||!['id','name','subtitle','floor','accent','hazards'].every(k=>v.arenaData[k]===arena[k])||!list(v.arenaData.obstacles,20)||v.arenaData.obstacles.length!==arena.obstacles.length||JSON.stringify(v.arenaData.brush)!==JSON.stringify(arena.brush))return false;
+    if(![1,2,3,4].includes(v.layoutVersion))return false;const arena=arenaForLayout(v.arena,v.layoutVersion);if(!v.arenaData||JSON.stringify(v.arenaData.pads)!==JSON.stringify(arena.pads)||!['id','name','subtitle','floor','accent','hazards'].every(k=>v.arenaData[k]===arena[k])||!list(v.arenaData.obstacles,20)||v.arenaData.obstacles.length!==arena.obstacles.length||JSON.stringify(v.arenaData.brush)!==JSON.stringify(arena.brush))return false;
     for(let i=0;i<arena.obstacles.length;i++){const a=arena.obstacles[i],b=v.arenaData.obstacles[i];if(!b||!['id','x','z','w','h','kind','destructible'].every(k=>a[k]===b[k])||!number(b.hp,0,a.hp))return false;}
     const ids=new Set(v.entities.map(e=>e?.id));if(ids.size!==v.entities.length||!ids.has('player'))return false;
     for(const e of v.entities){const f=fighterMap[e?.fighter];if(!f||typeof e.id!=='string'||e.id.length>24||typeof e.team!=='string'||e.team.length>24||typeof e.label!=='string'||e.label.length>60||typeof e.cpu!=='boolean'||typeof e.alive!=='boolean'||!integer(e.power,0,6)||!integer(e.cores,0,20)||!number(e.maxHp,1,300)||!number(e.hp,0,e.maxHp)||Math.abs(e.maxHp-f.hp*(1+e.power*.08))>.001)return false;
@@ -342,5 +364,5 @@
   function validateSnapshot(value){try{return validateCurrentSnapshot(value)}catch{return false;}}
   function restore(value){if(!validateSnapshot(value))throw Error('That match backup is incomplete or unsafe.');const state=value.version===1?migrateLegacy(value):value.version===2?migrateV2(value):copy(value);if(!validateSnapshot(state))throw Error('That older match could not be migrated safely.');return state;}
   function runCpuMatch(options){const state=createMatch(Object.assign({},options,{fighter:'spark'}));playerOf(state).cpu=true;for(let i=0;i<4200&&state.phase==='playing';i++)step(state);return state;}
-  return { VERSION, STEP, WIDTH, HEIGHT, fighters, fighterMap, arenas, modes, difficulties, gadgets, visibleTo, inBrush, inSmoke, createMatch, setIntent, requestFire, quickFire, requestSpecial, requestGadget, tick, step, snapshot, restore, validateSnapshot, runCpuMatch, gridPath, walkableLine, clearLine, solidAt };
+  return { VERSION, STEP, WIDTH, HEIGHT, fighters, fighterMap, arenas, modes, difficulties, gadgets, visibleTo, inBrush, inSmoke, arenaForLayout, createMatch, setIntent, requestFire, quickFire, requestSpecial, requestGadget, tick, step, snapshot, restore, validateSnapshot, runCpuMatch, gridPath, walkableLine, clearLine, solidAt };
 });
