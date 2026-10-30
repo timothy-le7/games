@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:block-islands:";
-const RELEASE = "13341e017cc7860fcf8e";
+const RELEASE = "a27b8ac4e8183bf20c7c";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./body-physics.js","./game-pwa.js","./game.css","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./rules.js","./voxel-view.js"];
 
@@ -11,7 +11,8 @@ self.addEventListener('install', event => {
     const cache = await caches.open(CACHE_NAME);
     try {
       // addAll either obtains every required local asset or the partial cache is removed.
-      await cache.addAll(ASSETS);
+      const requests = ASSETS.map(asset => new Request(new URL(asset, self.registration.scope), { cache: 'reload' }));
+      await cache.addAll(requests);
     } catch (error) {
       await caches.delete(CACHE_NAME);
       throw error;

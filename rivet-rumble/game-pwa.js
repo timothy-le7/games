@@ -158,6 +158,8 @@
       const observe = worker => worker?.addEventListener('statechange', () => {
         if (worker.state === 'redundant' && !registration.active) state.failed = true;
         updateControl();
+        // Some browsers expose registration.waiting after the statechange callback.
+        setTimeout(updateControl, 0);
       });
       observe(registration.installing);
       registration.addEventListener('updatefound', () => observe(registration.installing));
