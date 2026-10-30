@@ -122,7 +122,7 @@
   function inSmoke(state,e){return state.fields.some(f=>f.kind==='smoke'&&f.life>0&&f.team===e.team&&dist(e,f)<f.radius);}
   function visibleTo(state,observer,target){return observer.team===target.team||clearLine(state,observer,target)&&(!(inBrush(state,target)||inSmoke(state,target))||target.reveal>0||dist(observer,target)<3.2);}
   function landingPoint(state,x,z,radius){
-    for(let i=0;i<97;i++){const radiusStep=i===0?0:.2+Math.floor((i-1)/12)*.22,a=i*2.4,point={x:clamp(x+Math.cos(a)*radiusStep,1.1,30.9),z:clamp(z+Math.sin(a)*radiusStep,1.1,20.9)};if(!solidAt(state,point.x,point.z,radius))return point;}return null;
+    for(let i=0;i<145;i++){const radiusStep=i===0?0:.2+Math.floor((i-1)/12)*.22,a=i*2.4,point={x:clamp(x+Math.cos(a)*radiusStep,1.1,30.9),z:clamp(z+Math.sin(a)*radiusStep,1.1,20.9)};if(!solidAt(state,point.x,point.z,radius))return point;}return null;
   }
   function launch(state,e,x,z,slam=0,pad=''){
     if(e.jump||!e.alive)return false;const point=landingPoint(state,x,z,e.radius);if(!point)return false;
@@ -159,12 +159,12 @@
         for(const o of state.arenaData.obstacles)if(o.destructible&&o.hp>0){const point={x:clamp(e.x,o.x,o.x+o.w),z:clamp(e.z,o.z,o.z+o.h)};if(dist(e,point)<f.range&&Math.cos(Math.atan2(point.z-e.z,point.x-e.x)-angle)>.35)damageCover(state,o,f.damage*(1+e.power*.10));}
         recordEffect(state,{kind:'punch',x:e.x+Math.cos(angle)*1.6,z:e.z+Math.sin(angle)*1.6,color:f.color,life:.22,maxLife:.22,radius:1.5});
       }else{const count=f.pellets||1;for(let i=0;i<count;i++){const a=angle+(count===1?0:(i-(count-1)/2)*f.spread);spawnShot(state,e,a,f.damage*(1+e.power*.10),f.splash?e.intent.range:f.range,f.projectile,{splash:f.splash||0,arc:!!f.splash,bounce:f.bounce||0,heal:f.attackKind==='heal'?13:0,returning:f.attackKind==='return',patch:f.attackKind==='garden'});}}
-    }else{e.special=0;e.shot=.54;special(state,e,angle,f);}
+    }else{const charge=e.special;e.special=0;if(special(state,e,angle,f)===false){e.special=charge;return false;}e.shot=.54;}
     e.lastCombat=state.elapsed;e.reveal=kind==='special'&&f.specialKind==='smoke'?0:1.3;e.recoil=.22;state.stats.shots++;if(e.cpu)state.stats.cpuShots++;return true;
   }
   function spawnShot(state,e,angle,damageValue,range,speed,extra){const duration=Math.max(.05,range/speed)*(extra.returning?2:1);state.projectiles.push({id:'p'+state.nextId++,owner:e.id,team:e.team,x:e.x+Math.cos(angle)*.7,z:e.z+Math.sin(angle)*.7,prevX:e.x+Math.cos(angle)*.7,prevZ:e.z+Math.sin(angle)*.7,vx:Math.cos(angle)*speed,vz:Math.sin(angle)*speed,damage:damageValue,life:duration,duration,radius:extra.heal>0?.5:.16,splash:extra.splash||0,arc:!!extra.arc,pierce:extra.pierce||0,color:fighterMap[e.fighter].color,hit:[],bounce:extra.bounce||0,heal:extra.heal||0,returning:!!extra.returning,back:false,patch:!!extra.patch});}
   function special(state,e,a,f){
-    if(f.specialKind==='leap'){launch(state,e,e.x+Math.cos(a)*clamp(e.intent.range,.8,8),e.z+Math.sin(a)*clamp(e.intent.range,.8,8),42);return;}
+    if(f.specialKind==='leap')return launch(state,e,e.x+Math.cos(a)*clamp(e.intent.range,.8,8),e.z+Math.sin(a)*clamp(e.intent.range,.8,8),42);
     if(f.specialKind==='ricochet'){for(let i=-2;i<=2;i++)spawnShot(state,e,a+i*.12,22,17,22,{bounce:4});return;}
     if(f.specialKind==='smoke'){cloud(state,e,5,6);return;}
     if(f.specialKind==='thorns'){const point={x:clamp(e.x+Math.cos(a)*Math.min(6,e.intent.range),1,31),z:clamp(e.z+Math.sin(a)*Math.min(6,e.intent.range),1,21)};state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,...point,kind:'thorns',radius:3.3,life:5,maxLife:5,damage:19,color:f.color});return;}
