@@ -20,13 +20,15 @@
   function lookAt(eye,target,up){let z=norm([eye[0]-target[0],eye[1]-target[1],eye[2]-target[2]]),x=norm(cross(up,z)),y=cross(z,x);return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1];}
   const HD=typeof GameHD!=='undefined'?GameHD:typeof require==='function'?require('./hd-scene.js'):null;
   const PALETTES=[
-    {floor:'#74b8ab',tile:'#88c6ba',edge:'#214e62',stone:'#b4d4d8',top:'#edf7e9',accent:'#5bffe0',water:'#258eae',wood:'#c98548',back:'#396e83'},
-    {floor:'#c79c73',tile:'#d8b18a',edge:'#623f4d',stone:'#af6c58',top:'#f7d6a5',accent:'#ffb958',water:'#e47545',wood:'#bf8045',back:'#664956'},
-    {floor:'#7d9daa',tile:'#90b0b9',edge:'#30465f',stone:'#7c839f',top:'#dbe5f1',accent:'#c7a0ff',water:'#588ca1',wood:'#a68b62',back:'#405771'},
-    {floor:'#6ea75c',tile:'#81b969',edge:'#305b48',stone:'#b8bd94',top:'#e9e8bc',accent:'#baf489',water:'#338fac',wood:'#af8554',back:'#456c69'},
-    {floor:'#d7ad73',tile:'#e0bb87',edge:'#895441',stone:'#bd7556',top:'#f4d59d',accent:'#ffb452',water:'#cf7b47',wood:'#a67b4c',back:'#87625b'},
-    {floor:'#638aa5',tile:'#729eaf',edge:'#253c63',stone:'#6c79ae',top:'#c3def1',accent:'#78ffe0',water:'#2e78b6',wood:'#9e87ac',back:'#364b78'}
+    {floor:'#7dac65',tile:'#bdb780',edge:'#68854c',stone:'#738b9e',top:'#bdced3',accent:'#72e3df',water:'#48b9ce',wood:'#c48a46',back:'#708e55',grass:'#4c9e59',tip:'#9ed15c',soil:'#8e9c5a'},
+    {floor:'#d99b65',tile:'#dfb57f',edge:'#aa7051',stone:'#c6815d',top:'#f5c78b',accent:'#ffcb69',water:'#54b5c3',wood:'#b87844',back:'#b87e58',grass:'#b99543',tip:'#e7c859',soil:'#d49e64'},
+    {floor:'#7c74a5',tile:'#918ab0',edge:'#615478',stone:'#7d729f',top:'#c3b8d7',accent:'#b7a5ff',water:'#6d9dce',wood:'#a38379',back:'#635877',grass:'#548e94',tip:'#83c0b0',soil:'#79749e'},
+    {floor:'#6ca556',tile:'#b9aa78',edge:'#527a46',stone:'#779c8a',top:'#c3d3ac',accent:'#e8db83',water:'#4bb9c3',wood:'#b78148',back:'#537e56',grass:'#44945b',tip:'#a6d16a',soil:'#7eaa5b'},
+    {floor:'#db995f',tile:'#e6b97e',edge:'#a56349',stone:'#cb7854',top:'#f3bb80',accent:'#ffd777',water:'#55b9c4',wood:'#bc814b',back:'#b67a53',grass:'#aa9a49',tip:'#e4cb67',soil:'#d79660'},
+    {floor:'#7098ad',tile:'#91b1bd',edge:'#4c6c82',stone:'#697f9c',top:'#bacfdf',accent:'#72eee5',water:'#409fcd',wood:'#bb8d68',back:'#4f768e',grass:'#4c9390',tip:'#96c9ab',soil:'#7496a8'}
   ];
+  // Stable detail positions: rendering never consumes the match's gameplay RNG.
+  const noise=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
   function Renderer(canvas,options){
     this.canvas=canvas;this.options=options||{};this.ready=false;this.lost=false;this.time=0;
     this.eye=[16,23.5,28.5];this.target=[16,0,11];this.fov=.82;this.camera={};this.init();
@@ -43,51 +45,107 @@
   Renderer.prototype.screenToWorld=function(clientX,clientY){const r=this.canvas.getBoundingClientRect(),nx=(clientX-r.left)/r.width*2-1,ny=1-(clientY-r.top)/r.height*2,t=Math.tan(this.fov/2),d=norm(this.camera.forward.map((v,i)=>v+this.camera.right[i]*nx*t*this.camera.aspect+this.camera.up[i]*ny*t)),k=-this.eye[1]/d[1];return{x:clamp(this.eye[0]+d[0]*k,0,32),z:clamp(this.eye[2]+d[2]*k,0,22)};};
   Renderer.prototype.part=function(name,x,y,z,sx,sy,sz,c,ry=0,rx=0,rz=0,glow=0,cast=true,rough=.52,metal=.25,kind=0){this.scene.draw(name,HD.matrix(x,y,z,sx,sy,sz,ry,rx,rz),c,[rough,metal,glow,kind],cast);};
   Renderer.prototype.floor=function(state,p){
-    const d=this.part.bind(this);d('box',16,-.4,11,33,.8,23,p.edge,0,0,0,0,false);d('box',16,-.13,11,32,.22,22,p.floor,0,0,0,0,false,.9,0,2);
-    for(let x=1;x<32;x+=2)for(let z=1;z<22;z+=2)d('cube',x,-.006,z,1.97,.02,1.97,((x+z)%4)?p.floor:p.tile,0,0,0,0,false,.88,0,2);
-    for(const z of [1.1,20.9])for(let x=2;x<31;x+=3){d('box',x,.02,z,2.45,.04,.16,z<11?'#ed7180':'#67daff',0,0,0,.12,false);d('cube',x,.025,z+.18,.3,.025,.09,'#f5eedc',0,0,0,0,false);}
-    for(const x of [.25,31.75]){d('box',x,.05,11,.18,.12,21.7,p.top,0,0,0,0,false);d('box',x,-.08,11,.38,.03,21.8,p.water,0,0,0,.2,false);}
-    // The objective and final ring retain the engine's exact ground coordinates.
+    const d=this.part.bind(this);
+    // A continuous landscape replaces the elevated board and its gameplay-like grid.
+    d('box',16,-.36,11,48,.6,38,p.back,0,0,0,0,false,1,0);
+    d('cube',16,-.09,11,32,.16,22,p.floor,0,0,0,0,false,1,0);
+    // Quiet, continuous worn paths leave combat silhouettes and cover in focus.
+    for(let z=1;z<22;z+=1.7)d('disc',16+Math.sin(z*.32)*2,.003,z,4.3,1,3.4,p.tile,0,0,0,0,false,1,0);
+    for(let x=1.5;x<32;x+=2)d('disc',x,.004,11+Math.sin(x*.26)*1.6,4.4,1,2.6,p.tile,0,0,0,0,false,1,0);
+    for(let i=0;i<7;i++)d('disc',1+noise(i,7)*30,.005,1+noise(i,19)*20,1.2+noise(i,11),1,.8,p.soil,noise(i,2)*TAU,0,0,0,false,1,0);
+    // Small stones and short tufts are ground decoration, never apparent cover.
+    for(let i=0;i<65;i++){
+      const x=1+noise(i,31)*30,z=1+noise(i,41)*20;
+      if(state.arenaData.obstacles.some(o=>x>o.x-.2&&x<o.x+o.w+.2&&z>o.z-.2&&z<o.z+o.h+.2)||state.arenaData.brush.some(b=>x>b.x&&x<b.x+b.w&&z>b.z&&z<b.z+b.h))continue;
+      if(i%3===0)d('box',x,.03,z,.12,.055,.19,p.tile,noise(i,17)*TAU,0,0,0,false,1,0);
+      else for(const side of [-1,1])d('cone',x+side*.045,.08,z,.06,.16,.035,p.soil,0,0,side*.35,0,false,1,0);
+    }
+    // Team entry marks stay flat and do not resemble colliders.
+    for(const [z,c]of [[2.2,'#d87d83'],[19.8,'#68b9c7']])for(const x of [7,16,25])d('disc',x,.015,z,1.45,1,.55,color(c,.5),0,0,0,0,false,1,0);
     if(state.mode==='foundry'||state.mode==='rush'){
-      d('cylinder',16,.018,11,6.5,.028,6.5,color(p.edge,.32),0,0,0,0,false);
-      d('torus',16,.062,11,6.3,6.3,.3,p.accent,0,-Math.PI/2,0,.4,false);
-      d('torus',16,.04,11,5.55,5.55,.14,color(p.top,.6),0,-Math.PI/2,0,.1,false);
-      for(let i=0;i<12;i++){const a=i/12*TAU;d('box',16+Math.cos(a)*3.55,.06,11+Math.sin(a)*3.55,.12,.05,.42,p.top,-a,0,0,.1,false);}
-      d('gear',16,.025,11,1.7,.12,1.7,color(p.accent,.6),this.time*.1,0,0,.15,false);if(state.mode==='rush'){d('cylinder',16,.18,11,1.45,.3,1.45,p.edge);d('cone',16,.85,11,.7,.7,.7,'#d5a8ff',this.time*.5,0,0,.6);d('cone',16,.5,11,.7,.7,.7,'#af72eb',this.time*.5,Math.PI,0,.4);}
+      d('disc',16,.018,11,6.5,1,6.5,color(p.tile,.45),0,0,0,0,false,1,0);
+      // Thin segmented paint keeps the exact 3.25-unit scoring boundary readable.
+      for(let i=0;i<48;i++){const a=i/48*TAU;d('box',16+Math.cos(a)*3.25,.035,11+Math.sin(a)*3.25,.32,.025,.075,p.accent,-a-Math.PI/2,0,0,.10,false);}
+      if(state.mode==='rush'){
+        d('cylinder',16,.14,11,1.6,.28,1.6,p.stone);d('cylinder',16,.30,11,1.2,.08,1.2,p.top);
+        d('cone',16,.90,11,.7,.7,.7,'#d5a8ff',this.time*.5,0,0,.4);d('cone',16,.55,11,.7,.7,.7,'#af72eb',this.time*.5,Math.PI,0,.3);
+      }else{d('disc',16,.027,11,1.2,1,1.2,color(p.accent,.35),0,0,0,.06,false);}
     }else{const radius=state.ring||17;for(let i=0;i<96;i++){const a=i/96*TAU,tx=-Math.sin(a),tz=Math.cos(a)/1.23;d('box',16+Math.cos(a)*radius,.07,11+Math.sin(a)*radius/1.23,radius*TAU/96,.045,.10,'#c5e98a',-Math.atan2(tz,tx),0,0,.15,false);}}
   };
+  Renderer.prototype.tree=function(x,z,p,palm){
+    const d=this.part.bind(this);
+    d('disc',x,.006,z,2.5,1,1.8,color('#243f38',.20),0,0,0,0,false);
+    d('cylinder',x,1.15,z,.4,2.3,.4,'#90704d',.2,0,.07,0,true,1,0);
+    if(palm){for(let i=0;i<6;i++){const a=i*TAU/6;d('wedge',x+Math.sin(a)*.65,2.65,z+Math.cos(a)*.65,.55,.35,2.1,i%2?p.grass:p.tip,a,.12,0,0,true,.9,0);}}
+    else{for(const [dx,y,dz,r]of [[0,2.6,0,2.6],[-.6,2.3,.3,1.6],[.6,2.7,-.3,1.8]])d('sphere',x+dx,y,z+dz,r,r*.8,r,dx<0?p.grass:p.tip,.25,0,0,0,true,1,0);}
+  };
   Renderer.prototype.scenery=function(state,p){
-    const d=this.part.bind(this),reduced=this.options.reducedMotion?.()||false,time=reduced?0:this.time;
-    // Background architecture stays beyond the playable footprint.
-    d('box',16,.6,-1.4,35,1.2,1.2,p.back);d('box',16,3.7,-1.9,35,.22,.38,p.top);
-    for(let x=1;x<34;x+=4){d('box',x,2,-1.45,.32,4,1,p.edge);d('box',x,2.3,-1.12,3.4,2.35,.14,p.back);for(let y=1.45;y<3.4;y+=.55)d('box',x,y,-1.02,2.5,.08,.07,p.accent,0,0,0,.25);d('cylinder',x,3.95,-1.4,.42,.3,.42,p.top);}
+    const d=this.part.bind(this),time=this.options.reducedMotion?.()?0:this.time;
+    // Solid boundary follows the movement bounds; all scenery remains outside it.
+    for(const x of [0,32]){d('box',x,.35,11,.8,.7,23,p.edge,0,0,0,0,true,1,0);d('box',x,.72,11,.82,.10,23,p.soil,0,0,0,0,true,1,0);}
+    for(const z of [0,22]){d('box',16,.35,z,32,.7,.8,p.edge,0,0,0,0,true,1,0);d('box',16,.72,z,32,.10,.82,p.soil,0,0,0,0,true,1,0);}
     for(const o of state.arenaData.obstacles){
-      if(o.hp<=0)continue;const x=o.x+o.w/2,z=o.z+o.h/2,wood=o.destructible;
-      if(o.kind==='water'){d('box',x,.025,z,o.w,.055,o.h,p.water,0,0,0,.12,false,.2,.4);for(let i=0;i<3;i++)d('box',x-o.w*.3+i*o.w*.3,.06,z+Math.sin(time+i)*.2,.45,.018,.055,'#ace9ee',0,0,0,.15,false);continue;}
-      d('box',x,.66,z,o.w,1.3,o.h,wood?p.wood:p.stone);d('box',x,1.34,z,o.w,.12,o.h,wood?'#f4c581':p.top);
-      if(wood){
-        for(let u=-o.w*.3;u<=o.w*.3+.01;u+=Math.max(.55,o.w*.3))d('box',x+u,.7,z,.075,1.25,o.h+.015,'#825334');
-        for(const s of [-1,1]){d('box',x,.69,z+s*(o.h*.5+.008),o.w*.87,.12,.035,'#664936',0,0,s*.35);d('box',x+o.w*s*.33,.7,z,.12,1.38,o.h+.025,'#647b83');}
-      }else{
-        d('box',x,.18,z,o.w+.02,.16,o.h+.02,p.edge);
-        for(const s of [-1,1]){d('box',x,.94,z+s*(o.h*.5+.005),Math.max(.3,o.w-.45),.12,.025,p.accent,0,0,0,.25);for(const u of [-1,1])d('sphere',x+u*(o.w*.5-.18),1.42,z+s*(o.h*.5-.18),.12,.08,.12,p.edge);}
+      const x=o.x+o.w/2,z=o.z+o.h/2;
+      if(o.hp<=0){
+        d('disc',x,.018,z,o.w,1,o.h,color(p.soil,.5),0,0,0,0,false);
+        for(let i=0;i<4;i++)d('box',x+(noise(i,o.x)-.5)*o.w*.7,.09,z+(noise(i,o.z)-.5)*o.h*.7,.32,.16,.20,p.wood,noise(i,9)*TAU,0,0,0,false,1,0);
+        continue;
       }
-      // Shallow panels and metal straps never extend the collider silhouette.
-      if(wood&&o.hp<65)d('box',x,.85,z+o.h*.5+.016,.035,.8,.02,'#513a35',0,0,-.28);
+      if(o.kind==='water'){
+        d('box',x,.023,z,o.w,.04,o.h,p.water,0,0,0,.08,false,.32,.04);
+        // Banks stay inside the same impassable rectangle, with no false extra wall.
+        for(const side of [-1,1]){d('box',x,.05,z+side*(o.h/2-.07),o.w,.07,.14,p.tile,0,0,0,0,false,1,0);d('box',x+side*(o.w/2-.07),.05,z,.14,.07,o.h,p.tile,0,0,0,0,false,1,0);}
+        for(let i=0;i<5;i++)d('box',o.x+o.w*(i+.5)/5,.055,z+Math.sin(time*.8+i)*Math.min(.2,o.h*.2),Math.min(.5,o.w/7),.015,.045,color('#c3f4ef',.55),0,0,0,.05,false);
+        continue;
+      }
+      if(o.destructible){
+        // Separately modeled timber stacks clearly signal breakable, resource-bearing cover.
+        d('box',x,.56,z,o.w,1.12,o.h,p.wood,0,0,0,0,true,.95,0);
+        for(const h of [.26,.62,.98])d('box',x,h,z+o.h/2-.018,o.w-.06,.035,.045,'#946239',0,0,0,0,true,1,0);
+        for(const u of [-.31,.31])d('box',x+o.w*u,.58,z,.13,1.18,o.h+.015,'#e4bc73',0,0,0,0,true,.9,0);
+        d('box',x,1.15,z,o.w,.07,o.h,'#dfb478',0,0,0,0,true,1,0);
+        if(o.hp<65)d('box',x,.66,z+o.h*.5+.02,.05,.8,.02,'#614737',0,0,-.35);
+      }else{
+        // Masonry seams are visual subdivisions of the exact single collider.
+        d('box',x,.55,z,o.w,1.1,o.h,p.stone,0,0,0,0,true,.95,0);
+        const cols=Math.max(1,Math.round(o.w/1.15)),rows=Math.max(1,Math.round(o.h/1.15));
+        for(let i=0;i<cols;i++)for(let j=0;j<rows;j++){
+          const bx=o.x+(i+.5)*o.w/cols,bz=o.z+(j+.5)*o.h/rows;
+          d('box',bx,1.13,bz,o.w/cols-.045,.18,o.h/rows-.045,p.top,0,0,0,0,true,1,0);
+        }
+        d('box',x,.13,z,o.w,.16,o.h,p.edge,0,0,0,0,true,1,0);
+        for(let i=1;i<cols;i++)d('box',o.x+i*o.w/cols,.61,z+o.h/2+.004,.027,.85,.012,p.edge,0,0,0,0,false,1,0);
+        if(state.arena===3)for(const side of [-1,1])d('box',x+side*o.w*.28,1.235,z,.38,.03,Math.min(o.h,.65),p.grass,.2,0,0,0,false,1,0);
+      }
     }
+    const player=state.entities.find(e=>e.id==='player');
     for(const b of state.arenaData.brush||[]){
-      const player=state.entities.find(e=>e.id==='player'),near=player&&player.x>b.x-1&&player.x<b.x+b.w+1&&player.z>b.z-1&&player.z<b.z+b.h+1;
-      d('box',b.x+b.w/2,.025,b.z+b.h/2,b.w,.04,b.h,'#48794b',0,0,0,0,false,.9,0);
-      for(let x=b.x+.4;x<b.x+b.w;x+=.7)for(let z=b.z+.35;z<b.z+b.h;z+=.7){const wave=Math.sin(time*1.4+x+z)*.035,height=.68+Math.sin(x*8+z*4)*.12;d('box',x,.32,z,.26,.65,.26,'#406d48',wave,0,0,0,true,.85,0);d('sphere',x+wave,height,z,.8,.72,.76,color(state.arena===4?'#a4a957':'#78aa58',near?.55:1),0,0,0,0,true,.9,0);d('sphere',x+.13,height+.2,z-.1,.4,.32,.42,color('#b5ce72',near?.55:1),0,0,0,0,false,.8,0);}
+      // Flat bed has the exact concealment footprint. Grass never grows through cover.
+      d('cube',b.x+b.w/2,.022,b.z+b.h/2,b.w,.035,b.h,p.grass,0,0,0,0,false,1,0);
+      for(let x=b.x+.24;x<b.x+b.w-.05;x+=.58)for(let z=b.z+.24;z<b.z+b.h-.05;z+=.58){
+        if(state.arenaData.obstacles.some(o=>o.hp>0&&x>o.x-.2&&x<o.x+o.w+.2&&z>o.z-.2&&z<o.z+o.h+.2))continue;
+        const n=noise(x,z),wave=Math.sin(time*1.7+x+z)*.045,h=.65+n*.27,near=player&&Math.hypot(player.x-x,player.z-z)<1.7,a=near?.60:1;
+        d('sphere',x+(n-.5)*.16,.27,z+(noise(z,x)-.5)*.16,.82,.45,.77,color(p.grass,a),n*TAU,0,0,0,true,1,0);
+        d('cone',x+(n-.5)*.12,.35,z,.56,h,.38,color(p.grass,a),n*TAU,wave,.12,0,true,1,0);
+        d('cone',x+.12,.39,z+.05,.32,h+.12,.25,color(p.tip,a),n*TAU+.9,-wave,-.17,0,true,1,0);
+      }
     }
-    if(state.arena===3)for(const [x,z]of [[-1,6],[33,16],[5,-2],[27,24]]){d('cylinder',x,1.3,z,.45,2.7,.45,'#805e47');for(let i=0;i<5;i++)d('box',x+Math.sin(i*1.3)*.5,2.8,z+Math.cos(i*1.3)*.5,.65,.25,2.3,'#74ae68',i*1.3,.3);}
-    if(state.arena===4)for(const [x,z]of [[-1,7],[33,15],[2,-2],[30,24]]){d('box',x,1.2,z,2.4,2.4,2.1,'#ae6952',.2);d('cone',x+.3,3,z,2.7,2.3,2.3,'#e0a16e',.2);d('cylinder',x-.4,.5,z+1.3,.48,1.1,.48,'#89a064');}
-    if(state.arena===5)for(const [x,z]of [[-1,6],[33,16]]){d('box',x,2,z,.6,4,.6,'#344a77');d('box',x,4,z,2.3,.35,.6,'#b3a4e8');d('box',x,3.7,z,1.8,.1,.5,'#7bffeb',0,0,0,.6);}
-    for(const [x,z]of [[-1,2],[-1,20],[33,2],[33,20]]){
-      d('cylinder',x,.5,z,1.9,1,1.9,p.edge);d('cylinder',x,1.25,z,1.4,.5,1.4,p.stone);d('torus',x,1.58,z,1.48,1.48,.17,p.accent,0,-Math.PI/2,0,.4);d('sphere',x,1.9,z,.48,.6,.48,p.top);
-      for(let i=0;i<4;i++){const a=time*.6+i*TAU/4;d('box',x+Math.cos(a)*.75,2.15,z+Math.sin(a)*.75,1.3,.09,.25,p.top,-a);}
+    // Each district has its own small world rather than repeated industrial fans.
+    for(const [x,z]of [[-2,4],[-2,14],[34,8],[34,19],[5,-2],[26,-2],[3,24],[28,24]]){
+      if(state.arena===1||state.arena===4){
+        d('box',x,.70,z,2.3,1.5,1.8,p.stone,.15,0,.05,0,true,1,0);d('box',x-.2,1.55,z,1.7,.55,1.4,p.top,-.1,0,0,0,true,1,0);
+        d('cylinder',x+1,.6,z+.7,.34,1.2,.34,p.grass,0,0,.1,0,true,1,0);d('sphere',x+1,1.2,z+.7,.36,.36,.36,p.tip,0,0,0,0,true,1,0);
+      }else if(state.arena===5){
+        d('box',x,.06,z,2.5,.15,2.5,p.wood,0,0,0,0,true,1,0);for(const off of [-.9,.9])d('cylinder',x+off,.6,z,.2,1.2,.2,p.edge,0,0,0,0,true,1,0);
+        d('box',x,1.3,z,1.5,2.6,.18,p.edge);d('box',x,2.7,z,1.8,.2,.65,p.top);d('box',x,2.55,z+.15,1.3,.08,.2,p.accent,0,0,0,.35);
+      }else this.tree(x,z,p,state.arena===3);
     }
-    for(let x=4;x<31;x+=6){d('box',x,.09,-.3,2.3,.12,.5,p.edge);for(let k=0;k<4;k++)d('box',x-.8+k*.5,.17,-.3,.22,.05,.48,p.accent,0,0,.1,0,false);}
+    for(const [x,z,angle]of [[-3.2,10,Math.PI/2],[35.2,13,-Math.PI/2],[11,-3.3,0],[23,25.3,Math.PI]]){
+      d('box',x,1,z,3.2,2,2.2,p.stone,angle,0,0,0,true,1,0);
+      d('box',x,2.16,z,3.7,.35,2.7,state.arena===5?p.edge:p.wood,angle,0,0,0,true,.9,0);
+      const fx=x+Math.sin(angle)*1.13,fz=z+Math.cos(angle)*1.13;
+      d('box',fx,1.05,fz,.9,1.5,.08,p.edge,angle);d('box',fx,1.8,fz,1.2,.2,.15,p.top,angle);
+    }
   };
   function teamColor(e){return e.team==='blue'?C.blue:e.team==='red'?C.red:e.id==='player'?C.solo:'#c18bff';}
   Renderer.prototype.robot=function(state,e){
@@ -207,11 +265,11 @@
     if(!this.ready||this.lost)return;
     const raw=state.entities.find(e=>e.id==='player'),alpha=clamp(state.accumulator/RivetRumbleEngine.STEP,0,1),player=raw?{...raw,x:(raw.prevX??raw.x)+(raw.x-(raw.prevX??raw.x))*alpha,z:(raw.prevZ??raw.z)+(raw.z-(raw.prevZ??raw.z))*alpha}:null,portrait=this.canvas.clientWidth/this.canvas.clientHeight<.8,focus=player?clamp(player.x,portrait?5:10,portrait?27:22):16,focusZ=player?clamp(player.z-1,5.5,16):11,dt=clamp((now-(this.previousTime??now))/1000,0,.1),fresh=this.previousState!==state;
     const follow=1-Math.exp(-dt*9);this.focusX=fresh?focus:(this.focusX??focus)+(focus-(this.focusX??focus))*follow;this.focusZ=fresh?focusZ:(this.focusZ??focusZ)+(focusZ-(this.focusZ??focusZ))*follow;
-    this.previousState=state;this.previousTime=now;this.eye=[this.focusX,portrait?22:17.5,this.focusZ+(portrait?16.5:13)];this.target=[this.focusX,0,this.focusZ];this.fov=portrait?.76:.72;
+    this.previousState=state;this.previousTime=now;this.eye=[this.focusX,portrait?26:21.5,this.focusZ+(portrait?14:11.5)];this.target=[this.focusX,0,this.focusZ];this.fov=.70;
     this.resize();this.time=this.options.reducedMotion?.()?0:now*.001;const p=PALETTES[state.arena]||PALETTES[0],lightVP=HD.multiply(HD.ortho(-25,25,-23,23,1,90),HD.lookAt([-6,36,30],[16,0,11],[0,1,0]));
     this.scene.begin(multiply(this.camera.p,this.camera.v),this.eye,this.time,{lightVP,clear:color(p.back).slice(0,3),fog:color(p.back).slice(0,3)});this.floor(state,p);this.scenery(state,p);this.launchPads(state);for(const e of state.entities)this.robot(state,{...e,x:(e.prevX??e.x)+(e.x-(e.prevX??e.x))*alpha,z:(e.prevZ??e.z)+(e.z-(e.prevZ??e.z))*alpha,airY:(e.prevAirY||0)+((e.airY||0)-(e.prevAirY||0))*alpha});this.action(state);this.smoke(state);this.aim(state,aim);this.scene.flush();
   };
-  Renderer.prototype.debug=function(){return{...this.scene?.debug(),lost:this.lost,webgl:!!this.gl,camera:{eye:this.eye.slice(),target:this.target.slice(),aspect:this.camera.aspect,fov:this.fov},playerScreen:this.previousState?(()=>{const p=this.previousState.entities.find(e=>e.id==='player');return p?this.worldToScreen(p.x,1.5,p.z):null})():null,renderer:'hd-articulated-arena'};};
+  Renderer.prototype.debug=function(){return{...this.scene?.debug(),lost:this.lost,webgl:!!this.gl,camera:{eye:this.eye.slice(),target:this.target.slice(),aspect:this.camera.aspect,fov:this.fov},playerScreen:this.previousState?(()=>{const p=this.previousState.entities.find(e=>e.id==='player');return p?this.worldToScreen(p.x,1.5,p.z):null})():null,renderer:'hd-landscape-arena',worldStyle:'continuous-terrain',layoutVersion:this.previousState?.layoutVersion};};
   Renderer.prototype.destroy=function(){this.scene?.destroy();this.ready=false;};
   return {Renderer,color};
 });
