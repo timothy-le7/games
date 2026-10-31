@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  let registration, offlineReady = false, applyingUpdate = false, registrationFailed = false;
+  let registration, offlineReady = false, applyingUpdate = false, registrationFailed = false, checkingUpdate = false;
   const style = document.createElement('style');
   style.textContent = `
     #web-app-update[hidden]{display:none}
@@ -59,7 +59,16 @@
     const status = document.getElementById('web-app-offline-status');
     if (status) status.textContent = offlineStatus();
     const update = document.getElementById('web-app-update');
-    if (update) update.hidden = !registration?.waiting;
+    if (update) {
+      update.hidden = false;
+      update.disabled = !registration || checkingUpdate || applyingUpdate || (!registration.waiting && !!registration.installing);
+      update.textContent = registration?.waiting ? 'Save progress and update' : checkingUpdate || registration?.installing ? 'Checking for updates…' : 'Check for updates';
+    }
+    const menuUpdate = document.getElementById('web-app-check-update');
+    if (menuUpdate) {
+      menuUpdate.disabled = !registration || checkingUpdate || applyingUpdate || (!registration.waiting && !!registration.installing);
+      menuUpdate.textContent = registration?.waiting ? 'Save progress and update' : checkingUpdate || registration?.installing ? 'Checking for updates…' : 'Check for updates';
+    }
     updateNotice.hidden = !registration?.waiting;
   }
 
@@ -70,6 +79,23 @@
     toast('Progress saved. Updating Hexgame…');
     registration.waiting.postMessage({ type: 'POLY_TOP_APPLY_UPDATE' });
   }
+
+  async function checkForUpdates(manual = false) {
+    if (navigator.onLine === false) {
+      if (manual) toast('Could not check for updates. Reconnect and try again; your saves are unchanged.');
+      return;
+    }
+    if (!registration || checkingUpdate || applyingUpdate) return;
+    if (registration.waiting) { refreshStatus(); return; }
+    checkingUpdate = true; refreshStatus();
+    try {
+      await registration.update();
+      if (manual) toast(registration.waiting ? 'Update ready. Save progress and update.' : registration.installing ? 'Downloading update…' : 'You are up to date.');
+    } catch {
+      if (manual) toast('Could not check for updates. Reconnect and try again; your saves are unchanged.');
+    } finally { checkingUpdate = false; refreshStatus(); }
+  }
+  const updateAction = () => registration?.waiting ? applyUpdate() : checkForUpdates(true);
 
   const updateNotice = document.createElement('button');
   updateNotice.id = 'web-app-update-notice';
@@ -86,7 +112,7 @@
       '<button class="large-button" id="web-app-back">Play now ' + icon('chevron') + '</button><button class="large-button secondary" id="web-app-update" hidden>Save progress and update</button>' +
       '<details class="save-label web-app-backups"><summary>Help and backups</summary><p>If Share is hidden, tap Safari’s page menu first. If Add to Home Screen is missing, scroll to Edit Actions to add it.</p><p>Your progress stays on this phone. Menu → Export save makes a backup. If a Safari game is missing from the new icon, export it in Safari and use Import save in the app.</p></details>', installed ? 'Game icon' : 'Add the game icon');
     document.getElementById('web-app-back').onclick = () => { rememberWelcome(); closeModal(); };
-    document.getElementById('web-app-update').onclick = applyUpdate;
+    document.getElementById('web-app-update').onclick = updateAction;
     refreshStatus();
     if (installed) navigator.storage?.persist?.().catch(() => {});
   }
@@ -100,6 +126,9 @@
     button.innerHTML = homeIcon + '<span>' + (standalone() ? 'Game icon' : 'Add game icon') + '</span><small id="web-app-menu-status"></small>';
     button.onclick = showAppHelp;
     anchor.before(button);
+    const menuUpdate = document.createElement('button');
+    menuUpdate.id = 'web-app-check-update';menuUpdate.className = 'menu-item';
+    menuUpdate.onclick = updateAction;anchor.before(menuUpdate);
     const library = document.createElement('a');
     library.id = 'web-app-library';
     library.className = 'menu-item';
@@ -128,6 +157,9 @@
   if (!('serviceWorker' in navigator) || !isSecureContext || location.protocol === 'file:') {
     registrationFailed = true; refreshStatus(); return;
   }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdates(); });
+  window.addEventListener('pageshow', () => checkForUpdates());
+  window.addEventListener('online', () => checkForUpdates());
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (applyingUpdate) location.reload();
   });
@@ -145,6 +177,7 @@
     await navigator.serviceWorker.ready;
     offlineReady = true;
     refreshStatus();
+    checkForUpdates();
     if (standalone()) navigator.storage?.persist?.().catch(() => {});
   }).catch(() => { registrationFailed = true; refreshStatus(); });
 })();
