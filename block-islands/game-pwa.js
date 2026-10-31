@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const state = { registration: null, ready: false, failed: false, applying: false };
+  const state = { registration: null, ready: false, failed: false, applying: false, checking: false, notifyInstalled: false };
   const selector = value => Array.from(document.querySelectorAll(value));
   const gameName = () => document.querySelector('meta[name="application-name"]')?.content || document.title.replace(/\s*[|—-].*$/, '').trim() || 'this game';
   const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -85,11 +85,13 @@
     const button = document.querySelector('[data-games-pwa-update]');
     if (!button) return;
     const waiting = !!state.registration?.waiting;
-    button.hidden = !waiting;
-    if (waiting) {
-      button.textContent = 'Save progress and update';
-      button.disabled = state.applying;
-      button.setAttribute('aria-label', 'Save progress and update ' + gameName());
+    button.hidden = isFilePreview() || !('serviceWorker' in navigator) || !window.isSecureContext;
+    button.disabled = state.applying || state.checking || (!waiting && !!state.registration?.installing) || !state.registration;
+    button.textContent = state.applying ? 'Updating…' : waiting ? 'Save progress and update' : state.checking || state.registration?.installing ? 'Checking for updates…' : 'Check for updates';
+    button.setAttribute('aria-label', button.textContent + ' ' + gameName());
+    if (state.notifyInstalled && waiting) {
+      state.notifyInstalled = false;
+      toast('Update ready. Tap Save progress and update.');
     }
     setStatus();
   }
@@ -101,6 +103,30 @@
     state.applying = true;
     toast('Progress saved. Applying update…');
     waiting.postMessage({ type: 'GAMES_PWA_APPLY_UPDATE' });
+  }
+
+  async function checkForUpdates(manual = false) {
+    if (navigator.onLine === false) {
+      if (manual) toast('Could not check for updates. Reconnect and try again; your saves are unchanged.');
+      return;
+    }
+    if (!state.registration || state.checking || state.applying) return;
+    if (state.registration.waiting) { updateControl(); return; }
+    state.checking = true;
+    updateControl();
+    try {
+      await state.registration.update();
+      if (manual) {
+        if (state.registration.waiting) toast('Update ready. Tap Save progress and update.');
+        else if (state.registration.installing) state.notifyInstalled = true;
+        else toast('You are up to date.');
+      }
+    } catch {
+      if (manual) toast('Could not check for updates. Reconnect and try again; your saves are unchanged.');
+    } finally {
+      state.checking = false;
+      updateControl();
+    }
   }
 
   function prepareControls() {
@@ -139,8 +165,15 @@
       update.hidden = true;
       update.className = 'games-pwa-update';
       update.dataset.gamesPwaUpdate = '';
-      update.addEventListener('click', applyUpdate);
-      install.insertAdjacentElement('afterend', update);
+      const updateHost = document.querySelector('[data-game-update-controls]');
+      if (updateHost) updateHost.append(update);
+      else install.insertAdjacentElement('afterend', update);
+    }
+    for (const update of selector('[data-games-pwa-update]')) {
+      if (update.dataset.gamesPwaUpdateBound) continue;
+      update.dataset.gamesPwaUpdateBound = '1';
+      update.classList.add('games-pwa-update');
+      update.addEventListener('click', () => state.registration?.waiting ? applyUpdate() : checkForUpdates(true));
     }
     setStatus();
     updateControl();
@@ -168,6 +201,7 @@
       state.ready = true;
       setStatus();
       updateControl();
+      checkForUpdates();
       if (isStandalone()) navigator.storage?.persist?.().catch(() => {});
     } catch {
       state.failed = true;
@@ -179,6 +213,9 @@
     prepareControls();
     window.addEventListener('game-ready', prepareControls);
     navigator.serviceWorker?.addEventListener('controllerchange', () => { if (state.applying) location.reload(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdates(); });
+    window.addEventListener('pageshow', () => checkForUpdates());
+    window.addEventListener('online', () => checkForUpdates());
     registerWorker();
   }
 
