@@ -26,7 +26,6 @@
     {id:'tempo',name:'Bassbell',role:'wave healer',hp:138,speed:5.3,damage:17,range:8.5,ammo:3,reload:1.18,cooldown:.55,projectile:14,attackKind:'heal',color:'#ecbd49',trim:'#fff9dc',special:'Encore repair',specialKind:'heal',blurb:'Wide sound waves hurt rivals and repair teammates. Special heals your nearby crew.'},
     {id:'gyro',name:'Yo-Yolk',role:'returning-disc duelist',hp:122,speed:6.1,damage:19,range:9,ammo:3,reload:1.25,cooldown:.62,projectile:16,attackKind:'return',color:'#ef83ba',trim:'#fff0fa',special:'Wheelburst',specialKind:'orbit',blurb:'A disc can hit once out and once coming back. Special throws a ring of returning discs.'}
   ];
-  const fighterMap = Object.fromEntries(fighters.map(f => [f.id, f]));
 
   const difficulties = {
     rookie:{name:'Rookie',think:.62,error:.32,lead:0,dodge:0,retreat:.2,gadgets:false,description:'Slower reactions, generous aim and simple positioning.'},
@@ -48,6 +47,9 @@
     tempo:{name:'First-aid chime',cooldown:13,description:'Leave a team healing beacon for 4 seconds.'},
     gyro:{name:'Gyro guard',cooldown:13,description:'Gain a 3-second shield and a brief speed boost.'}
   };
+  const roster=typeof RivetRumbleRoster!=='undefined'?RivetRumbleRoster:require('./roster.js');
+  roster.extend(fighters,gadgets);
+  const fighterMap = Object.fromEntries(fighters.map(f => [f.id, f]));
   const arenaTemplates = [
     { id:'spillway', name:'Spillway Circuit', subtitle:'Water gates & pallet bridges', floor:'#24475a', accent:'#55d9ff', hazards:'rising coolant edges', obstacles:[[-.1,5.4,8.1,2.1], [24,14.5,8.1,2.1], [12.5,8.3,2.5,1.3,true], [17,12.2,2.4,1.3,true], [5.7,15,3.1,1.4], [23.4,5.6,3.1,1.4]] },
     { id:'kiln', name:'Kilnwalk Yard', subtitle:'Warm rails & collapsible stacks', floor:'#56372a', accent:'#ff9c4e', hazards:'glowing slag gutters', obstacles:[[5.2,5.4,4.2,1.5], [22.6,15.1,4.2,1.5], [13.3,4.5,1.8,4.0,true], [16.9,13.5,1.8,4.0,true], [8.5,12,2.2,2.2], [21.3,10,2.2,2.2]] },
@@ -158,7 +160,7 @@
       recordEffect(state,{kind:'blast',x:e.x,z:e.z,color:fighterMap[e.fighter].color,life:.45,maxLife:.45,radius:j.slam?3:1.2});emit(state,'land',{actor:e.id});
     }
   }
-  function nearestEnemy(state,e){let best=null,score=Infinity;for(const q of state.entities)if(q.alive&&q!==e&&teamEnemy(e,q)&&visibleTo(state,e,q)){const value=dist(e,q)-q.cores*.5+(q.hp/q.maxHp)*1.2;if(value<score){score=value;best=q;}}return best;}
+  function nearestEnemy(state,e){let best=null,score=Infinity;for(const q of combatTargets(state))if(q.alive&&q!==e&&teamEnemy(e,q)&&visibleTo(state,e,q)){const value=dist(e,q)-q.cores*.5+(q.hp/q.maxHp)*1.2;if(value<score){score=value;best=q;}}return best;}
   function walkableLine(state,a,b,radius){return !state.arenaData.obstacles.some(o=>o.hp>0&&segmentBox(a.x,a.z,b.x,b.z,{x:o.x-radius,z:o.z-radius,w:o.w+radius*2,h:o.h+radius*2}));}
   function gridPath(state, from, to) {
     const cell=2, cols=16,rows=11, key=(x,z)=>z*cols+x, point=(x,z)=>({x:(x+.5)*cell,z:(z+.5)*cell});
@@ -169,31 +171,68 @@
   }
   function setIntent(state,intent){const p=playerOf(state);if(!p||state.phase!=='playing'||!intent)return false;p.intent.x=clamp(+intent.x||0,-1,1);p.intent.z=clamp(+intent.z||0,-1,1);if(Number.isFinite(intent.heading))p.intent.heading=intent.heading;if(Number.isFinite(intent.range))p.intent.range=clamp(intent.range,.8,fighterMap[p.fighter].specialKind==='leap'?8:fighterMap[p.fighter].range);for(const key of ['fire','special','gadget'])if(Object.hasOwn(intent,key))p.intent[key]=!!intent[key];return true;}
   function requestFire(state){const p=playerOf(state);if(p&&p.alive&&state.phase==='playing'){p.intent.fire=true;return true;}return false;}
-  function quickFire(state){const p=playerOf(state),f=p&&fighterMap[p.fighter];if(!p||!f||!p.alive||state.phase!=='playing')return false;const target=state.entities.filter(e=>e.alive&&!e.jump&&teamEnemy(p,e)&&dist(p,e)<=f.range&&visibleTo(state,p,e)).sort((a,b)=>dist(p,a)-dist(p,b))[0];if(!target)return false;p.intent.heading=Math.atan2(target.z-p.z,target.x-p.x);p.intent.range=dist(p,target);p.intent.fire=true;return{x:target.x,z:target.z};}
+  function quickFire(state){const p=playerOf(state),f=p&&fighterMap[p.fighter];if(!p||!f||!p.alive||state.phase!=='playing')return false;const target=combatTargets(state).filter(e=>e.alive&&!e.jump&&teamEnemy(p,e)&&dist(p,e)<=f.range&&visibleTo(state,p,e)).sort((a,b)=>dist(p,a)-dist(p,b))[0];if(!target)return false;p.intent.heading=Math.atan2(target.z-p.z,target.x-p.x);p.intent.range=dist(p,target);p.intent.fire=true;return{x:target.x,z:target.z};}
   function requestSpecial(state){const p=playerOf(state);if(p&&p.alive&&state.phase==='playing'){p.intent.special=true;return true;}return false;}
   function requestGadget(state){const p=playerOf(state);if(!p||!p.alive||p.gadget>0||state.phase!=='playing')return false;p.intent.gadget=true;return true;}
+  function combatTargets(state){return state.entities.concat(state.fields.filter(f=>f.kind==='turret'&&f.hp>0&&f.life>0));}
+  function addField(state,field){
+    // Three active deployments per owner; replace your oldest before adding another.
+    let own=state.fields.filter(f=>f.owner===field.owner);
+    while(own.length>=3){state.fields.splice(state.fields.indexOf(own[0]),1);own.shift();}
+    if(state.fields.length>=30)return false;
+    state.fields.push(field);return true;
+  }
+  function applyHit(state,target,amount,owner,shot){
+    const before=target.hp;if(!damage(state,target,amount,owner))return false;
+    const dealt=Math.max(0,before-target.hp);
+    if(shot.drain>0&&owner.alive)owner.hp=Math.min(owner.maxHp,owner.hp+dealt*shot.drain);
+    if(target.alive&&target.kind!=='turret'){
+      if(shot.chill>0)target.chill=Math.max(target.chill||0,shot.chill);
+      if(shot.venom>0){target.venom=Math.max(target.venom||0,shot.venom);target.venomDamage=shot.venomDamage||4;target.venomOwner=owner.id;target.venomTick=target.venomTick||.5;}
+      if(shot.pull>0||shot.push>0){const dx=target.x-owner.x,dz=target.z-owner.z,l=Math.hypot(dx,dz)||1,d=(shot.push||0)-(shot.pull||0);for(let i=0;i<8;i++)resolveMove(state,target,dx/l*d/8,dz/l*d/8);}
+    }
+    if(shot.chain>0){let at=target;const hit=new Set([target.id]);for(let i=0;i<shot.chain;i++){
+      const next=combatTargets(state).filter(q=>q.alive&&!q.jump&&q.team!==owner.team&&!hit.has(q.id)&&dist(at,q)<3.4&&clearLine(state,at,q)&&visibleTo(state,owner,q)).sort((a,b)=>dist(at,a)-dist(at,b))[0];if(!next)break;
+      recordEffect(state,{kind:'chain',x:next.x,z:next.z,fromX:at.x,fromZ:at.z,color:'#b5f6ff',life:.22,maxLife:.22,radius:1});
+      applyHit(state,next,amount*.55,owner,{...shot,chain:0});hit.add(next.id);at=next;
+    }}
+    return true;
+  }
   function attack(state,e,angle,kind){
     const f=fighterMap[e.fighter];if(!e.alive||e.jump||kind==='basic'&&e.shot>0)return false;
     if(kind==='basic'){
       if(e.ammo<=0)return false;e.ammo--;e.reload=f.reload;e.shot=f.cooldown;
+      const power=1+e.power*.10,mods={chill:f.chill||0,venom:f.venom||0,venomDamage:f.venom>0?(f.venomDamage||4)*power:0,pull:f.pull||0,push:f.push||0,drain:f.drain||0,chain:f.chain||0,farshot:f.farshot||0,explosive:f.explosive||0};
       if(f.attackKind==='melee'){
-        for(const q of state.entities)if(q.alive&&!q.jump&&teamEnemy(e,q)&&dist(e,q)<f.range&&clearLine(state,e,q)&&Math.cos(Math.atan2(q.z-e.z,q.x-e.x)-angle)>.35)damage(state,q,f.damage*(1+e.power*.10),e);
-        for(const o of state.arenaData.obstacles)if(o.destructible&&o.hp>0){const point={x:clamp(e.x,o.x,o.x+o.w),z:clamp(e.z,o.z,o.z+o.h)};if(dist(e,point)<f.range&&Math.cos(Math.atan2(point.z-e.z,point.x-e.x)-angle)>.35)damageCover(state,o,f.damage*(1+e.power*.10));}
+        for(const q of combatTargets(state))if(q.alive&&!q.jump&&teamEnemy(e,q)&&dist(e,q)<f.range&&clearLine(state,e,q)&&Math.cos(Math.atan2(q.z-e.z,q.x-e.x)-angle)>(f.meleeArc??.35))applyHit(state,q,f.damage*power,e,mods);
+        for(const o of state.arenaData.obstacles)if(o.destructible&&o.hp>0){const point={x:clamp(e.x,o.x,o.x+o.w),z:clamp(e.z,o.z,o.z+o.h)};if(dist(e,point)<f.range&&Math.cos(Math.atan2(point.z-e.z,point.x-e.x)-angle)>.35)damageCover(state,o,f.damage*power);}
         recordEffect(state,{kind:'punch',x:e.x+Math.cos(angle)*1.6,z:e.z+Math.sin(angle)*1.6,color:f.color,life:.22,maxLife:.22,radius:1.5});
-      }else{const count=f.pellets||1;for(let i=0;i<count;i++){const a=angle+(count===1?0:(i-(count-1)/2)*f.spread);spawnShot(state,e,a,f.damage*(1+e.power*.10),f.splash?e.intent.range:f.range,f.projectile,{splash:f.splash||0,arc:!!f.splash,bounce:f.bounce||0,heal:f.attackKind==='heal'?13:0,returning:f.attackKind==='return',patch:f.attackKind==='garden'});}}
+      }else{const count=f.pellets||1;for(let burst=0;burst<(f.burst||1);burst++)for(let i=0;i<count;i++){
+        const a=angle+(count===1?0:(i-(count-1)/2)*f.spread);
+        spawnShot(state,e,a,f.damage*power,f.splash?e.intent.range:f.range,f.projectile,{...mods,delay:burst*.1,splash:f.splash||f.explosive||0,arc:!!f.splash,bounce:f.bounce||0,pierce:f.pierce||0,shotRadius:f.shotRadius||0,heal:f.attackKind==='heal'?13:0,returning:f.attackKind==='return',patch:f.attackKind==='garden'});
+      }}
     }else{const charge=e.special;e.special=0;if(special(state,e,angle,f)===false){e.special=charge;return false;}e.shot=.54;}
     e.lastCombat=state.elapsed;e.reveal=kind==='special'&&f.specialKind==='smoke'?0:1.3;e.recoil=.22;state.stats.shots++;if(e.cpu)state.stats.cpuShots++;return true;
   }
-  function spawnShot(state,e,angle,damageValue,range,speed,extra){const duration=Math.max(.05,range/speed)*(extra.returning?2:1);state.projectiles.push({id:'p'+state.nextId++,owner:e.id,team:e.team,x:e.x+Math.cos(angle)*.7,z:e.z+Math.sin(angle)*.7,prevX:e.x+Math.cos(angle)*.7,prevZ:e.z+Math.sin(angle)*.7,vx:Math.cos(angle)*speed,vz:Math.sin(angle)*speed,damage:damageValue,life:duration,duration,radius:extra.heal>0?.5:.16,splash:extra.splash||0,arc:!!extra.arc,pierce:extra.pierce||0,color:fighterMap[e.fighter].color,hit:[],bounce:extra.bounce||0,heal:extra.heal||0,returning:!!extra.returning,back:false,patch:!!extra.patch});}
+  function spawnShot(state,e,angle,damageValue,range,speed,extra){
+    if(state.projectiles.length>=180)return false;
+    const duration=Math.max(.05,range/speed)*(extra.returning?2:1),shot={id:'p'+state.nextId++,owner:e.id,team:e.team,x:e.x+Math.cos(angle)*.7,z:e.z+Math.sin(angle)*.7,prevX:e.x+Math.cos(angle)*.7,prevZ:e.z+Math.sin(angle)*.7,vx:Math.cos(angle)*speed,vz:Math.sin(angle)*speed,damage:damageValue,life:duration,duration,radius:extra.shotRadius||(extra.heal>0?.5:.16),splash:extra.splash||0,arc:!!extra.arc,pierce:extra.pierce||0,color:fighterMap[e.fighter].color,hit:[],bounce:extra.bounce||0,heal:extra.heal||0,returning:!!extra.returning,back:false,patch:!!extra.patch};
+    for(const key of ['delay','chill','venom','venomDamage','pull','push','drain','chain','farshot','explosive'])if(extra[key]>0)shot[key]=extra[key];
+    state.projectiles.push(shot);return true;
+  }
   function special(state,e,a,f){
+    if(f.specialKind==='turret')return addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:'turret',radius:.55,life:8,maxLife:8,damage:12,shot:0,hp:78,maxHp:78,alive:true,color:f.color});
+    if(f.specialKind==='vortex'){const point=landingPoint(state,e.x+Math.cos(a)*Math.min(6,e.intent.range),e.z+Math.sin(a)*Math.min(6,e.intent.range),.2);if(!point)return false;return addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,...point,kind:'vortex',radius:3,life:4,maxLife:4,damage:9,color:f.color});}
+    if(f.specialKind==='rescue'){for(const q of state.entities)if(q.alive&&q.team===e.team&&dist(e,q)<5.5&&clearLine(state,e,q)){q.hp=Math.min(q.maxHp,q.hp+q.maxHp*.25);q.shield=Math.max(q.shield,2.5);q.haste=Math.max(q.haste,3);}recordEffect(state,{kind:'repair',x:e.x,z:e.z,color:'#beffd3',radius:5.5,life:.7,maxLife:.7});return;}
     if(f.specialKind==='leap')return launch(state,e,e.x+Math.cos(a)*clamp(e.intent.range,.8,8),e.z+Math.sin(a)*clamp(e.intent.range,.8,8),42);
     if(f.specialKind==='ricochet'){for(let i=-2;i<=2;i++)spawnShot(state,e,a+i*.12,22,17,22,{bounce:4});return;}
     if(f.specialKind==='smoke'){cloud(state,e,5,6);return;}
-    if(f.specialKind==='thorns'){const point={x:clamp(e.x+Math.cos(a)*Math.min(6,e.intent.range),1,31),z:clamp(e.z+Math.sin(a)*Math.min(6,e.intent.range),1,21)};state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,...point,kind:'thorns',radius:3.3,life:5,maxLife:5,damage:19,color:f.color});return;}
+    if(f.specialKind==='thorns'){const point={x:clamp(e.x+Math.cos(a)*Math.min(6,e.intent.range),1,31),z:clamp(e.z+Math.sin(a)*Math.min(6,e.intent.range),1,21)};addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,...point,kind:'thorns',radius:3.3,life:5,maxLife:5,damage:19,color:f.color});return;}
     if(f.specialKind==='heal'){for(const q of state.entities)if(q.alive&&q.team===e.team&&dist(e,q)<6&&clearLine(state,e,q))q.hp=Math.min(q.maxHp,q.hp+q.maxHp*.45);recordEffect(state,{kind:'repair',x:e.x,z:e.z,color:'#abffba',radius:6,life:.7,maxLife:.7});return;}
     if(f.specialKind==='orbit'){for(let i=0;i<8;i++)spawnShot(state,e,a+i*TAU/8,21,7,17,{returning:true});return;}
-    emit(state,'special',{actor:e.id,kind:f.specialKind});recordEffect(state,{kind:'special',x:e.x,z:e.z,color:f.color,life:.72,maxLife:.72,radius:1});if(f.specialKind==='pierce'||f.specialKind==='line'){spawnShot(state,e,a,f.specialKind==='line'?48:34,17,28,{pierce:f.specialKind==='line'?6:2});return;}if(f.specialKind==='dash'){e.dash=.28;e.dashAngle=a;e.dashHits=[];return;}if(f.specialKind==='slam'){for(const q of state.entities)if(q.alive&&teamEnemy(e,q)&&dist(e,q)<3.25){damage(state,q,30,e);const d=Math.max(.1,dist(e,q));resolveMove(state,q,(q.x-e.x)/d*1.25,(q.z-e.z)/d*1.25);}return;}if(f.specialKind==='blast'){state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,x:clamp(e.x+Math.cos(a)*5,.5,31.5),z:clamp(e.z+Math.sin(a)*5,.5,21.5),radius:3,life:.18,maxLife:.18,damage:40,once:true,color:f.color});return;}if(f.specialKind==='field')state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,radius:3.2,life:4,maxLife:4,heal:9,damage:7,color:f.color});}
+    emit(state,'special',{actor:e.id,kind:f.specialKind});recordEffect(state,{kind:'special',x:e.x,z:e.z,color:f.color,life:.72,maxLife:.72,radius:1});if(f.specialKind==='pierce'||f.specialKind==='line'){spawnShot(state,e,a,f.specialKind==='line'?48:34,17,28,{pierce:f.specialKind==='line'?6:2});return;}if(f.specialKind==='dash'){e.dash=.28;e.dashAngle=a;e.dashHits=[];return;}if(f.specialKind==='slam'){for(const q of state.entities)if(q.alive&&teamEnemy(e,q)&&dist(e,q)<3.25){damage(state,q,30,e);const d=Math.max(.1,dist(e,q));resolveMove(state,q,(q.x-e.x)/d*1.25,(q.z-e.z)/d*1.25);}return;}if(f.specialKind==='blast'){addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,x:clamp(e.x+Math.cos(a)*5,.5,31.5),z:clamp(e.z+Math.sin(a)*5,.5,21.5),radius:3,life:.18,maxLife:.18,damage:40,once:true,color:f.color});return;}if(f.specialKind==='field')addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,radius:3.2,life:4,maxLife:4,heal:9,damage:7,color:f.color});}
   function damage(state,target,amount,source){
+    if(target.kind==='turret'&&target.hp!==undefined){if(target.hp<=0||amount<=0)return false;const dealt=Math.min(target.hp,amount);target.hp=Math.max(0,target.hp-amount);state.stats.hits++;if(source)source.special=clamp(source.special+dealt/180,0,1);if(target.hp===0){target.alive=false;target.life=0;recordEffect(state,{kind:'burst',x:target.x,z:target.z,color:target.color,radius:1,life:.4,maxLife:.4});}return true;}
     if(!target.alive||target.spawn>0||target.jump&&source!==target||amount<=0)return false;
     amount*=target.shield>0?.55:1;target.hp-=amount;target.hit=.2;target.lastCombat=state.elapsed;target.reveal=1.3;state.stats.hits++;
     if(source&&source!==target)source.special=clamp(source.special+amount/(target.maxHp*2.3),0,1);target.special=clamp(target.special+amount/(target.maxHp*6),0,1);
@@ -201,48 +240,57 @@
     if(target.hp<=0){target.hp=0;kill(state,target,source);}return true;
   }
   function kill(state,target,source){
-    if(!target.alive)return;target.alive=false;target.death=state.mode!=='last'?3.1:0;target.intent.fire=false;target.intent.gadget=false;target.dash=0;target.jump=null;target.airY=target.prevAirY=0;state.stats.deaths++;
+    if(!target.alive)return;target.alive=false;target.death=state.mode!=='last'?3.1:0;target.intent.fire=false;target.intent.gadget=false;target.chill=target.venom=0;target.venomTick=0;target.venomOwner='';target.venomDamage=0;target.dash=0;target.jump=null;target.airY=target.prevAirY=0;state.stats.deaths++;
     for(let i=0;i<target.cores;i++)dropPickup(state,'core',target.x+Math.cos(i*2.4)*.7,target.z+Math.sin(i*2.4)*.7);
     if(target.power>0)dropPickup(state,'cell',target.x,target.z);target.cores=0;target.power=0;target.maxHp=fighterMap[target.fighter].hp;
     recordEffect(state,{kind:'burst',x:target.x,z:target.z,color:fighterMap[target.fighter].color,life:.68,maxLife:.68,radius:1.65});emit(state,'defeat',{target:target.id,source:source&&source.id||''});if(source&&source!==target)source.score++;
   }
-  function blastShot(state,p){const owner=state.entities.find(e=>e.id===p.owner);if(!owner)return;if(p.patch)state.fields.push({id:'f'+state.nextId++,owner:owner.id,team:owner.team,x:clamp(p.x,0,WIDTH),z:clamp(p.z,0,HEIGHT),kind:'thorns',radius:1.6,life:2,maxLife:2,damage:9,color:p.color});for(const q of state.entities)if(q.alive&&!q.jump&&q.team!==p.team&&dist(q,p)<p.splash+q.radius)damage(state,q,p.damage,owner);for(const o of state.arenaData.obstacles)if(o.destructible&&o.hp>0&&p.x>o.x-p.splash&&p.x<o.x+o.w+p.splash&&p.z>o.z-p.splash&&p.z<o.z+o.h+p.splash)damageCover(state,o,p.damage);recordEffect(state,{kind:'blast',x:p.x,z:p.z,color:p.color,life:.45,maxLife:.45,radius:p.splash});}
+  function blastShot(state,p){
+    const owner=state.entities.find(e=>e.id===p.owner);if(!owner)return;
+    if(p.patch)addField(state,{id:'f'+state.nextId++,owner:owner.id,team:owner.team,x:clamp(p.x,0,WIDTH),z:clamp(p.z,0,HEIGHT),kind:'thorns',radius:1.6,life:2,maxLife:2,damage:9,color:p.color});
+    for(const q of combatTargets(state))if(q.alive&&!q.jump&&q.team!==p.team&&dist(q,p)<p.splash+q.radius&&(!p.explosive||clearLine(state,p,q)))applyHit(state,q,p.damage,owner,p);
+    for(const o of state.arenaData.obstacles)if(o.destructible&&o.hp>0&&p.x>o.x-p.splash&&p.x<o.x+o.w+p.splash&&p.z>o.z-p.splash&&p.z<o.z+o.h+p.splash)damageCover(state,o,p.damage);
+    recordEffect(state,{kind:'blast',x:p.x,z:p.z,color:p.color,life:.45,maxLife:.45,radius:p.splash});
+  }
   function damageCover(state,o,amount){o.hp=Math.max(0,o.hp-amount*.72);if(o.hp===0){recordEffect(state,{kind:'rubble',x:o.x+o.w/2,z:o.z+o.h/2,color:state.arenaData.accent,life:.72,maxLife:.72,radius:1.5});dropPickup(state,'cell',o.x+o.w/2,o.z+o.h/2);emit(state,'coverDown',{cover:o.id});}}
   function segmentDistance(a,b,q){const dx=b.x-a.x,dz=b.z-a.z,t=clamp(((q.x-a.x)*dx+(q.z-a.z)*dz)/(dx*dx+dz*dz||1),0,1);return Math.hypot(q.x-a.x-dx*t,q.z-a.z-dz*t);}
   function updateProjectiles(state,dt){for(let i=state.projectiles.length-1;i>=0;i--){
-    const p=state.projectiles[i],old={x:p.x,z:p.z};p.prevX=p.x;p.prevZ=p.z;p.x+=p.vx*dt;p.z+=p.vz*dt;p.life=Math.max(0,p.life-dt);
+    const p=state.projectiles[i];
+    if(p.delay>0){const owner=state.entities.find(e=>e.id===p.owner);if(!owner?.alive||owner.jump){state.projectiles.splice(i,1);continue;}p.delay=Math.max(0,p.delay-dt);if(p.delay>0)continue;const a=Math.atan2(p.vz,p.vx);p.x=p.prevX=owner.x+Math.cos(a)*.7;p.z=p.prevZ=owner.z+Math.sin(a)*.7;owner.recoil=Math.max(owner.recoil,.16);owner.lastCombat=state.elapsed;owner.reveal=1.3;}
+    const old={x:p.x,z:p.z};p.prevX=p.x;p.prevZ=p.z;p.x+=p.vx*dt;p.z+=p.vz*dt;p.life=Math.max(0,p.life-dt);
     if(p.returning&&!p.back&&p.life<=p.duration*.5){p.back=true;p.hit=[];}
     if(p.back){const owner=state.entities.find(e=>e.id===p.owner);if(owner){const a=Math.atan2(owner.z-p.z,owner.x-p.x),speed=Math.hypot(p.vx,p.vz);p.vx=Math.cos(a)*speed;p.vz=Math.sin(a)*speed;if(dist(p,owner)<.7){state.projectiles.splice(i,1);continue;}}}
     let wall=null;if(!p.arc)wall=state.arenaData.obstacles.find(o=>o.hp>0&&o.kind!=='water'&&segmentBox(old.x,old.z,p.x,p.z,o));
-    if(wall){if(wall.destructible)damageCover(state,wall,p.damage);state.stats.wallHits++;
+    if(wall){if(wall.destructible&&!p.explosive)damageCover(state,wall,p.damage);state.stats.wallHits++;
       if(p.bounce>0&&wall.hp>0){const xOnly=segmentBox(old.x,old.z,p.x,old.z,wall),zOnly=segmentBox(old.x,old.z,old.x,p.z,wall);if(xOnly||!zOnly)p.vx=-p.vx;if(zOnly)p.vz=-p.vz;p.x=old.x;p.z=old.z;p.bounce--;wall=null;recordEffect(state,{kind:'spark',x:p.x,z:p.z,color:p.color,life:.2,maxLife:.2,radius:.4});}
     }
     if(!wall&&p.bounce>0&&(p.x<.45||p.x>WIDTH-.45||p.z<.45||p.z>HEIGHT-.45)){if(p.x<.45||p.x>WIDTH-.45)p.vx=-p.vx;if(p.z<.45||p.z>HEIGHT-.45)p.vz=-p.vz;p.x=old.x;p.z=old.z;p.bounce--;state.stats.wallHits++;}
-    if(wall||p.life<=0||p.x<0||p.z<0||p.x>WIDTH||p.z>HEIGHT){if(p.arc&&p.life<=0)blastShot(state,p);state.projectiles.splice(i,1);continue;}
+    if(wall||p.life<=0||p.x<0||p.z<0||p.x>WIDTH||p.z>HEIGHT){if(p.arc&&p.life<=0||p.explosive){if(wall){p.x=old.x;p.z=old.z;}blastShot(state,p);}state.projectiles.splice(i,1);continue;}
     if(p.arc)continue;let consumed=false;
-    for(const e of state.entities)if(e.alive&&!e.jump&&e.id!==p.owner&&(e.team!==p.team||p.heal>0&&e.hp<e.maxHp)&&!p.hit.includes(e.id)&&segmentDistance(old,p,e)<e.radius+p.radius){const owner=state.entities.find(q=>q.id===p.owner);p.hit.push(e.id);if(owner){if(e.team===p.team)e.hp=Math.min(e.maxHp,e.hp+p.heal);else damage(state,e,p.damage,owner);}recordEffect(state,{kind:'spark',x:p.x,z:p.z,color:p.color,life:.26,maxLife:.26,radius:.52});if(p.heal>0){}else if(p.pierce>0)p.pierce--;else if(!p.returning)consumed=true;break;}
+    for(const e of combatTargets(state))if(e.alive&&!e.jump&&e.id!==p.owner&&(e.team!==p.team||p.heal>0&&e.hp<e.maxHp)&&!p.hit.includes(e.id)&&segmentDistance(old,p,e)<e.radius+p.radius){const owner=state.entities.find(q=>q.id===p.owner);p.hit.push(e.id);if(p.explosive){blastShot(state,p);consumed=true;break;}if(owner){if(e.team===p.team)e.hp=Math.min(e.maxHp,e.hp+p.heal);else applyHit(state,e,p.damage*(1+(p.farshot||0)*(1-p.life/p.duration)),owner,p);}recordEffect(state,{kind:'spark',x:p.x,z:p.z,color:p.color,life:.26,maxLife:.26,radius:.52});if(p.heal>0){}else if(p.pierce>0)p.pierce--;else if(!p.returning)consumed=true;break;}
     if(consumed)state.projectiles.splice(i,1);
   }}
-  function cloud(state,e,radius,life){state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:'smoke',radius,life,maxLife:life,color:'#bda6f4'});e.reveal=0;emit(state,'smoke',{actor:e.id});}
+  function cloud(state,e,radius,life){addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:'smoke',radius,life,maxLife:life,color:'#bda6f4'});e.reveal=0;emit(state,'smoke',{actor:e.id});}
   function useGadget(state,e){
-    if(e.gadget>0||!e.alive||e.jump)return false;const f=fighterMap[e.fighter];e.gadget=gadgets[e.fighter].cooldown;e.reveal=1.3;
-    if(f.id==='spark'){e.ammo=f.ammo;e.reload=0;e.haste=3;}
-    if(f.id==='anvil')e.shield=4;
-    if(f.id==='knuckle'){e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3);e.shield=2;}
-    if(f.id==='echo'){e.ammo=f.ammo;e.reload=0;e.haste=2.5;}
-    if(f.id==='shroud')cloud(state,e,3.5,3);
-    if(f.id==='gyro'){e.shield=3;e.haste=2;}
-    if(f.id==='briar'||f.id==='tempo')state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:f.id==='briar'?'turret':'repair',radius:3,life:f.id==='briar'?5:4,maxLife:f.id==='briar'?5:4,heal:f.id==='tempo'?14:0,shot:0,color:f.color});
-    if(f.id==='vector'){for(let i=0;i<10;i++)resolveMove(state,e,Math.cos(e.heading)*.35,Math.sin(e.heading)*.35);e.shield=1.5;}
-    if(['mortar','lumen','rail'].includes(f.id))state.fields.push({id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:f.id==='mortar'?'turret':f.id==='rail'?'mine':'repair',radius:f.id==='rail'?2.2:3,life:f.id==='mortar'?5:4,maxLife:f.id==='mortar'?5:4,damage:f.id==='rail'?38:0,heal:f.id==='lumen'?14:0,arm:f.id==='rail'?.5:0,shot:0,color:f.color});
+    if(e.gadget>0||!e.alive||e.jump)return false;const f=fighterMap[e.fighter],kit=f.gadgetKind||f.id;e.gadget=gadgets[e.fighter].cooldown;e.reveal=1.3;
+    if(kit==='spark'){e.ammo=f.ammo;e.reload=0;e.haste=3;}
+    if(kit==='anvil')e.shield=4;
+    if(kit==='knuckle'){e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3);e.shield=2;}
+    if(kit==='echo'){e.ammo=f.ammo;e.reload=0;e.haste=2.5;}
+    if(kit==='shroud')cloud(state,e,3.5,3);
+    if(kit==='gyro'){e.shield=3;e.haste=2;}
+    if(kit==='briar'||kit==='tempo')addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:kit==='briar'?'turret':'repair',radius:3,life:kit==='briar'?5:4,maxLife:kit==='briar'?5:4,heal:kit==='tempo'?14:0,shot:0,color:f.color});
+    if(kit==='vector'){for(let i=0;i<10;i++)resolveMove(state,e,Math.cos(e.heading)*.35,Math.sin(e.heading)*.35);e.shield=1.5;}
+    if(['mortar','lumen','rail'].includes(kit))addField(state,{id:'f'+state.nextId++,owner:e.id,team:e.team,x:e.x,z:e.z,kind:kit==='mortar'?'turret':kit==='rail'?'mine':'repair',radius:kit==='rail'?2.2:3,life:kit==='mortar'?5:4,maxLife:kit==='mortar'?5:4,damage:kit==='rail'?38:0,heal:kit==='lumen'?14:0,arm:kit==='rail'?.5:0,shot:0,color:f.color});
     state.stats.gadgets++;recordEffect(state,{kind:'gadget',x:e.x,z:e.z,color:'#a9ffb4',life:.6,maxLife:.6,radius:1.4});emit(state,'gadget',{actor:e.id,name:gadgets[e.fighter].name});return true;
   }
   function updateFields(state,dt){for(let i=state.fields.length-1;i>=0;i--){
     const f=state.fields[i],owner=state.entities.find(e=>e.id===f.owner)||state.entities.find(e=>e.team===f.team);f.life-=dt;if(!owner){state.fields.splice(i,1);continue;}
     if(f.kind==='smoke'){if(f.life<=0)state.fields.splice(i,1);continue;}
-    if(f.kind==='turret'){f.shot=Math.max(0,f.shot-dt);const target=state.entities.filter(e=>e.alive&&e.team!==f.team&&dist(e,f)<8&&visibleTo(state,{...f,reveal:0},e)).sort((a,b)=>dist(f,a)-dist(f,b))[0];if(target&&f.shot===0){const angle=Math.atan2(target.z-f.z,target.x-f.x);spawnShot(state,{...owner,x:f.x,z:f.z},angle,10,8,18,{});f.shot=.7;}}
+    if(f.kind==='turret'){f.shot=Math.max(0,f.shot-dt);const target=state.entities.filter(e=>e.alive&&e.team!==f.team&&dist(e,f)<8&&visibleTo(state,{...f,reveal:0},e)).sort((a,b)=>dist(f,a)-dist(f,b))[0];if(target&&f.shot===0){const angle=Math.atan2(target.z-f.z,target.x-f.x);spawnShot(state,{...owner,x:f.x,z:f.z},angle,f.damage||10,8,18,{});f.shot=.7;}}
     else if(f.kind==='mine'){f.arm=Math.max(0,f.arm-dt);if(f.arm===0&&state.entities.some(e=>e.alive&&e.team!==f.team&&dist(e,f)<f.radius&&clearLine(state,f,e))){for(const e of state.entities)if(e.alive&&e.team!==f.team&&dist(e,f)<f.radius&&clearLine(state,f,e))damage(state,e,f.damage,owner);f.life=0;recordEffect(state,{kind:'blast',x:f.x,z:f.z,radius:f.radius,color:f.color,life:.4,maxLife:.4});}}
-    else for(const e of state.entities)if(e.alive&&!e.jump&&dist(e,f)<f.radius&&clearLine(state,f,e)){const friendly=e.team===f.team;if(f.once){if(!friendly)damage(state,e,f.damage,owner);}else if(friendly)e.hp=clamp(e.hp+(f.heal||0)*dt,0,e.maxHp);else damage(state,e,(f.damage||0)*dt,owner);}
+    else for(const e of state.entities)if(e.alive&&!e.jump&&dist(e,f)<f.radius&&clearLine(state,f,e)){
+      if(f.kind==='vortex'&&e.team!==f.team){const dx=f.x-e.x,dz=f.z-e.z,l=Math.hypot(dx,dz)||1;resolveMove(state,e,dx/l*dt*1.3,dz/l*dt*1.3);e.chill=Math.max(e.chill||0,.2);}const friendly=e.team===f.team;if(f.once){if(!friendly)damage(state,e,f.damage,owner);}else if(friendly)e.hp=clamp(e.hp+(f.heal||0)*dt,0,e.maxHp);else damage(state,e,(f.damage||0)*dt,owner);}
     if(f.once)f.damage=0;
     if(f.life<=0)state.fields.splice(i,1);
   }}
@@ -267,24 +315,25 @@
     if(state.mode==='rush'&&state.elapsed>=state.coreAt){dropPickup(state,'core',16+Math.sin(state.coreAt)*1.4,11+Math.cos(state.coreAt)*1.1);state.coreAt+=2.1;}
   }
   function think(state,e){
-    const f=fighterMap[e.fighter],skill=difficulties[e.team==='blue'?'standard':state.difficulty],target=nearestEnemy(state,e),well={x:16,z:11};let goal=well;
+    const f=fighterMap[e.fighter],skill=difficulties[e.team==='blue'?'standard':state.difficulty],well={x:16,z:11};let target=nearestEnemy(state,e),goal=well;
+    if(f.attackKind==='heal'&&e.hp>e.maxHp*.5){const ally=state.entities.filter(q=>q!==e&&q.alive&&q.team===e.team&&q.hp<q.maxHp*.65&&dist(e,q)<f.range&&clearLine(state,e,q)).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp)[0];if(ally&&(!target||dist(e,target)>3))target=ally;}
     const supplies=state.pickups.filter(p=>dist(e,p)<9&&(p.kind==='core'&&state.mode==='rush'||p.kind==='repair'&&e.hp<e.maxHp*.7||p.kind==='cell'&&e.power<6||p.kind==='charge'&&e.special<.7)).sort((a,b)=>dist(e,a)-dist(e,b));
     if(supplies.length)goal=supplies[0];else if(target)goal=target;
     if(state.mode==='foundry'&&(e.hp>e.maxHp*skill.retreat||!target)){const slot=state.entities.filter(q=>q.team===e.team).indexOf(e);goal={x:16+(slot-1)*1.35,z:e.team==='blue'?12:10};if(solidAt(state,goal.x,goal.z,e.radius)){for(let i=0;i<12;i++){const a=(i+slot*4)/12*TAU,candidate={x:16+Math.cos(a)*2.1,z:11+Math.sin(a)*2.1};if(!solidAt(state,candidate.x,candidate.z,e.radius)){goal=candidate;break;}}}}
     if(state.mode==='rush'&&e.cores>=4&&state.holdTeam===e.team)goal={x:16+(Number(e.id.slice(-1))||0)*3,z:e.team==='blue'?17:5};
     if(e.ammo===0)e.ai.reloading=true;if(e.ammo>=Math.min(2,f.ammo))e.ai.reloading=false;
     if(e.hp/e.maxHp<skill.retreat)e.ai.recover=true;if(e.hp/e.maxHp>.76)e.ai.recover=false;
-    if(target&&e.ai.recover){const covers=[];for(const o of state.arenaData.obstacles)if(o.hp>0&&o.kind!=='water')for(const point of [{x:o.x-.9,z:o.z+o.h/2},{x:o.x+o.w+.9,z:o.z+o.h/2},{x:o.x+o.w/2,z:o.z-.9},{x:o.x+o.w/2,z:o.z+o.h+.9}])if(!solidAt(state,point.x,point.z,e.radius)&&!clearLine(state,target,point)&&dist(e,point)<10)covers.push(point);covers.sort((a,b)=>dist(e,a)-dist(e,b));goal=covers[0]||{x:clamp(e.x+(e.x-target.x)*.45,1,31),z:clamp(e.z+(e.z-target.z)*.45,1,21)};}
+    if(target&&target.team!==e.team&&e.ai.recover){const covers=[];for(const o of state.arenaData.obstacles)if(o.hp>0&&o.kind!=='water')for(const point of [{x:o.x-.9,z:o.z+o.h/2},{x:o.x+o.w+.9,z:o.z+o.h/2},{x:o.x+o.w/2,z:o.z-.9},{x:o.x+o.w/2,z:o.z+o.h+.9}])if(!solidAt(state,point.x,point.z,e.radius)&&!clearLine(state,target,point)&&dist(e,point)<10)covers.push(point);covers.sort((a,b)=>dist(e,a)-dist(e,b));goal=covers[0]||{x:clamp(e.x+(e.x-target.x)*.45,1,31),z:clamp(e.z+(e.z-target.z)*.45,1,21)};}
     if(state.difficulty==='rookie'&&e.team!=='blue'&&target&&!e.ai.recover)goal=target;
     e.ai.target=target?.id||null;e.ai.goal={x:goal.x,z:goal.z};e.ai.path=walkableLine(state,e,goal,e.radius)?[]:gridPath(state,e,goal);e.ai.at=0;
     let point=e.ai.path.find(p=>dist(e,p)>.8)||goal,dx=point.x-e.x,dz=point.z-e.z;
     if(target){const d=dist(e,target),flight=d/f.projectile;
       e.intent.heading=Math.atan2(target.z+target.vz*flight*skill.lead-e.z,target.x+target.vx*flight*skill.lead-e.x)+(rng(state)-.5)*skill.error;
-      e.intent.range=clamp(d,.8,f.specialKind==='leap'?8:f.range);e.ai.fire=d<f.range&&e.ammo>0&&!e.ai.reloading&&!e.ai.recover;e.intent.special=e.special>=1&&d<Math.min(f.specialKind==='leap'?8:f.range,f.specialKind==='dash'?5.5:8);
-      if(goal===target&&d<f.range*.7){const side=Math.sin(state.elapsed*1.4+state.entities.indexOf(e))>0?1:-1;dx=-(target.z-e.z)*side;dz=(target.x-e.x)*side;if(d<2.4){dx-=target.x-e.x;dz-=target.z-e.z;}}
+      e.intent.range=clamp(d,.8,f.specialKind==='leap'?8:f.range);e.ai.fire=d<f.range&&e.ammo>0&&!e.ai.reloading&&!e.ai.recover;e.intent.special=e.special>=1&&(target.team!==e.team||['heal','field','rescue'].includes(f.specialKind))&&d<Math.min(f.specialKind==='leap'?8:f.range,f.specialKind==='dash'?5.5:8);
+      if(goal===target&&target.team!==e.team&&d<f.range*.7){const side=Math.sin(state.elapsed*1.4+state.entities.indexOf(e))>0?1:-1;dx=-(target.z-e.z)*side;dz=(target.x-e.x)*side;if(d<2.4){dx-=target.x-e.x;dz-=target.z-e.z;}}
       if(skill.gadgets&&e.gadget===0&&(e.hp<e.maxHp*.65||d<f.range*.7))e.intent.gadget=true;
     }else e.ai.fire=false;
-    if(skill.dodge&&(state.mode!=='foundry'||dist(e,well)>3.2)){const incoming=state.projectiles.find(p=>p.team!==e.team&&!p.arc&&segmentDistance(p,{x:p.x+p.vx*.4,z:p.z+p.vz*.4},e)<1&&Math.hypot(p.x-e.x,p.z-e.z)<7);if(incoming){const side=(e.x-incoming.x)*incoming.vz-(e.z-incoming.z)*incoming.vx>0?1:-1;dx+=incoming.vz*.12*side*skill.dodge;dz-=incoming.vx*.12*side*skill.dodge;}}
+    if(skill.dodge&&(state.mode!=='foundry'||dist(e,well)>3.2)){const incoming=state.projectiles.find(p=>!(p.delay>0)&&p.team!==e.team&&!p.arc&&segmentDistance(p,{x:p.x+p.vx*.4,z:p.z+p.vz*.4},e)<1&&Math.hypot(p.x-e.x,p.z-e.z)<7);if(incoming){const side=(e.x-incoming.x)*incoming.vz-(e.z-incoming.z)*incoming.vx>0?1:-1;dx+=incoming.vz*.12*side*skill.dodge;dz-=incoming.vx*.12*side*skill.dodge;}}
     if(state.mode==='last'&&Math.hypot(e.x-16,(e.z-11)*1.23)>state.ring-1.5){dx=16-e.x;dz=11-e.z;}
     if(!e.ai.recover&&e.jumpLock===0){const goalDistance=dist(e,goal);const pad=state.arenaData.pads.find(p=>dist(e,p)<8&&dist(e,p)+Math.hypot(p.toX-goal.x,p.toZ-goal.z)+1.5<goalDistance&&walkableLine(state,e,p,e.radius));if(pad){dx=pad.x-e.x;dz=pad.z-e.z;}}
     const length=Math.hypot(dx,dz)||1,magnitude=Math.min(1,length*1.7);e.intent.x=dx/length*magnitude;e.intent.z=dz/length*magnitude;
@@ -292,13 +341,15 @@
   function updateEntity(state,e,dt){
     e.prevX=e.x;e.prevZ=e.z;e.prevAirY=e.airY;const f=fighterMap[e.fighter];for(const key of ['shot','recoil','hit','spawn','gadget','shield','haste','reveal','jumpLock'])e[key]=Math.max(0,e[key]-dt);
     if(!e.alive){if(state.mode!=='last'){e.death-=dt;if(e.death<=0){const slot=state.entities.filter(q=>q.team===e.team).indexOf(e),point=safeSpot(state,e.team,slot);e.x=point.x;e.z=point.z;e.prevX=e.x;e.prevZ=e.z;e.vx=e.vz=0;e.hp=e.maxHp;e.ammo=f.ammo;e.reload=0;e.alive=true;e.spawn=1.1;e.death=0;e.lastCombat=state.elapsed;e.shield=0;e.haste=0;emit(state,'respawn',{actor:e.id});}}return;}
+    if(e.chill>0)e.chill=Math.max(0,e.chill-dt);
+    if(e.venom>0){e.venom=Math.max(0,e.venom-dt);e.venomTick=Math.max(0,(e.venomTick||0)-dt);if(e.venomTick===0){const source=state.entities.find(q=>q.id===e.venomOwner);if(source)damage(state,e,e.venomDamage||4,source);e.venomTick=.5;}if(!e.alive)return;}
     if(e.jump){fly(state,e,dt);return;}
     if(e.ammo<f.ammo){e.reload=Math.max(0,e.reload-dt);if(e.reload===0){e.ammo++;e.reload=e.ammo<f.ammo?f.reload:0;}}else e.reload=0;
     if(state.elapsed-e.lastCombat>3)e.hp=clamp(e.hp+e.maxHp*.10*dt,0,e.maxHp);
-    if(e.cpu){const skill=difficulties[e.team==='blue'?'standard':state.difficulty];e.ai.think-=dt;if(e.ai.think<=0){think(state,e);e.ai.think=skill.think*(.9+rng(state)*.2);}const target=state.entities.find(q=>q.id===e.ai.target);e.intent.fire=!!(e.ai.fire&&target?.alive&&visibleTo(state,e,target)&&dist(e,target)<f.range);
+    if(e.cpu){const skill=difficulties[e.team==='blue'?'standard':state.difficulty];e.ai.think-=dt;if(e.ai.think<=0){think(state,e);e.ai.think=skill.think*(.9+rng(state)*.2);}const target=combatTargets(state).find(q=>q.id===e.ai.target);e.intent.fire=!!(e.ai.fire&&target?.alive&&visibleTo(state,e,target)&&dist(e,target)<f.range);
       if(Math.hypot(e.x-e.ai.lastX,e.z-e.ai.lastZ)<.03)e.ai.stuck+=dt;else e.ai.stuck=0;e.ai.lastX=e.x;e.ai.lastZ=e.z;if(e.ai.stuck>2&&!e.intent.fire){e.ai.path=[];e.ai.think=0;e.ai.stuck=0;state.stats.stuck++;}
     }
-    const input=e.intent;if(Number.isFinite(input.heading))e.heading=input.heading;const length=Math.max(1,Math.hypot(input.x,input.z)),speed=f.speed*(e.haste>0?1.25:1),dash=e.dash>0;
+    const input=e.intent;if(Number.isFinite(input.heading))e.heading=input.heading;const length=Math.max(1,Math.hypot(input.x,input.z)),speed=f.speed*(e.haste>0?1.25:1)*(e.chill>0?.65:1),dash=e.dash>0;
     e.vx=between(e.vx,dash?Math.cos(e.dashAngle)*18:input.x/length*speed,Math.min(1,dt*18));e.vz=between(e.vz,dash?Math.sin(e.dashAngle)*18:input.z/length*speed,Math.min(1,dt*18));e.dash=Math.max(0,e.dash-dt);
     resolveMove(state,e,e.vx*dt,e.vz*dt);if(dash)for(const q of state.entities)if(q.alive&&!q.jump&&q.team!==e.team&&!e.dashHits.includes(q.id)&&dist(e,q)<e.radius+q.radius+.25){e.dashHits.push(q.id);damage(state,q,30,e);}e.walk+=Math.hypot(e.vx,e.vz)*dt*1.5;
     const pad=e.jumpLock===0&&state.arenaData.pads.find(p=>dist(e,p)<.8);if(pad&&launch(state,e,pad.toX,pad.toZ,0,pad.id))return;
@@ -348,21 +399,26 @@
       if(!number(e.prevX,0,WIDTH)||!number(e.prevZ,0,HEIGHT)||!number(e.x,0,WIDTH)||!number(e.z,0,HEIGHT)||!number(e.vx,-40,40)||!number(e.vz,-40,40)||!number(e.heading,-20,20)||e.radius!==.62||!integer(e.ammo,0,f.ammo)||!number(e.reload,0,2)||!number(e.shot,0,2)||!number(e.special,0,1)||!number(e.walk,0,10000)||!integer(e.score,0,1000)||!number(e.dashAngle,-20,20)||!number(e.lastCombat,0,v.elapsed+.01))return false;
       if(!number(e.jumpLock,0,2)||!number(e.airY,0,4)||!number(e.prevAirY,0,4))return false;
       if(e.jump!==null){const j=e.jump;if(!j||!e.alive||!number(j.fromX,0,WIDTH)||!number(j.fromZ,0,HEIGHT)||!number(j.toX,0,WIDTH)||!number(j.toZ,0,HEIGHT)||j.duration!==.9||!number(j.time,0,.9)||!number(j.slam,0,50)||!['','launch-blue','launch-red'].includes(j.pad)||solidAt(v,j.toX,j.toZ,e.radius)||Math.hypot(e.x-between(j.fromX,j.toX,j.time/j.duration),e.z-between(j.fromZ,j.toZ,j.time/j.duration))>.001||Math.abs(e.airY-Math.sin(j.time/j.duration*Math.PI)*3.8)>.001)return false;}else if(e.airY!==0)return false;
+      if(!['chill','venom','venomDamage','venomTick'].every(k=>e[k]===undefined||number(e[k],0,k==='venomDamage'?20:4))||e.venomOwner!==undefined&&e.venomOwner!==''&&!ids.has(e.venomOwner))return false;
       if(!list(e.dashHits,8)||!e.dashHits.every(id=>ids.has(id)))return false;
       if(!['recoil','hit','dash','spawn','death','shield','haste','reveal','gadget'].every(k=>number(e[k],0,k==='gadget'?30:8)))return false;
       if(!e.intent||!number(e.intent.x,-1,1)||!number(e.intent.z,-1,1)||!number(e.intent.heading,-20,20)||!number(e.intent.range,.8,14)||!['fire','special','gadget'].every(k=>typeof e.intent[k]==='boolean'))return false;
       if(!e.ai||!list(e.ai.path,180)||!number(e.ai.think,-1,2)||!number(e.ai.stuck,0,4)||!number(e.ai.lastX,0,WIDTH)||!number(e.ai.lastZ,0,HEIGHT)||!['fire','reloading','recover'].every(k=>typeof e.ai[k]==='boolean')||!e.ai.path.every(p=>p&&number(p.x,0,WIDTH)&&number(p.z,0,HEIGHT)))return false;
     }
     const colorSafe=c=>typeof c==='string'&&/^#[0-9a-fA-F]{6}$/.test(c);
-    for(const p of v.projectiles)if(!p||!ids.has(p.owner)||typeof p.id!=='string'||typeof p.team!=='string'||!number(p.prevX,-2,WIDTH+2)||!number(p.prevZ,-2,HEIGHT+2)||!number(p.x,-2,WIDTH+2)||!number(p.z,-2,HEIGHT+2)||!number(p.vx,-40,40)||!number(p.vz,-40,40)||!number(p.damage,0,100)||!number(p.life,0,20)||!number(p.duration,.00001,20)||p.life>p.duration||!number(p.radius,.01,2)||!number(p.splash,0,4)||!integer(p.bounce,0,4)||!number(p.heal,0,30)||!['returning','back','patch'].every(k=>typeof p[k]==='boolean')||!integer(p.pierce,0,8)||typeof p.arc!=='boolean'||!colorSafe(p.color)||!list(p.hit,8)||!p.hit.every(id=>ids.has(id)))return false;
-    for(const f of v.fields)if(!f||typeof f.id!=='string'||typeof f.team!=='string'||!number(f.x,0,WIDTH)||!number(f.z,0,HEIGHT)||!number(f.radius,.1,8)||!number(f.life,0,8)||!number(f.maxLife,.1,8)||!colorSafe(f.color)||f.kind&&!['turret','mine','repair','smoke','thorns'].includes(f.kind)||f.owner&&!ids.has(f.owner)||f.damage!==undefined&&!number(f.damage,0,100)||f.heal!==undefined&&!number(f.heal,0,30)||f.arm!==undefined&&!number(f.arm,0,1)||f.shot!==undefined&&!number(f.shot,0,2))return false;
+    for(const p of v.projectiles)if(!p||!ids.has(p.owner)||typeof p.id!=='string'||typeof p.team!=='string'||!number(p.prevX,-2,WIDTH+2)||!number(p.prevZ,-2,HEIGHT+2)||!number(p.x,-2,WIDTH+2)||!number(p.z,-2,HEIGHT+2)||!number(p.vx,-40,40)||!number(p.vz,-40,40)||!number(p.damage,0,100)||!number(p.life,0,20)||!number(p.duration,.00001,20)||p.life>p.duration||!number(p.radius,.01,2)||!number(p.splash,0,4)||!integer(p.bounce,0,4)||!number(p.heal,0,30)||!['returning','back','patch'].every(k=>typeof p[k]==='boolean')||!integer(p.pierce,0,8)||typeof p.arc!=='boolean'||!colorSafe(p.color)||!list(p.hit,40)||!p.hit.every(id=>ids.has(id)||typeof id==='string'&&/^f[1-9][0-9]*$/.test(id)&&Number(id.slice(1))<v.nextId))return false;
+    for(const p of v.projectiles)if(!['delay','chill','venom','venomDamage','pull','push','drain','chain','farshot','explosive'].every(k=>p[k]===undefined||number(p[k],0,k==='venomDamage'?20:k==='pull'||k==='push'?3:k==='chain'?3:4)))return false;
+    for(const p of v.projectiles)if(p.chain!==undefined&&!integer(p.chain,0,3)||p.drain!==undefined&&!number(p.drain,0,1)||p.farshot!==undefined&&!number(p.farshot,0,1.5))return false;
+    for(const f of v.fields)if(!f||typeof f.id!=='string'||typeof f.team!=='string'||!number(f.x,0,WIDTH)||!number(f.z,0,HEIGHT)||!number(f.radius,.1,8)||!number(f.life,0,8)||!number(f.maxLife,.1,8)||!colorSafe(f.color)||f.kind&&!['turret','mine','repair','smoke','thorns','vortex'].includes(f.kind)||f.owner&&!ids.has(f.owner)||f.damage!==undefined&&!number(f.damage,0,100)||f.heal!==undefined&&!number(f.heal,0,30)||f.arm!==undefined&&!number(f.arm,0,1)||f.shot!==undefined&&!number(f.shot,0,2))return false;
+    for(const f of v.fields)if(f.hp!==undefined&&(typeof f.id!=='string'||!/^f[1-9][0-9]*$/.test(f.id)||Number(f.id.slice(1))>=v.nextId||ids.has(f.id)||v.fields.filter(q=>q.id===f.id).length!==1||f.alive!==(f.hp>0)||f.hp>0&&f.life<=0||f.kind!=='turret'||!number(f.hp,0,100)||!number(f.maxHp,1,100)||f.hp>f.maxHp||typeof f.alive!=='boolean'||f.radius!==.55))return false;
     for(const p of v.pickups)if(!p||typeof p.id!=='string'||!['cell','core','repair','haste','charge'].includes(p.kind)||!number(p.x,0,WIDTH)||!number(p.z,0,HEIGHT)||!number(p.life,0,120))return false;
     for(const effect of v.effects)if(!effect||!number(effect.x,-2,WIDTH+2)||!number(effect.z,-2,HEIGHT+2)||!number(effect.life,0,2)||!number(effect.maxLife,.01,2)||!number(effect.radius,0,8)||effect.amount!==undefined&&!number(effect.amount,0,1000)||!colorSafe(effect.color))return false;
+    for(const effect of v.effects)if(effect.kind==='chain'&&(!number(effect.fromX,0,WIDTH)||!number(effect.fromZ,0,HEIGHT)))return false;
     for(const event of v.events)if(!event||!integer(event.id,1,v.nextId)||!number(event.at,0,v.elapsed)||typeof event.type!=='string')return false;
     return true;
   }
   function validateSnapshot(value){try{return validateCurrentSnapshot(value)}catch{return false;}}
   function restore(value){if(!validateSnapshot(value))throw Error('That match backup is incomplete or unsafe.');const state=value.version===1?migrateLegacy(value):value.version===2?migrateV2(value):copy(value);if(!validateSnapshot(state))throw Error('That older match could not be migrated safely.');return state;}
   function runCpuMatch(options){const state=createMatch(Object.assign({},options,{fighter:'spark'}));playerOf(state).cpu=true;for(let i=0;i<4200&&state.phase==='playing';i++)step(state);return state;}
-  return { VERSION, STEP, WIDTH, HEIGHT, fighters, fighterMap, arenas, modes, difficulties, gadgets, visibleTo, inBrush, inSmoke, arenaForLayout, createMatch, setIntent, requestFire, quickFire, requestSpecial, requestGadget, tick, step, snapshot, restore, validateSnapshot, runCpuMatch, gridPath, walkableLine, clearLine, solidAt };
+  return { VERSION, STEP, WIDTH, HEIGHT, fighters, fighterMap, classes:roster.classes, arenas, modes, difficulties, gadgets, visibleTo, inBrush, inSmoke, arenaForLayout, createMatch, setIntent, requestFire, quickFire, requestSpecial, requestGadget, tick, step, snapshot, restore, validateSnapshot, runCpuMatch, gridPath, walkableLine, clearLine, solidAt };
 });

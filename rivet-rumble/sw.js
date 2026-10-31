@@ -2,9 +2,9 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:rivet-rumble:";
-const RELEASE = "9be243fd9905ba277cee";
+const RELEASE = "692907f3fe9fa986230f";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
-const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
+const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./roster.js","./style.css"];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
