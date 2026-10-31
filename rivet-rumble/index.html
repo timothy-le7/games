@@ -33,14 +33,13 @@
     <section id="menu" class="panel menu-panel" aria-labelledby="menuTitle">
       <p class="eyebrow">LOCAL CPU SPORT</p>
       <h1 id="menuTitle">Rivet <em>Rumble</em></h1>
-      <p class="lede">Twelve distinct fighters. Six battlegrounds. Fair offline CPU crews. Pick your loadout and fight for the objective.</p>
+      <p class="lede">120 distinct fighters. Six battlegrounds. Fair offline CPU crews. Pick your loadout and fight for the objective.</p>
       <div class="launch-controls" data-game-update-controls><button id="startButton" class="start-button" type="button">Start Foundry Hold</button>
       <button id="newMatchButton" class="start-button hidden" type="button">Start new match with selected crew</button></div>
       <details class="tutorial"><summary>Move · Aim · Fire · Gadget <span>Controls + match rules</span></summary><p>Left stick to move; drag and release the right stick to aim/fire. AUTO FIRE targets visible rivals. SPECIAL uses your hit-charged ability; GADGET uses your machine’s reusable cooldown tool. Desktop: WASD/arrows move, pointer/left click fire, F quick fire, Q/Space/right click Special, E/G Gadget, P/Escape pause. Ammo refills one slot at a time. Stop attacking and avoid damage for 3 seconds to repair. Brush conceals distant opponents until they attack; water blocks movement but not shots. Walk onto a yellow jump pad to vault cover; its dotted route ends at your landing ring. You cannot shoot or collect supplies in flight. Green power cells raise health and attack; white crosses heal. Survival smoke damages everyone outside the clear ring. Violet team smoke hides distant teammates until they attack.</p></details>
       <div class="mode-row" id="modeRow" role="group" aria-label="Mode"></div>
       <div class="choice-label">CPU difficulty</div><div class="difficulty-row" id="difficultyRow" role="group" aria-label="CPU difficulty"></div><p id="difficultyNote" class="difficulty-note"></p>
-      <div class="choice-label">Choose a machine</div>
-      <div class="roster" id="roster" aria-label="Fighter roster"></div>
+      <div class="choice-label">Fighter</div><button id="chooseFighter" class="choose-fighter" type="button" aria-label="Choose fighter"><span id="selectedCrew" class="selected-crew"></span><span id="chooseCrewCount" class="choose-crew-count"></span></button>
       <div class="choice-label">Arena <span id="arenaName"></span></div>
       <div class="arena-row" id="arenaRow" role="group" aria-label="Arena"></div>
       <div id="loadout" class="loadout"></div><p id="savedMatchNote" class="saved-match-note"></p>
@@ -66,7 +65,14 @@
     </section>
     <input id="importFile" type="file" accept="application/json,.json" hidden>
   </main>
-  <script src="engine.js"></script><script src="hd-scene.js"></script><script src="renderer.js"></script><script src="game.js"></script>
+    <section id="crewPicker" class="crew-picker hidden" role="dialog" aria-modal="true" aria-labelledby="crewPickerTitle">
+    <header class="crew-picker-header"><div><p class="eyebrow">FULL COLLECTION</p><h2 id="crewPickerTitle">Choose your fighter <span id="rosterCount"></span></h2></div><button id="closeCrewPicker" type="button" aria-label="Close fighter collection">Back</button></header>
+      <label class="roster-search">Find a fighter<input id="fighterSearch" type="search" placeholder="Name, role or ability" autocomplete="off"></label>
+      <div id="fighterFilters" class="fighter-filters" role="group" aria-label="Fighter classes"></div>
+      <div class="roster" id="roster" aria-label="Fighter roster"></div>
+  </section>
+<script src="roster.js"></script>
+<script src="engine.js"></script><script src="hd-scene.js"></script><script src="renderer.js"></script><script src="game.js"></script>
 <script data-games-pwa-runtime src="./game-pwa.js"></script>
 </body>
 </html>

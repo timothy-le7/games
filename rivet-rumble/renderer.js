@@ -149,56 +149,67 @@
   };
   function teamColor(e){return e.team==='blue'?C.blue:e.team==='red'?C.red:e.id==='player'?C.solo:'#c18bff';}
   Renderer.prototype.robot=function(state,e){
-    if(!e.alive)return;const observer=state.entities.find(q=>q.id==='player');if(observer&&!RivetRumbleEngine.visibleTo(state,observer,e))return;const f=RivetRumbleEngine.fighterMap[e.fighter],heavy=['anvil','knuckle'].includes(f.id),slim=['vector','shroud'].includes(f.id),tint=e.hit>0?'#fff3db':f.color,trim=f.trim,team=teamColor(e),dark='#203747',metal='#607b8b',x=e.x,z=e.z,r=Math.PI/2-e.heading,c=Math.cos(r),s=Math.sin(r),walk=Math.sin(e.walk),moving=Math.min(1,Math.hypot(e.vx,e.vz)/2),bob=Math.abs(walk)*.035*moving,width=heavy?1.15:slim?.72:f.id==='tempo'?1.08:f.id==='briar'?.93:.86;
+    if(!e.alive)return;const observer=state.entities.find(q=>q.id==='player');if(observer&&!RivetRumbleEngine.visibleTo(state,observer,e))return;const f=RivetRumbleEngine.fighterMap[e.fighter],shape=f.model||f.id,heavy=['anvil','knuckle'].includes(shape),slim=['vector','shroud'].includes(shape),tint=e.hit>0?'#fff3db':f.color,trim=f.trim,team=teamColor(e),dark='#203747',metal='#607b8b',x=e.x,z=e.z,r=Math.PI/2-e.heading,c=Math.cos(r),s=Math.sin(r),walk=Math.sin(e.walk),moving=Math.min(1,Math.hypot(e.vx,e.vz)/2),bob=Math.abs(walk)*.035*moving,width=heavy?1.15:slim?.72:shape==='tempo'?1.08:shape==='briar'?.93:.86;
     const d=(name,lx,y,lz,sx,sy,sz,col,rx=0,ry=0,rz=0,glow=0,cast=true)=>this.part(name,x+lx*c+lz*s,y+bob+(e.airY||0),z-lx*s+lz*c,sx,sy,sz,col,r+ry,rx,rz,glow,cast);
     this.part('disc',x,.014,z,1.7,1,1.38,color('#102c40',.22),0,0,0,0,false);
     this.part('torus',x,.04,z,1.65,1.65,.23,team,0,-Math.PI/2,0,.25,false);
     // Separate ankle pivots, boots, knee plates and hip cylinders create a readable gait.
     for(const sign of [-1,1]){const step=walk*sign*.14*moving;d('box',sign*width*.3,.21,.08+step,.36,.28,.6,dark);d('box',sign*width*.3,.33,.23+step,.31,.13,.24,trim);d('cylinder',sign*width*.3,.52,step,.19,.45,.19,metal);d('box',sign*width*.3,.67,.12+step,.30,.33,.28,tint,step);d('sphere',sign*width*.3,.85,0,.26,.26,.26,dark);}
-    d('box',0,.98,0,width*.92,.26,.61,dark);if(['briar','gyro','echo'].includes(f.id))d('cylinder',0,1.38,0,width,.85,.78,f.id==='briar'?'#9d6948':tint);else d('box',0,1.38,0,width,.72,.72,tint);if(f.id==='tempo'){d('cylinder',0,1.4,.45,.6,.2,.6,dark,Math.PI/2);d('torus',0,1.4,.57,.5,.5,.15,trim,0,0,0,.2);}else d('box',0,1.48,.39,width*.76,.33,.12,trim);d('box',0,1.45,.46,width*.5,.15,.025,team,0,0,0,.55);
+    d('box',0,.98,0,width*.92,.26,.61,dark);if(['briar','gyro','echo'].includes(shape))d('cylinder',0,1.38,0,width,.85,.78,shape==='briar'?'#9d6948':tint);else d('box',0,1.38,0,width,.72,.72,tint);if(shape==='tempo'){d('cylinder',0,1.4,.45,.6,.2,.6,dark,Math.PI/2);d('torus',0,1.4,.57,.5,.5,.15,trim,0,0,0,.2);}else d('box',0,1.48,.39,width*.76,.33,.12,trim);d('box',0,1.45,.46,width*.5,.15,.025,team,0,0,0,.55);
     for(const sign of [-1,1]){d('sphere',sign*(width*.64),1.58,0,.36,.38,.38,metal);d('box',sign*(width*.67),1.63,.02,heavy?.53:.35,.33,.48,tint);d('cylinder',sign*(width*.65),1.28,.03,.2,.4,.2,dark);d('box',sign*(width*.64),1.12,.19,.29,.29,.37,trim);d('sphere',sign*width*.37,1.7,.39,.075,.075,.045,metal);}
     d('cylinder',0,1.85,0,.29,.22,.29,metal);
-    if(f.id==='mortar'){d('sphere',0,2.17,0,.86,.65,.8,tint);d('cylinder',0,2.47,0,.95,.12,.85,trim);d('cylinder',0,2.59,-.04,.38,.17,.38,dark);}
-    else if(['lumen','tempo'].includes(f.id)){d('sphere',0,2.18,0,.79,.64,.74,tint);d('torus',0,2.6,0,.98,.98,.16,trim,-Math.PI/2,0,0,.18);}
-    else if(f.id==='shroud'){d('cone',0,2.3,-.05,1.2,.9,1.1,tint);d('box',0,2.12,.28,.69,.34,.3,dark);d('box',0,1.1,-.44,1.15,1.35,.13,tint,.2);}
-    else if(f.id==='briar'){d('sphere',0,2.15,0,.8,.7,.8,trim);for(let i=0;i<5;i++)d('cone',Math.sin(i*1.4)*.28,2.66,Math.cos(i*1.4)*.28,.3,.7,.24,tint,0,i*1.4,.4);}
-    else if(f.id==='echo'){d('sphere',0,2.17,0,.87,.8,.79,tint);d('torus',0,2.17,.37,.59,.59,.15,trim,0,0,0,.2);}
-    else if(f.id==='gyro'){d('cylinder',0,2.2,0,.88,.7,.88,tint);d('torus',0,2.56,0,1.04,1.04,.2,trim,-Math.PI/2,0,0,.2);}
+    if(shape==='mortar'){d('sphere',0,2.17,0,.86,.65,.8,tint);d('cylinder',0,2.47,0,.95,.12,.85,trim);d('cylinder',0,2.59,-.04,.38,.17,.38,dark);}
+    else if(['lumen','tempo'].includes(shape)){d('sphere',0,2.18,0,.79,.64,.74,tint);d('torus',0,2.6,0,.98,.98,.16,trim,-Math.PI/2,0,0,.18);}
+    else if(shape==='shroud'){d('cone',0,2.3,-.05,1.2,.9,1.1,tint);d('box',0,2.12,.28,.69,.34,.3,dark);d('box',0,1.1,-.44,1.15,1.35,.13,tint,.2);}
+    else if(shape==='briar'){d('sphere',0,2.15,0,.8,.7,.8,trim);for(let i=0;i<5;i++)d('cone',Math.sin(i*1.4)*.28,2.66,Math.cos(i*1.4)*.28,.3,.7,.24,tint,0,i*1.4,.4);}
+    else if(shape==='echo'){d('sphere',0,2.17,0,.87,.8,.79,tint);d('torus',0,2.17,.37,.59,.59,.15,trim,0,0,0,.2);}
+    else if(shape==='gyro'){d('cylinder',0,2.2,0,.88,.7,.88,tint);d('torus',0,2.56,0,1.04,1.04,.2,trim,-Math.PI/2,0,0,.2);}
     else{d('box',0,2.16,0,heavy?.94:.76,heavy?.61:.55,.71,trim);d('box',0,2.48,-.03,.57,.12,.53,tint);}
     d('box',0,2.17,.37,heavy?.75:.61,.27,.09,dark);
-    if(f.id==='rail')d('sphere',0,2.18,.44,.25,.22,.12,team,0,0,0,.8);
+    if(shape==='rail')d('sphere',0,2.18,.44,.25,.22,.12,team,0,0,0,.8);
     else for(const sign of [-1,1])d('box',sign*.16,2.19,.428,.12,.075,.035,team,0,0,0,.9);
     d('box',0,2.02,.422,.21,.035,.025,metal);d('cylinder',-.25,2.64,-.14,.065,.24,.065,dark);d('sphere',-.25,2.79,-.14,.115,.115,.115,team,0,0,0,.65);
     // Back-mounted power pack, fins and a role-specific weapon all face engine heading.
     d('box',0,1.52,-.46,.59,.68,.32,dark);for(const sign of [-1,1]){d('cylinder',sign*.2,1.5,-.64,.17,.50,.17,tint);d('box',sign*.2,1.6,-.74,.1,.29,.035,team,0,0,0,.3);}
     const recoil=e.recoil||0;
-    if(f.id==='anvil'){
+    if(shape==='anvil'){
       for(const sign of [-1,1]){d('box',sign*.67,1.33,.53,.52,.48,.65,tint);d('box',sign*.67,1.34,.87,.43,.28,.08,trim);for(const u of [-1,1])d('cylinder',sign*.67+u*.105,1.34,.94,.14,.2,.14,dark,Math.PI/2);}
       d('box',0,1.08,.38,.91,.25,.16,trim);
-    }else if(f.id==='mortar'){
+    }else if(shape==='mortar'){
       d('cylinder',.55,1.49,.74,.55,1,.55,dark,Math.PI/2-.2);d('cylinder',.55,1.6,1.18,.65,.16,.65,tint,Math.PI/2-.2);d('cylinder',.55,1.63,1.26,.4,.05,.4,'#142638',Math.PI/2-.2);d('sphere',.55,1.67,1.27,.19,.19,.08,team,0,0,0,.65);
-    }else if(f.id==='vector'){
+    }else if(shape==='vector'){
       for(const sign of [-1,1]){d('box',sign*.58,1.26,.69,.24,.23,.88,dark);d('box',sign*.58,1.3,.83,.12,.08,.72,team,0,0,0,.5);d('cylinder',sign*.58,1.26,1.17,.27,.13,.27,trim,Math.PI/2);d('box',sign*.83,1.61,-.3,.60,.08,.4,trim,0,0,sign*.3);}
-    }else if(f.id==='lumen'){
+    }else if(shape==='lumen'){
       d('box',.51,1.32,.8,.33,.28,.96,dark);for(const sign of [-1,1])d('cylinder',.51+sign*.2,1.37,1.04,.13,.63,.13,trim,Math.PI/2);d('sphere',.51,1.37,1.35,.31,.31,.31,team,0,0,0,.8);d('torus',0,2.73,0,.47,.47,.13,team,-Math.PI/2,0,0,.5);
-    }else if(f.id==='knuckle'){
+    }else if(shape==='knuckle'){
       for(const sign of [-1,1]){const punch=sign>0?recoil*2:0;d('box',sign*.82,1.36,.55+punch,.69,.65,.84,tint);d('box',sign*.82,1.38,1+punch,.6,.5,.14,trim);for(let k=0;k<3;k++)d('cylinder',sign*.82-.19+k*.19,1.42,1.11+punch,.12,.12,.12,dark,Math.PI/2);}
       d('cylinder',0,1.4,-.65,.52,.8,.52,trim);d('cone',0,.92,-.65,.36,.6,.36,'#ffae64',Math.PI,0,0,.7);
-    }else if(f.id==='shroud'){
+    }else if(shape==='shroud'){
       for(const sign of [-1,1]){d('box',sign*.6,1.22,.7,.17,.22,.55,dark);d('cone',sign*.6,1.25,1.13,.25,.7,.1,trim,Math.PI/2);d('box',sign*.42,2.29,-.42,.3,.08,.9,tint,.2,sign*.2);}
-    }else if(f.id==='briar'){
+    }else if(shape==='briar'){
       d('sphere',0,1.45,-.55,.8,1,.65,'#754e39');for(const sign of [-1,1])d('cone',sign*.27,1.9,-.65,.3,.7,.2,tint,0,0,sign*.5);d('cylinder',.55,1.37,.8,.5,.9,.5,'#77594b',Math.PI/2-.3);d('sphere',.55,1.55,1.25,.45,.4,.4,tint);
-    }else if(f.id==='tempo'){
+    }else if(shape==='tempo'){
       for(const sign of [-1,1]){d('box',sign*.63,1.36,.58,.47,.8,.43,dark);d('torus',sign*.63,1.41,.82,.4,.4,.12,trim,0,0,0,.1);d('sphere',sign*.63,1.41,.83,.2,.2,.05,tint,0,0,0,.3);}d('torus',0,2.8,0,.9,.9,.15,'#91ffce',-Math.PI/2,0,0,.45);
-    }else if(f.id==='gyro'){
+    }else if(shape==='gyro'){
       d('torus',.65,1.35,.8,.9,.9,.24,trim,0,this.time*3,0,.3);d('sphere',.65,1.35,.8,.35,.35,.35,tint);d('box',-.6,1.35,.5,.3,.3,.55,dark);
-    }else if(f.id==='echo'){
+    }else if(shape==='echo'){
       d('cylinder',.55,1.33,.8,.55,1.1,.55,dark,Math.PI/2);for(let i=0;i<3;i++)d('torus',.55,1.33,.5+i*.31,.64,.64,.14,tint,0,0,0,.4);d('sphere',.55,1.33,1.42,.3,.3,.3,trim,0,0,0,.6);
     }else{
-      const rail=f.id==='rail',length=rail?1.62:.95;d('box',.5,1.32,.83-recoil*.12,.30,.28,length,dark);d('box',.5,1.49,.96,.19,.07,length*.87,trim);d('cylinder',.5,1.32,.83+length*.5,.34,.16,.34,tint,Math.PI/2);d('cylinder',.5,1.32,.94+length*.5,.19,.07,.19,team,Math.PI/2,0,0,.65);
+      const rail=shape==='rail',length=rail?1.62:.95;d('box',.5,1.32,.83-recoil*.12,.30,.28,length,dark);d('box',.5,1.49,.96,.19,.07,length*.87,trim);d('cylinder',.5,1.32,.83+length*.5,.34,.16,.34,tint,Math.PI/2);d('cylinder',.5,1.32,.94+length*.5,.19,.07,.19,team,Math.PI/2,0,0,.65);
       if(rail){d('cylinder',.5,1.64,.61,.21,.43,.21,metal,Math.PI/2);d('sphere',.5,1.64,.86,.17,.17,.07,team,0,0,0,.7);}else for(let i=0;i<3;i++)d('box',.68,1.35,.58+i*.16,.04,.18,.06,trim);
     }
-    if(e.recoil>.015&&f.attackKind!=='melee'){const mz=f.id==='rail'?1.75:f.id==='mortar'?1.3:f.id==='vector'?1.2:1.38;d('sphere',f.id==='anvil'?.67:.51,1.32,mz,.16,.16,.32,'#fff6b3',0,0,0,1.1,false);}
+    if(e.recoil>.015&&f.attackKind!=='melee'){const mz=shape==='rail'?1.75:shape==='mortar'?1.3:shape==='vector'?1.2:1.38;d('sphere',shape==='anvil'?.67:.51,1.32,mz,.16,.16,.32,'#fff6b3',0,0,0,1.1,false);}
+    if(f.variant!==undefined){
+      const v=f.variant;
+      if(v===0){for(const sign of [-1,1])d('cone',sign*.37,2.62,-.04,.24,.46,.22,trim,0,0,sign*.3);}
+      if(v===1){d('torus',0,2.62,0,1.08,1.08,.15,tint,-Math.PI/2);for(const sign of [-1,1])d('box',sign*.52,2.4,-.08,.43,.15,.4,trim,0,0,sign*.18);}
+      if(v===2){for(const sign of [-1,1]){d('box',sign*.63,1.72,-.3,.38,.6,.42,dark);d('cylinder',sign*.63,1.78,-.53,.19,.4,.19,trim);}}
+      if(v===3){for(let i=0;i<3;i++)d('cone',-.24+i*.24,2.64,0,.22,.5+(i%2)*.12,.22,'#a9edff',0,0,(i-1)*.2);}
+      if(v===4){for(const sign of [-1,1]){d('cylinder',sign*.44,1.3,-.66,.29,.75,.29,'#c6ed8b');d('box',sign*.44,1.4,-.82,.17,.28,.03,dark);}}
+      if(v===5){d('torus',0,2.65,0,.94,.94,.16,'#ffc2dd',-Math.PI/2);d('sphere',0,2.71,0,.35,.22,.35,'#ffdeeb',0,0,0,.3);}
+    }
+    if(e.chill>0)this.part('torus',x,.11,z,2.15,2.15,.12,'#a4e6ff',0,-Math.PI/2,0,.3,false);
+    if(e.venom>0)for(let i=0;i<3;i++){const a=this.time*2+i*TAU/3;this.part('sphere',x+Math.cos(a)*.65,1.7+Math.sin(a)*.3,z+Math.sin(a)*.65,.13,.18,.13,'#caec84',0,0,0,.25,false);}
     // Elevated health plate is attached to a body already visible in the scene.
     const player=state.entities.find(a=>a.id==='player');if(e.id==='player'||player&&(e.team===player.team||RivetRumbleEngine.visibleTo(state,player,e))){const ratio=clamp(e.hp/e.maxHp,0,1);this.part('box',x,(e.airY||0)+3.12,z,1.55,.17,.22,'#183242',0,0,0,0,false);this.part('box',x-(1-ratio)*.69,(e.airY||0)+3.22,z+.015,Math.max(.015,1.38*ratio),.10,.24,team,0,0,0,.25,false);if(e.id==='player')this.part('cone',x,(e.airY||0)+3.61+Math.sin(this.time*3)*.04,z,.29,.34,.29,'#fdf7d4',0,Math.PI,0,.18,false);}
     for(let i=0;i<f.ammo;i++)this.part('box',x+(i-(f.ammo-1)/2)*.28,2.96+(e.airY||0),z+.03,.22,.08,.18,i<e.ammo?'#ffd875':'#3e5263',0,0,0,i<e.ammo?.2:0,false);
@@ -237,20 +248,23 @@
         else d('gear',x,.69+bob,z,.43,.12,.43,c,this.time*.7,0,0,.45);
       }
     }
-    for(const p of state.projectiles){const x=(p.prevX??p.x)+(p.x-(p.prevX??p.x))*alpha,z=(p.prevZ??p.z)+(p.z-(p.prevZ??p.z))*alpha,r=Math.PI/2-Math.atan2(p.vz,p.vx),phase=1-clamp((p.life+(1-alpha)*RivetRumbleEngine.STEP)/p.duration,0,1),y=p.arc?1.1+Math.sin(phase*Math.PI)*3.5:1.32;
+    for(const p of state.projectiles){if(p.delay>0)continue;const x=(p.prevX??p.x)+(p.x-(p.prevX??p.x))*alpha,z=(p.prevZ??p.z)+(p.z-(p.prevZ??p.z))*alpha,r=Math.PI/2-Math.atan2(p.vz,p.vx),phase=1-clamp((p.life+(1-alpha)*RivetRumbleEngine.STEP)/p.duration,0,1),y=p.arc?1.1+Math.sin(phase*Math.PI)*3.5:1.32;
+      if(p.chill>0)d('cone',x,y,z,.42,.65,.35,'#c4f4ff',r,Math.PI/2);if(p.venom>0)d('sphere',x,y,z,.4,.4,.4,'#cbe58a',0,0,0,.3,false);if(p.explosive>0)d('box',x,y,z,.32,.32,.65,p.color,r);
       if(p.heal>0)d('torus',x,y,z,1,1,.15,color('#a7ffd3',.8),r,0,0,.6,false);if(p.returning)d('torus',x,y,z,.72,.72,.2,p.color,this.time*8,0,0,.4,false);
       d('sphere',x,y,z,p.arc?.48:.27,p.arc?.48:.27,p.arc?.48:.27,'#fff8e1',0,0,0,1,false);d('box',x-p.vx*.018,y-.02,z-p.vz*.018,.16,.12,.75,color(p.color,.75),r,0,0,.9,false);
     }
-    for(const f of state.fields){const q=f.life/f.maxLife,owner=state.entities.find(e=>e.id===f.owner),observer=state.entities.find(e=>e.id==='player');if(f.kind==='mine'&&observer&&f.team!==observer.team&&!RivetRumbleEngine.clearLine(state,observer,f))continue;
+    for(const f of state.fields){const q=f.life/f.maxLife,owner=state.entities.find(e=>e.id===f.owner),observer=state.entities.find(e=>e.id==='player');if(f.hp!==undefined&&observer&&!RivetRumbleEngine.visibleTo(state,observer,f))continue;if(f.kind==='mine'&&observer&&f.team!==observer.team&&!RivetRumbleEngine.clearLine(state,observer,f))continue;
       d('disc',f.x,.03,f.z,f.radius*2,1,f.radius*2,color(f.color,.13+.13*q),0,0,0,.2,false);d('torus',f.x,.08,f.z,f.radius*2,f.radius*2,.2,color(f.color,.8*q),0,-Math.PI/2,0,.5,false);
+      if(f.kind==='vortex'){for(let i=0;i<4;i++){const a=this.time*2+i*TAU/4;d('box',f.x+Math.cos(a)*f.radius*.6,.2+i*.12,f.z+Math.sin(a)*f.radius*.6,.16,.12,1.1,f.color,-a,0,0,.3,false);}continue;}
       if(f.kind==='smoke'){for(let i=0;i<13;i++){const a=i*2.4+this.time*.12,r=Math.sqrt((i+.5)/13)*f.radius;d('sphere',f.x+Math.cos(a)*r,.8+Math.sin(i*3)*.3,f.z+Math.sin(a)*r,1.7,1.5,1.7,color(f.color,.22),0,0,0,0,false);}continue;}
       if(f.kind==='thorns')for(let i=0;i<9;i++){const a=i*2.4,r=Math.sqrt(i/9)*f.radius;d('cone',f.x+Math.cos(a)*r,.4,f.z+Math.sin(a)*r,.38,.8,.38,'#a6dc72',0,0,.1);}
       if(f.kind==='turret'){const target=state.entities.filter(e=>e.alive&&e.team!==f.team&&Math.hypot(e.x-f.x,e.z-f.z)<8&&RivetRumbleEngine.visibleTo(state,f,e)).sort((a,b)=>Math.hypot(a.x-f.x,a.z-f.z)-Math.hypot(b.x-f.x,b.z-f.z))[0],angle=target?Math.PI/2-Math.atan2(target.z-f.z,target.x-f.x):this.time;
-        d('cylinder',f.x,.3,f.z,.85,.55,.85,'#394f68');d('sphere',f.x,.95,f.z,.75,.65,.75,f.color);d('box',f.x+Math.sin(angle)*.4,1,f.z+Math.cos(angle)*.4,.19,.2,.85,'#e5e5f5',angle);d('sphere',f.x,1.35,f.z,.18,.18,.18,'#a5ffdf',0,0,0,.7);}
+        d('cylinder',f.x,.3,f.z,.85,.55,.85,'#394f68');d('sphere',f.x,.95,f.z,.75,.65,.75,f.color);d('box',f.x+Math.sin(angle)*.4,1,f.z+Math.cos(angle)*.4,.19,.2,.85,'#e5e5f5',angle);d('sphere',f.x,1.35,f.z,.18,.18,.18,'#a5ffdf',0,0,0,.7);if(f.hp!==undefined){d('box',f.x,1.7,f.z,1,.12,.16,'#183242',0,0,0,0,false);d('box',f.x-(1-f.hp/f.maxHp)*.43,1.78,f.z,.86*f.hp/f.maxHp,.06,.17,f.team===observer?.team?C.blue:C.red,0,0,0,.15,false);}}
       else if(f.kind==='mine'){d('cylinder',f.x,.18,f.z,.8,.25,.8,'#3b4b61');d('sphere',f.x,.38,f.z,.24,.16,.24,f.arm>0?'#fff6aa':'#ffa0a8',0,0,0,.8);}
       else if(f.kind==='repair'){d('cylinder',f.x,.4,f.z,.6,.7,.6,'#3c795c');d('box',f.x,.9,f.z,.5,.13,.18,'#b4ffbe',0,0,0,.6);d('box',f.x,.9,f.z,.13,.5,.18,'#b4ffbe',0,0,0,.6);}
     }
     for(const e of state.effects){const q=clamp(e.life/e.maxLife,0,1),r=(e.radius||.4)*(1.2-q*.25),burst=['blast','burst','special'].includes(e.kind);
+      if(e.kind==='chain'){const dx=e.x-e.fromX,dz=e.z-e.fromZ,a=Math.atan2(dx,dz);d('box',(e.x+e.fromX)/2,1.4,(e.z+e.fromZ)/2,.10,.10,Math.hypot(dx,dz),color('#c8f9ff',q),a,0,0,.8,false);}
       d('torus',e.x,.12,e.z,r*2,r*2,.15,color(e.color||'#fff',q*.7),0,-Math.PI/2,0,.7,false);
       if(burst){d('sphere',e.x,.8,e.z,r*q,r*q,r*q,color('#fff5c4',q*.7),0,0,0,.8,false);for(let i=0;i<3;i++){const a=i*2.1;d('sphere',e.x+Math.cos(a)*r*.4*(1-q),.7+(1-q)*.6,e.z+Math.sin(a)*r*.4*(1-q),r*.75*q,r*.8*q,r*.75*q,color(e.color,q*.5),0,0,0,.3,false);}}
       for(let i=0;i<6;i++){const a=i/6*TAU;d('box',e.x+Math.cos(a)*r*(1-q),.3+(1-q)*1.1,e.z+Math.sin(a)*r*(1-q),.07*q,.25*q,.07*q,e.color||'#fff',a,0,this.time,.6,false);}
