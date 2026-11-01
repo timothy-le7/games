@@ -135,3 +135,5 @@ h3 { margin: 24px 0 8px; }
 #next-card-art .painted-portrait { border-radius:7px; }
 
 .hand-shortcut{display:none}@media(pointer:fine){.hand-shortcut{display:block;position:absolute;left:6px;top:6px;z-index:2;min-width:20px;padding:2px 4px;border:1px solid #9bd3e0;border-radius:5px;background:#132b43e8;color:#fff;font:700 12px system-ui;text-align:center}}
+
+.defense-portrait{display:grid;place-items:center;background:linear-gradient(145deg,#3d6580,#182d40)}.defense-portrait svg{height:100%;width:100%;object-fit:contain}

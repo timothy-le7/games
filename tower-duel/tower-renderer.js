@@ -191,6 +191,7 @@
       for(const c of calls)if(c[13]){const copy=c.slice();copy[11]*=this.shadowTarget?.30:1;this.drawMesh(...copy);}
       this.drawModels(calls,groups);
       for(const c of calls)if(!c[13]&&c[11]!=null&&c[11]<1)this.drawMesh(...c);
+      for(const c of match.casts||[]){const x=(c.x-500)/115,z=(c.y-700)/100,t=1-c.left/c.duration;this.drawMesh('sphere',x,4.6*(1-t)+.2,z,.22,.22,.22,'#ffd27a',0,0,0,.95);this.drawMesh('ring',x,.04,z,1.12,1,1.12,TEAM_LIGHT[c.side],0,0,0,.35);}
       for(const projectile of match.projectiles)this.drawProjectile(projectile,match);
       if(!options.reducedEffects)for(const effect of match.effects)this.drawEffect(effect);
       if(options.dragPreview&&options.dragPreview.inside)this.drawGhost(options.dragPreview,match);
@@ -338,7 +339,7 @@
         }
       }
     }
-    drawPlacement(match,options){const id=options.dragPreview?options.dragPreview.id:options.selectedCard;if(!id)return;const card=this.engine.cardMap[id],z=card.kind==='spell'?0:3.75;this.drawMesh('box',0,.065,z,4.32,.018,card.kind==='spell'?7:3.2,card.kind==='spell'?'#f6d36d':'#55e1bf',0,0,0,.17);if(card.kind==='unit')for(const lane of [0,1]){const tower=match.towers.find(item=>item.side==='enemy'&&item.type==='lane'&&item.lane===lane);if(tower&&!tower.alive)this.drawMesh('box',lane===0?-2.05:2.05,.07,-2.02,1.72,.02,1.37,'#55e1bf',0,0,0,.19);}if(options.dragPreview&&options.dragPreview.inside){const point=options.dragPreview.world,x=(point.x-500)/115,wz=(point.y-700)/100,legal=this.engine.legalPlacement(match,'player',card,point.x,point.y),radius=Math.max(.38,(card.radius||card.size*1.8)/108);this.drawMesh('ring',x,.11,wz,radius,1,radius,legal.ok?'#c2ffea':'#ff8e83',0,0,0,.92);}}
+    drawPlacement(match,options){const id=options.dragPreview?options.dragPreview.id:options.selectedCard;if(!id)return;const card=this.engine.cardMap[id],z=card.kind==='spell'?0:3.75;this.drawMesh('box',0,.065,z,4.32,.018,card.kind==='spell'?7:3.2,card.kind==='spell'?'#f6d36d':'#55e1bf',0,0,0,.17);if(card.kind!=='spell')for(const lane of [0,1]){const tower=match.towers.find(item=>item.side==='enemy'&&item.type==='lane'&&item.lane===lane);if(tower&&!tower.alive)this.drawMesh('box',lane===0?-2.05:2.05,.07,-2.02,1.72,.02,1.37,'#55e1bf',0,0,0,.19);}if(options.dragPreview&&options.dragPreview.inside){const point=options.dragPreview.world,x=(point.x-500)/115,wz=(point.y-700)/100,legal=this.engine.legalPlacement(match,'player',card,point.x,point.y),radius=Math.max(.38,(card.radius||card.size*1.8)/108);this.drawMesh('ring',x,.11,wz,radius,1,radius,legal.ok?'#c2ffea':'#ff8e83',0,0,0,.92);}}
     drawTower(t){
       const x=(t.x-500)/115,z=(t.y-700)/100,side=t.side,team=TEAM[side],light=TEAM_LIGHT[side],base=t.type==='base',s=base?1.12:.88,flash=Math.min(1,(t.hit||0)*6),face=side==='player'?-1:1;
       this.shadow(x+.12,z+.15,s*.95,.42);
@@ -372,7 +373,17 @@
       p('cylinder',0,.08,-.36-recoil*.12,.09,.28,.09,'#657477',Math.PI/2);p('cylinder',0,.08,-.62-recoil*.12,.13,.07,.13,'#d3ac60',Math.PI/2);p('cylinder',0,.08,-.70-recoil*.12,.075,.02,.075,'#263238',Math.PI/2);
     }
     hpBar(x,y,z,ratio,side,width){this.drawMesh('box',x,y,z,.5*width,.035,.045,'#172233');this.drawMesh('box',x-(1-ratio)*.5*width,y+.008,z-.003,.48*width*ratio,.045,.055,TEAM[side]);}
-    drawUnit(u,match,ghostAlpha){const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,yaw=(u.heading||-Math.PI/2)+Math.PI/2,s=Math.max(.74,card.size/34),fly=u.flying?.66+Math.sin(match.time*5+String(u.id).length)*.08:0,bob=Math.sin(u.walk||0)*.035,surface=Math.abs(z)<.62&&Math.abs(Math.abs(x)-LANE_X)<.9?SURFACE.bridge:Math.abs(Math.abs(x)-LANE_X)<.76?SURFACE.path:SURFACE.grass,o=[x,surface+.30*s+fly+bob,z],a=ghostAlpha==null?1:ghostAlpha,flash=Math.min(1,(u.hit||0)*6),attack=(u.attackAnim||0)>0?Math.sin((1-u.attackAnim/.24)*Math.PI):0;this.shadow(x,z,.28+s*.22,u.flying?.18:.32);if(MODEL_GROUPS.golem.includes(card.id))this.drawGolem(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.beast.includes(card.id))this.drawBeast(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.flying.includes(card.id))this.drawFlying(card,u,o,yaw,s,attack,a,flash,match.time);else this.drawFighter(card,u,o,yaw,s,attack,a,flash);this.drawTeamMark(o,yaw,s,u.side,a,!!u.flying);if(ghostAlpha==null){if(u.deploy>0){const progress=Math.min(1,u.deploy/(match.rulesVersion===2?1:.58)),radius=(.42+s*.20)*(1+progress*.14);this.drawMesh('ring',x,surface+.014,z,radius,1,radius,TEAM_LIGHT[u.side],0,0,0,.3+progress*.4);}this.hpBar(x,o[1]+1.47*s,z,u.hp/u.maxHp,u.side,.46+s*.16);if(u.slow>0)this.drawMesh('ring',x,.06,z,.34+s*.16,1,.34+s*.16,'#ef9de9',0,0,0,.7);}}
+    drawDefense(u,match,alpha){
+      const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,c=card.color,yaw=(u.heading||0)+Math.PI/2,a=alpha==null?1:alpha;
+      this.shadow(x,z,.57,.34);this.drawMesh('box',x,.21,z,.83,.37,.83,'#364758',0,0,0,a);
+      this.drawMesh('box',x,.43,z,.68,.16,.68,c,0,0,0,a);
+      for(const dx of [-.3,.3])for(const dz of [-.3,.3])this.drawMesh('box',x+dx,.54,z+dz,.16,.33,.16,'#d1dac3',0,0,0,a);
+      this.drawMesh('cylinder',x,.69,z,.31,.3,.31,c,0,0,0,a);
+      const bx=Math.sin(yaw)*.24,bz=Math.cos(yaw)*.24;this.drawMesh('box',x+bx,.78,z+bz,.16,.16,.65,'#314559',yaw,0,0,a);
+      this.drawMesh('ring',x,.89,z,.19,1,.19,TEAM_LIGHT[u.side],0,0,0,a);
+      if(alpha==null){this.hpBar(x,1.16,z,u.hp/u.maxHp,u.side,.56);if(u.deploy>0)this.drawMesh('ring',x,.04,z,.65,1,.65,TEAM_LIGHT[u.side],0,0,0,.6);}
+    }
+    drawUnit(u,match,ghostAlpha){if(this.engine.cardMap[u.cardId].kind==='building'){this.drawDefense(u,match,ghostAlpha);return;}const card=this.engine.cardMap[u.cardId],x=(u.x-500)/115,z=(u.y-700)/100,yaw=(u.heading||-Math.PI/2)+Math.PI/2,s=Math.max(.74,card.size/34),fly=u.flying?.66+Math.sin(match.time*5+String(u.id).length)*.08:0,bob=Math.sin(u.walk||0)*.035,surface=Math.abs(z)<.62&&Math.abs(Math.abs(x)-LANE_X)<.9?SURFACE.bridge:Math.abs(Math.abs(x)-LANE_X)<.76?SURFACE.path:SURFACE.grass,o=[x,surface+.30*s+fly+bob,z],a=ghostAlpha==null?1:ghostAlpha,flash=Math.min(1,(u.hit||0)*6),attack=(u.attackAnim||0)>0?Math.sin((1-u.attackAnim/.24)*Math.PI):0;this.shadow(x,z,.28+s*.22,u.flying?.18:.32);if(MODEL_GROUPS.golem.includes(card.id))this.drawGolem(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.beast.includes(card.id))this.drawBeast(card,u,o,yaw,s,attack,a,flash);else if(MODEL_GROUPS.flying.includes(card.id))this.drawFlying(card,u,o,yaw,s,attack,a,flash,match.time);else this.drawFighter(card,u,o,yaw,s,attack,a,flash);this.drawTeamMark(o,yaw,s,u.side,a,!!u.flying);if(ghostAlpha==null){if(u.deploy>0){const progress=Math.min(1,u.deploy/(match.rulesVersion>=2?1:.58)),radius=(.42+s*.20)*(1+progress*.14);this.drawMesh('ring',x,surface+.014,z,radius,1,radius,TEAM_LIGHT[u.side],0,0,0,.3+progress*.4);}this.hpBar(x,o[1]+1.47*s,z,u.hp/u.maxHp,u.side,.46+s*.16);if(u.slow>0)this.drawMesh('ring',x,.06,z,.34+s*.16,1,.34+s*.16,'#ef9de9',0,0,0,.7);}}
     drawTeamMark(o,yaw,s,side,a,flying){
       const team=TEAM[side],light=TEAM_LIGHT[side],height=flying?.46:.58;
       this.part('box',o,[0,height,.31*s],[.105*s,.12*s,.025*s],team,yaw,0,Math.PI/4,a);
@@ -453,7 +464,7 @@
         if(life>.58)this.drawMesh('sphere',x,.22,z,radius*.26*life,.20*life,radius*.26*life,'#fff1c3',0,0,0,(life-.58)*1.5);
       }
     }
-    drawGhost(preview,match){const card=this.engine.cardMap[preview.id];if(card.kind!=='unit')return;this.drawUnit({id:'ghost',cardId:card.id,side:'player',x:preview.world.x,y:preview.world.y,hp:card.hp,maxHp:card.hp,heading:-Math.PI/2,walk:match.time*5,attackAnim:0,hit:0,deploy:0,flying:!!card.flying,slow:0},match,.62);}
+    drawGhost(preview,match){const card=this.engine.cardMap[preview.id];if(card.kind==='spell')return;this.drawUnit({id:'ghost',cardId:card.id,side:'player',x:preview.world.x,y:preview.world.y,hp:card.hp,maxHp:card.hp,heading:-Math.PI/2,walk:match.time*5,attackAnim:0,hit:0,deploy:0,flying:!!card.flying,slow:0},match,.62);}
     debug(){const rect=this.canvas.getBoundingClientRect(),top=this.worldToScreen(500,0),bottom=this.worldToScreen(500,1400),left=this.worldToScreen(0,700),right=this.worldToScreen(1000,700),silhouette=[];for(const dx of [-32,32])for(const dy of [-34,34])for(const h of [0,1.25])silhouette.push(this.worldToScreen(280+dx,1000+dy,h));const modelTop=Math.min(...silhouette.map(point=>point.y)),modelBottom=Math.max(...silhouette.map(point=>point.y));return Object.assign({lost:this.lost,width:this.canvas.width,height:this.canvas.height,webgl:!!this.gl,renderer:'project-authored-webgl-meshes',projection:this.camera&&this.camera.projection,arenaBounds:{top:top.y-rect.top,bottom:bottom.y-rect.top,left:left.x-rect.left,right:right.x-rect.left,usefulHeight:Math.abs(bottom.y-top.y),usefulHeightRatio:Math.abs(bottom.y-top.y)/Math.max(1,rect.height)},minimumInfantryPixels:modelBottom-modelTop},this.stats);}
   }
   root.TowerDuelRenderer3D=TowerRenderer3D;
