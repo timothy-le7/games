@@ -205,7 +205,7 @@
   function welcome(recovered) {
     const continued = profiles.campaign.completed.length || profiles.campaign.time > 1;
     const rendererNote = V ? '' : '<p class="tiny"><strong>3D view is loading.</strong> This build needs its local voxel renderer before play can begin.</p>';
-    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD. Push fully forward or hold Shift to run; hold C to walk slowly.</div><div><strong>2 · Look</strong>Drag the open right side, use arrow keys, or choose Mouse look on desktop.</div><div><strong>3 · Mine</strong>Hold Mine or R on a block in the crosshair. In Mouse look, hold left click.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place, Q, or right click.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Space jumps · 1–5 hotbar · E/I crafting · V camera · P/Esc pause/back. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
+    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD. Push fully forward or hold Shift to run; hold C to walk slowly.</div><div><strong>2 · Look</strong>Drag the open right side, use arrow keys, or click the world once to capture the desktop mouse.</div><div><strong>3 · Mine</strong>Hold Mine or R on a block in the crosshair. After capture, hold left click.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place, Q, or right click.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Space jumps · 1–5 hotbar · E/I crafting · V camera · P/Esc pause/back. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
     bind('startButton', () => activateMode('campaign')); bind('creativeButton', () => activateMode('creative'));
   }
   function activateMode(mode) {
@@ -222,7 +222,7 @@
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
   }
   function settings() {
-    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">WASD moves; arrows or a right-side drag look. Space jumps; Shift runs; C or Sneak moves slowly and protects ledges while grounded. Hold R or Mine to gather; Q/right click places; F strikes; E/I crafts; V changes view; 1–5 selects blocks; P/Escape pauses or goes back. Mouse look locks the desktop pointer: left click mines, right click places. Escape releases the mouse. On touch, move with the left thumb and look with the right; action buttons work with another finger.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
+    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">WASD moves; arrows or a right-side drag look. Space jumps; Shift runs; C or Sneak moves slowly and protects ledges while grounded. Hold R or Mine to gather; Q/right click places; F strikes; E/I crafts; V changes view; 1–5 selects blocks; P/Escape pauses or goes back. Click the desktop world once to lock the mouse; left click mines, right click places, and the wheel changes the hotbar. Escape releases it. On touch, move with the left thumb and look with the right; action buttons work with another finger.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
     bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
     bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
     bind('sizeButton', () => { const sizes = [.92, 1, 1.1, 1.2, 1.28], index = sizes.indexOf(prefs.buttonSize); prefs.buttonSize = sizes[index < 0 || index === sizes.length - 1 ? 0 : index + 1]; savePrefs(); applyPrefs(); settings(); });
@@ -506,7 +506,9 @@
   }
   function jump() {
     if (!running) return;
-    jumpUntil = performance.now() + 140; applyJump();
+    // A press arriving during the last landing frames should still make the
+    // next grounded jump, including on a busy phone frame.
+    jumpUntil = performance.now() + 220; applyJump();
   }
   function applyJump() {
     if (jumpUntil < performance.now() || !jumpUntil) return;
@@ -739,6 +741,24 @@
     if (!input.look || event.pointerId !== input.look.pointer) return;
     event.preventDefault(); const factor = .006 * prefs.sensitivity; pose.yaw -= (event.clientX - input.look.x) * factor; pose.pitch = clamp(pose.pitch - (event.clientY - input.look.y) * factor, -1.42, 1.42); input.look.x = event.clientX; input.look.y = event.clientY;
   }
+  function captureMouse() {
+    if (!running || document.pointerLockElement === canvas) return true;
+    try {
+      const request = canvas.requestPointerLock?.();
+      if (!canvas.requestPointerLock) throw Error('pointer lock unavailable');
+      request?.catch(() => say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.'));
+      return true;
+    } catch (_) {
+      say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.');
+      return false;
+    }
+  }
+  function cycleHotbar(delta) {
+    const slots=[...$('hotbar').querySelectorAll('[data-block]:not(:disabled)')];
+    if(!slots.length)return;
+    const current=Math.max(0,slots.findIndex(slot=>slot.dataset.block===selectedBlock));
+    slots[(current+(delta>0?1:-1)+slots.length)%slots.length].click();
+  }
   function keyboard(event,down){
     const key=event.code==='Space'?' ':event.code?.startsWith('Key')?event.code.slice(3).toLowerCase():event.key.toLowerCase();
     if(!down){input.keys.delete(key);if(key==='r')endMine({pointerId:-1});if([' ','enter'].includes(key))endMine({pointerId:-3});return;}
@@ -765,15 +785,26 @@
     }));
   }
   function loop(now) {
-    const rawDt = Math.max(0, (now - lastTime) / 1000), dt = Math.min(.05, rawDt); lastTime = now;
+    const rawDt = Math.max(0, (now - lastTime) / 1000); lastTime = now;
     if (document.hidden) { requestAnimationFrame(loop); return; }
     if (running) {
-      updatePhysics(dt); handleCompletion(); updateTarget();
+      // A phone can defer WebGL frames while its keyboard events continue to
+      // arrive.  Do not throw the elapsed control time away at a single
+      // 50 ms frame clamp: catch it up in collision-safe slices so held
+      // WASD/arrow input remains proportional to the player's real hold.
+      // The half-second ceiling deliberately avoids a background-tab jump.
+      let remaining=Math.min(.6,rawDt),ticked={defeated:false,damaged:false};
+      while(remaining>1e-6&&running){
+        const step=Math.min(.025,remaining);
+        updatePhysics(step); handleCompletion(); updateTarget();
+        ticked=R.tick(state,world,step);remaining-=step;
+        if(ticked.defeated)break;
+      }
       // Rendering may be slower in a software-emulated browser than it is on
       // a phone GPU. Mining is an intentional held action, so let its visible
       // progress track bounded real time while physics remains fixed-step.
       updateMine(Math.min(.16, rawDt));
-      const ticked = R.tick(state, world, dt); updateClock();
+      updateClock();
       if (ticked.defeated) { durableSave(); open('<p class="eyebrow">RECOVERY</p><h2>Back at camp</h2><p class="lead">The island wildlife overwhelmed you. Retrying keeps tools and most materials, but resets this island’s terrain and foes.</p>' + button('retryButton', 'Retry island') + button('mapAfterLoss', 'Campaign map', 'secondary')); bind('retryButton', retry); bind('mapAfterLoss', stages); }
       else if (ticked.damaged) { buzz('danger'); updateUI(); }
       if (!saveTimer && now - lastSavedAt > 5000) durableSave();
@@ -822,12 +853,13 @@
   $('lookZone').addEventListener('pointerdown', lookStart); $('lookZone').addEventListener('pointermove', lookMove); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('lookZone').addEventListener(type, event => { if (input.look && event.pointerId === input.look.pointer) input.look = null; }));
   for(const node of [canvas,$('lookZone')]){
     node.addEventListener('contextmenu',event=>{if(running)event.preventDefault();});
-    node.addEventListener('pointerdown',event=>{if(!running||event.pointerType!=='mouse')return;if(event.button===2){event.preventDefault();placeTarget();return;}if(document.pointerLockElement===canvas){if(event.button===0)beginMine(event);}else if(node===canvas)lookStart(event);});
+    node.addEventListener('pointerdown',event=>{if(!running||event.pointerType!=='mouse')return;if(event.button===2){event.preventDefault();placeTarget();return;}if(document.pointerLockElement===canvas){if(event.button===0)beginMine(event);}else if(node===canvas){event.preventDefault();captureMouse();lookStart(event);}});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])node.addEventListener(type,event=>{endMine(event);if(input.look?.pointer===event.pointerId)input.look=null;});
   }
   canvas.addEventListener('pointermove',lookMove);
-  $('mouseButton').addEventListener('click',()=>{if(!running)return;try{const request=canvas.requestPointerLock?.();if(!canvas.requestPointerLock)throw Error();request?.catch(()=>say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.'));}catch{say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.');}});
+  $('mouseButton').addEventListener('click',captureMouse);
   document.addEventListener('mousemove',event=>{if(document.pointerLockElement===canvas&&running){pose.yaw-=event.movementX*.0025*prefs.sensitivity;pose.pitch=clamp(pose.pitch-event.movementY*.0025*prefs.sensitivity,-1.42,1.42);}});
+  canvas.addEventListener('wheel',event=>{if(!running||document.pointerLockElement!==canvas)return;event.preventDefault();cycleHotbar(event.deltaY);},{passive:false});
   document.addEventListener('pointerlockchange',()=>{clearInputs();if(document.pointerLockElement===canvas)canvas.focus({preventScroll:true});else{const intentional=releasingMouseForPanel;releasingMouseForPanel=false;if(!intentional&&running&&hasStarted)menu();}});
   window.addEventListener('keydown', event => keyboard(event, true)); window.addEventListener('keyup', event => keyboard(event, false));
   $('importInput').addEventListener('change', event => { const file = event.target.files && event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { importSave(JSON.parse(String(reader.result))); } catch (_) { say('That file is not valid JSON. Your current journey is unchanged.'); } close(); }; reader.readAsText(file); event.target.value = ''; });

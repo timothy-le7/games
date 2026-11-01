@@ -28,14 +28,43 @@
   const legacyLevels=themes.map((_,i)=>buildLevel(i));
   // The original maps assumed an instantaneous gravity teleport. New courses
   // leave a recovery runway for the physical traversal; old saves keep theirs.
-  const levels=legacyLevels.map(original=>{const level=copy(original),flips=original.sections.filter((s,i)=>i>0&&s.gravity!==original.sections[i-1].gravity).map(s=>s.x),offset=x=>flips.filter(at=>at<x).length*4.5;
+  const revisedLevels=legacyLevels.map(original=>{const level=copy(original),flips=original.sections.filter((s,i)=>i>0&&s.gravity!==original.sections[i-1].gravity).map(s=>s.x),offset=x=>flips.filter(at=>at<x).length*4.5;
     if(level.id===4)for(const o of level.obstacles)if(o.type==='spike'&&o.x>=84)o.x=84+(o.x-84)*.88;
     if(level.id===5)for(const o of level.obstacles)if(o.type==='spike'&&o.x>=104)o.x+=.6;
     level.obstacles.forEach(o=>o.x+=offset(o.x));level.sections.forEach(s=>s.x+=offset(s.x));level.checkpoints=level.checkpoints.map(x=>x+offset(x));level.length+=flips.length*4.5;return level;});
-  function levelFor(match){return(match.rulesVersion===2?levels:legacyLevels)[match.level];}
+  // Rules 3 is a fixed-arc runner. It starts from the physical rules-2
+  // corridor, then gives each course its own wider machine-block landing and
+  // spike approach. Rules 1 and 2 retain their original geometry exactly.
+  const levels=revisedLevels.map(original=>{const level=copy(original);level.courseVersion=3;level.theme={...level.theme,blurb:original.theme.blurb.replace(/Hold[^.]*\./,'Tap a fixed jump pulse.')};
+    const priorSpike={floor:null,ceiling:null},spikeRun={floor:0,ceiling:0};
+    for(const o of level.obstacles){
+      if(o.type==='block'){o.w=Math.max(o.w,1.18);o.h=Math.min(o.h,1.34);}
+      if(o.type==='spike'){
+        const side=o.side||'floor',previous=priorSpike[side],originalX=o.x;
+        if(previous&&originalX-previous.originalX<=3.8){o.x=previous.x+1.08;spikeRun[side]++;}else spikeRun[side]=1;
+        if(spikeRun[side]>4)o.fixedArcSkip=true;
+        o.w=Math.min(o.w,.66);priorSpike[side]={x:o.x,originalX};
+      } else {priorSpike[o.side||'floor']=null;spikeRun[o.side||'floor']=0;}
+    }
+    level.obstacles=level.obstacles.filter(o=>!o.fixedArcSkip);
+    // The first course is the controller lesson, not a reaction-time trap:
+    // leave a real control/read runway before the first pulse. That permits
+    // pause, accessibility and keyboard ownership interactions without a
+    // fresh run silently expiring underneath them.
+    if(level.id===0){
+      // This is the fixed-arc tutorial, authored as a calm three-pulse line:
+      // each pair leaves a full landing-and-read runway before the next beat.
+      // Machine blocks first appear in course two.
+      level.obstacles=[36,37.08,62,63.08,88,89.08].map(x=>({type:'spike',x,w:.66,h:.72,side:'floor'}));
+      level.checkpoints=[52,84];
+      level.length=102;
+    }
+    return level;
+  });
+  function levelFor(match){return(match.rulesVersion===3?levels:match.rulesVersion===2?revisedLevels:legacyLevels)[match.level];}
   function sectionAt(level,x){let out=level.sections[0];for(const s of level.sections){if(s.x<=x+.0001)out=s;else break;}return out;}
   function makeActor(id,kind,difficulty,palette){return{id,kind,difficulty:difficulty||'human',palette,x:0,y:.44,vy:0,w:.55,h:.72,held:false,press:false,buffer:0,holdTime:0,grounded:true,mode:'run',gravity:1,alive:true,finished:false,finishTime:null,deaths:0,retryTimer:0,sectionIndex:0,trail:[]};}
-  function makeMatch(options){options=options||{};const level=levels[clamp(options.level|0,0,levels.length-1)],practice=!!options.practice,rivals=options.rivals===false?0:clamp(options.rivalCount==null?2:options.rivalCount|0,0,3),difficulties=['steady','sharp','ace'];const actors=[makeActor('player','player','human','#5ef2d1')];for(let i=0;i<rivals;i++)actors.push(makeActor('cpu-'+(i+1),'cpu',options.difficulty||difficulties[i]||'sharp',['#ffb55c','#8eb6ff','#f58de0'][i]));return{version:1,rulesVersion:2,level:level.id,practice,phase:'playing',elapsed:0,attemptStart:0,attempt:1,checkpoint:0,checkpointState:null,actors,rng:(options.seed>>>0)||((level.id+1)*2654435761>>>0),events:[],accumulator:0,result:null,bestPercent:0};}
+  function makeMatch(options){options=options||{};const level=levels[clamp(options.level|0,0,levels.length-1)],practice=!!options.practice,rivals=options.rivals===false?0:clamp(options.rivalCount==null?2:options.rivalCount|0,0,3),difficulties=['steady','sharp','ace'];const actors=[makeActor('player','player','human','#5ef2d1')];for(let i=0;i<rivals;i++)actors.push(makeActor('cpu-'+(i+1),'cpu',options.difficulty||difficulties[i]||'sharp',['#ffb55c','#8eb6ff','#f58de0'][i]));return{version:1,rulesVersion:3,level:level.id,practice,phase:'playing',elapsed:0,attemptStart:0,attempt:1,checkpoint:0,checkpointState:null,actors,rng:(options.seed>>>0)||((level.id+1)*2654435761>>>0),events:[],accumulator:0,result:null,bestPercent:0};}
   function emit(m,type,data){const actor=data?.actor&&m.actors.find(a=>a.id===data.actor);m.events.push(Object.assign({type,time:m.elapsed},actor?{y:actor.y,gravity:actor.gravity}:{},data||{}));if(m.events.length>48)m.events.shift();}
   function setSection(actor,level,modern=false){const current=sectionAt(level,actor.x);if(actor.mode===current.mode&&actor.gravity===current.gravity)return;actor.mode=current.mode;actor.gravity=current.gravity;if(current.mode==='flight'){actor.y=clamp(actor.y,1,5);actor.vy=0;actor.grounded=false;}else if(modern){actor.vy=-current.gravity*10.2;actor.grounded=false;}else{actor.y=current.gravity===1?.44:CEILING-.44;actor.vy=0;actor.grounded=true;}
   }
@@ -50,7 +79,7 @@
       const next=level.obstacles.find(o=>o.type==='gate'&&o.x>actor.x+1),target=next?next.center:3,predicted=actor.y+actor.vy*(actor.difficulty==='steady'?.16:.24);
       return{held:predicted<target,pressed:false};
     }
-    if(!actor.grounded)return{held:actor.holdTime<.24,pressed:false};
+    if(!actor.grounded)return{held:match.rulesVersion===2&&actor.holdTime<.24,pressed:false};
     const side=section.gravity===1?'floor':'ceiling',next=level.obstacles.find(o=>o.type!=='gate'&&o.side===side&&o.x+o.w*.5>actor.x);
     const distance=next?next.x-next.w*.5-(actor.x+actor.w*.5):99,need=distance<reaction&&distance>-.4;
     return{held:need,pressed:need};
@@ -66,14 +95,16 @@
   function resetActor(actor,x,level){const section=sectionAt(level,x);actor.x=x;actor.mode=section.mode;actor.gravity=section.gravity;actor.y=section.mode==='flight'?3:supportY(actor);actor.vy=0;actor.alive=true;actor.finished=false;actor.finishTime=null;actor.held=false;actor.press=false;actor.buffer=0;actor.holdTime=0;actor.grounded=section.mode==='run';actor.trail=[];}
   function updateActor(match,actor,input,dt){
     const level=levelFor(match);if(actor.finished)return;if(!actor.alive){if(actor.kind==='cpu'){actor.retryTimer-=dt;if(actor.retryTimer<=0)resetActor(actor,0,level);}return;}
-    const modern=match.rulesVersion===2;setSection(actor,level,modern);inputActor(actor,input||{held:false,pressed:false});actor.buffer=Math.max(0,actor.buffer-dt);actor.x+=8*dt;
+    const modern=match.rulesVersion===2||match.rulesVersion===3,fixedArc=match.rulesVersion===3;setSection(actor,level,modern);inputActor(actor,input||{held:false,pressed:false});actor.buffer=Math.max(0,actor.buffer-dt);actor.x+=8*dt;
     if(actor.mode==='flight'){
       actor.vy+=(actor.held?13.5:-13.5)*dt;actor.vy*=Math.pow(.985,dt*120);actor.vy=clamp(actor.vy,-5.8,5.8);actor.y+=actor.vy*dt;
       if(actor.y<.42||actor.y>CEILING-.42)return kill(match,actor,'foundry wall');
     }else{
       if(modern&&actor.grounded&&!hasSupport(actor,level))actor.grounded=false;
-      if((actor.buffer>0||modern&&actor.held)&&actor.grounded){actor.vy=actor.gravity===1?10.2:-10.2;actor.grounded=false;actor.buffer=0;actor.holdTime=0;emit(match,'jump',{actor:actor.id,x:actor.x});}
-      actor.holdTime+=dt;const rising=Math.sign(actor.vy)===(actor.gravity===1?1:-1),soften=(actor.held&&actor.holdTime<.24&&rising)?0.52:1;
+      // Rules 3 uses one fixed running arc per press. Rules 2 keeps its
+      // installed held-input behavior for restored matches.
+      if((actor.buffer>0||match.rulesVersion===2&&actor.held)&&actor.grounded){actor.vy=actor.gravity===1?10.2:-10.2;actor.grounded=false;actor.buffer=0;actor.holdTime=0;emit(match,'jump',{actor:actor.id,x:actor.x});}
+      actor.holdTime+=dt;const rising=Math.sign(actor.vy)===(actor.gravity===1?1:-1),soften=(!fixedArc&&actor.held&&actor.holdTime<.24&&rising)?.52:1;
       const beforeY=actor.y,wasGrounded=actor.grounded;actor.vy+=-actor.gravity*18*soften*dt;actor.y+=actor.vy*dt;let support=supportY(actor);
       if(modern){for(const o of level.obstacles){if(o.type!=='block'||o.side!==(actor.gravity===1?'floor':'ceiling')||!horizontalOverlap(actor,o))continue;const top=blockSupport(actor,o);if(actor.gravity===1&&actor.vy<=0&&beforeY>=top-.00001&&actor.y<=top)support=Math.max(support,top);if(actor.gravity===-1&&actor.vy>=0&&beforeY<=top+.00001&&actor.y>=top)support=Math.min(support,top);}}
 
@@ -84,13 +115,13 @@
     actor.trail.push({x:actor.x,y:actor.y});if(actor.trail.length>80)actor.trail.shift();
     if(actor.x>=level.length){actor.x=level.length;actor.finished=true;actor.finishTime=match.elapsed;emit(match,'finish',{actor:actor.id,time:match.elapsed});if(actor.kind==='player'){match.bestPercent=100;match.phase='finished';match.result={kind:'completion',time:runTime(match),practice:match.practice,place:1+match.actors.filter(a=>a.kind==='cpu'&&a.finished&&a.finishTime<=match.elapsed).length};}}
   }
-  function runTime(match){return match.rulesVersion===2?match.elapsed-(match.attemptStart||0):match.elapsed;}
+  function runTime(match){return match.rulesVersion===2||match.rulesVersion===3?match.elapsed-(match.attemptStart||0):match.elapsed;}
   function step(match,humanInput,dt){if(!match||match.phase!=='playing')return match;dt=dt==null?STEP:dt;match.elapsed+=dt;for(const actor of match.actors){const input=actor.kind==='cpu'?recommendedInput(match,actor):humanInput||{held:false,pressed:false};updateActor(match,actor,input,dt);}const player=match.actors[0],level=levelFor(match);if(match.practice&&player.alive){for(const cp of level.checkpoints){if(cp>match.checkpoint&&player.x>=cp){match.checkpoint=cp;match.checkpointState={x:cp};emit(match,'checkpoint',{x:cp});}}}return match;}
   function advance(match,input,delta){if(!match||match.phase!=='playing')return match;match.accumulator=Math.min(MAX_BACKLOG,match.accumulator+Math.max(0,Number(delta)||0));let first=!!input?.pressed;while(match.accumulator>=STEP){step(match,{held:!!input?.held,pressed:first},STEP);first=false;match.accumulator-=STEP;if(match.phase!=='playing')break;}return match;}
-  function restart(match){const level=levelFor(match),player=match.actors[0],start=match.practice&&match.checkpointState?match.checkpointState.x:0;match.phase='playing';match.result=null;match.attempt++;if(match.rulesVersion===2)match.attemptStart=match.elapsed;resetActor(player,start,level);for(const cpu of match.actors.slice(1))resetActor(cpu,0,level);match.accumulator=0;emit(match,'restart',{x:start,practice:match.practice});return match;}
+  function restart(match){const level=levelFor(match),player=match.actors[0],start=match.practice&&match.checkpointState?match.checkpointState.x:0;match.phase='playing';match.result=null;match.attempt++;if(match.rulesVersion===2||match.rulesVersion===3)match.attemptStart=match.elapsed;resetActor(player,start,level);for(const cpu of match.actors.slice(1))resetActor(cpu,0,level);match.accumulator=0;emit(match,'restart',{x:start,practice:match.practice});return match;}
   function pauseSnapshot(match){return copy(match);}
   function validateMatch(m){
-    if(!m||m.version!==1||m.rulesVersion!==undefined&&m.rulesVersion!==2||!Number.isInteger(m.level)||m.level<0||m.level>=levels.length||!['playing','dead','finished'].includes(m.phase)||typeof m.practice!=='boolean'||!Number.isFinite(m.elapsed)||m.elapsed<0||m.elapsed>3600||m.attemptStart!==undefined&&(!Number.isFinite(m.attemptStart)||m.attemptStart<0||m.attemptStart>m.elapsed)||!Number.isInteger(m.attempt)||m.attempt<1||m.attempt>100000||!Number.isFinite(m.checkpoint)||m.checkpoint<0||m.checkpoint>levelFor(m).length||!Number.isInteger(m.rng)||m.rng<0||m.rng>4294967295||!Number.isFinite(m.accumulator)||m.accumulator<0||m.accumulator>MAX_BACKLOG+.001||!Number.isInteger(m.bestPercent)||m.bestPercent<0||m.bestPercent>100||!Array.isArray(m.actors)||m.actors.length<1||m.actors.length>4||!Array.isArray(m.events)||m.events.length>48)return false;
+    if(!m||m.version!==1||m.rulesVersion!==undefined&&m.rulesVersion!==2&&m.rulesVersion!==3||!Number.isInteger(m.level)||m.level<0||m.level>=levels.length||!['playing','dead','finished'].includes(m.phase)||typeof m.practice!=='boolean'||!Number.isFinite(m.elapsed)||m.elapsed<0||m.elapsed>3600||m.attemptStart!==undefined&&(!Number.isFinite(m.attemptStart)||m.attemptStart<0||m.attemptStart>m.elapsed)||!Number.isInteger(m.attempt)||m.attempt<1||m.attempt>100000||!Number.isFinite(m.checkpoint)||m.checkpoint<0||m.checkpoint>levelFor(m).length||!Number.isInteger(m.rng)||m.rng<0||m.rng>4294967295||!Number.isFinite(m.accumulator)||m.accumulator<0||m.accumulator>MAX_BACKLOG+.001||!Number.isInteger(m.bestPercent)||m.bestPercent<0||m.bestPercent>100||!Array.isArray(m.actors)||m.actors.length<1||m.actors.length>4||!Array.isArray(m.events)||m.events.length>48)return false;
     if(m.checkpointState!==null&&(!m.checkpointState||!Number.isFinite(m.checkpointState.x)||m.checkpointState.x<0||m.checkpointState.x>levelFor(m).length||Math.abs(m.checkpointState.x-m.checkpoint)>.01))return false;
     if(m.result!==null&&(!m.result||!['failure','completion'].includes(m.result.kind)||(m.result.cause!==undefined&&(typeof m.result.cause!=='string'||m.result.cause.length>64))||(m.result.percent!==undefined&&(!Number.isInteger(m.result.percent)||m.result.percent<0||m.result.percent>100))||(m.result.time!==undefined&&(!Number.isFinite(m.result.time)||m.result.time<0||m.result.time>3600))||(m.result.practice!==undefined&&typeof m.result.practice!=='boolean')||(m.result.place!==undefined&&(!Number.isInteger(m.result.place)||m.result.place<1||m.result.place>4))))return false;
     if(!m.events.every(e=>e&&typeof e.type==='string'&&e.type.length>0&&e.type.length<32&&Number.isFinite(e.time)&&e.time>=0&&e.time<=m.elapsed+.01&&(e.x===undefined||Number.isFinite(e.x)&&e.x>=0&&e.x<=levelFor(m).length+.1)&&(e.y===undefined||Number.isFinite(e.y)&&e.y>=-.1&&e.y<=6.1)&&(e.gravity===undefined||[1,-1].includes(e.gravity))))return false;
@@ -98,5 +129,5 @@
     return m.actors.every((a,index)=>{const valid=a&&typeof a.id==='string'&&a.id.length>0&&a.id.length<32&&!ids.has(a.id)&&a.kind===(index===0?'player':'cpu')&&['human','steady','sharp','ace'].includes(a.difficulty)&&typeof a.palette==='string'&&/^#[0-9a-f]{6}$/i.test(a.palette)&&Number.isFinite(a.x)&&a.x>=0&&a.x<=levelFor(m).length+.1&&Number.isFinite(a.y)&&a.y>=-.1&&a.y<=CEILING+.1&&Number.isFinite(a.vy)&&Math.abs(a.vy)<50&&Number.isFinite(a.w)&&a.w>.1&&a.w<2&&Number.isFinite(a.h)&&a.h>.1&&a.h<2&&typeof a.held==='boolean'&&typeof a.press==='boolean'&&Number.isFinite(a.buffer)&&a.buffer>=0&&a.buffer<1&&Number.isFinite(a.holdTime)&&a.holdTime>=0&&a.holdTime<3600&&typeof a.grounded==='boolean'&&['run','flight'].includes(a.mode)&&[1,-1].includes(a.gravity)&&typeof a.alive==='boolean'&&typeof a.finished==='boolean'&&(a.finishTime===null||Number.isFinite(a.finishTime)&&a.finishTime>=0&&a.finishTime<=3600)&&Number.isInteger(a.deaths)&&a.deaths>=0&&a.deaths<100000&&Number.isFinite(a.retryTimer)&&a.retryTimer>=-.1&&a.retryTimer<10&&Number.isInteger(a.sectionIndex)&&a.sectionIndex>=0&&a.sectionIndex<levelFor(m).sections.length&&Array.isArray(a.trail)&&a.trail.length<=80&&a.trail.every(q=>q&&Number.isFinite(q.x)&&q.x>=0&&q.x<=levelFor(m).length+.1&&Number.isFinite(q.y)&&q.y>=-.1&&q.y<=CEILING+.1);if(valid)ids.add(a.id);return valid;});
   }
   function restoreMatch(value){if(!validateMatch(value))return null;const m=copy(value);m.accumulator=0;m.events=Array.isArray(m.events)?m.events.slice(-48):[];for(const a of m.actors){a.held=false;a.press=false;}return m;}
-  return{STEP,MAX_BACKLOG,FLOOR,CEILING,levels,levelFor,runTime,makeMatch,step,advance,restart,recommendedInput,pauseSnapshot,validateMatch,restoreMatch,sectionAt,obstacleHit};
+  return{STEP,MAX_BACKLOG,FLOOR,CEILING,levels,revisedLevels,legacyLevels,levelFor,runTime,makeMatch,step,advance,restart,recommendedInput,pauseSnapshot,validateMatch,restoreMatch,sectionAt,obstacleHit};
 });

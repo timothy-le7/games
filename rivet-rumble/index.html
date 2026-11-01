@@ -27,6 +27,7 @@
       <div id="moveStick" class="stick-zone" aria-label="Move robot"><i></i></div>
       <div id="aimPad" class="aim-zone" aria-label="Drag to aim and release to fire"><i></i></div>
       <button id="quickFire" class="quick-fire" type="button" aria-label="Quick fire nearest visible rival">AUTO FIRE</button>
+      <button id="viewButton" class="overview-button" type="button" aria-pressed="false" aria-label="Switch to tactical overview">VIEW</button>
       <button id="gadgetButton" class="gadget-button" type="button"><span>GADGET</span><small id="gadgetReadout">READY · E</small></button>
       <button id="specialButton" class="special-button" type="button" aria-label="Use charged special">SPECIAL</button>
     </section>
@@ -36,7 +37,8 @@
       <p class="lede">120 distinct fighters. Six battlegrounds. Fair offline CPU crews. Pick your loadout and fight for the objective.</p>
       <div class="launch-controls" data-game-update-controls><button id="startButton" class="start-button" type="button">Start Foundry Hold</button>
       <button id="newMatchButton" class="start-button hidden" type="button">Start new match with selected crew</button></div>
-      <details class="tutorial"><summary>Move · Aim · Fire · Gadget <span>Controls + match rules</span></summary><p>Left stick to move; drag and release the right stick to aim/fire, or tap it to auto-aim. AUTO FIRE targets visible rivals. Tap SPECIAL to auto-aim your hit-charged ability, or drag it to aim and release. Drag an attack or Special back to its center to cancel; GADGET uses your machine’s reusable cooldown tool. Desktop: WASD/arrows move, pointer/left click fire, F quick fire, Q/Space/right click Special, E/G Gadget, P/Escape pause. Ammo refills one slot at a time. Stop attacking and avoid damage for 3 seconds to repair. Brush conceals distant opponents until they attack; water blocks movement but not shots. Walk onto a yellow jump pad to vault cover; its dotted route ends at your landing ring. You cannot shoot or collect supplies in flight. Green power cells raise health and attack; white crosses heal. Survival smoke damages everyone outside the clear ring. Violet team smoke hides distant teammates until they attack.</p></details>
+      <div class="menu-actions"><button id="settingsButton" type="button">Settings &amp; saves</button><button data-install-game type="button">Install / offline help</button><a data-all-games href="../">All games</a></div>
+      <details class="tutorial"><summary>Move · Aim · Fire · Gadget <span>Controls + match rules</span></summary><p>Touch: the left stick anchors under your thumb, has a short dead zone, and moves independently of the right aim/release pad. Tap the right pad for optional auto-aim; drag/release for aimed fire. Drag an attack or Special back to its anchor to cancel. AUTO FIRE targets only a visible rival. Tap VIEW for a tactical camera. Desktop: WASD moves; arrows aim; Enter fires the aimed shot; pointer/left click fires; F quick fires; Q/Space/right click uses Special; E/G uses Gadget; C changes camera; P/Escape pauses. Ammo refills one slot at a time. Stop attacking and avoid damage for 3 seconds to repair. Brush conceals distant opponents until they attack; water blocks movement but not shots. Walk onto a yellow jump pad to vault cover; its dotted route ends at your landing ring. You cannot shoot or collect supplies in flight. Green power cells raise health and attack; white crosses heal. Survival smoke damages everyone outside the clear ring. Violet team smoke hides distant teammates until they attack.</p></details>
       <div class="mode-row" id="modeRow" role="group" aria-label="Mode"></div>
       <div class="choice-label">CPU difficulty</div><div class="difficulty-row" id="difficultyRow" role="group" aria-label="CPU difficulty"></div><p id="difficultyNote" class="difficulty-note"></p>
       <div class="choice-label">Fighter</div><button id="chooseFighter" class="choose-fighter" type="button" aria-label="Choose fighter"><span id="selectedCrew" class="selected-crew"></span><span id="chooseCrewCount" class="choose-crew-count"></span></button>
@@ -44,7 +46,6 @@
       <div class="arena-row" id="arenaRow" role="group" aria-label="Arena"></div>
       <div id="loadout" class="loadout"></div><p id="savedMatchNote" class="saved-match-note"></p>
       <p id="fighterNote" class="fighter-note"></p>
-      <div class="menu-actions"><button id="settingsButton" type="button">Settings &amp; saves</button><button data-install-game type="button">Install / offline help</button><a data-all-games href="../">All games</a></div>
       <span data-game-offline-status class="offline-status" role="status"></span>
       <p id="menuNotice" class="notice" role="status" aria-live="polite"></p>
     </section>
