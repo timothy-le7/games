@@ -10,11 +10,11 @@
     constructor(canvas,engine){this.canvas=canvas;this.engine=engine;this.gl=null;this.lost=false;this.stats={drawCalls:0,triangles:0,dpr:1,actors:0};canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true;});canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.init();});this.init();}
     init(){this.scene=new root.GameHD.Scene(this.canvas,{meshScale:2,shadowSize:1024,bloomStrength:.29});this.gl=this.scene.gl;}
     resize(){const r=this.canvas.getBoundingClientRect();this.scene.resize(r.width,r.height,root.devicePixelRatio||1,6500000);const aspect=this.canvas.width/this.canvas.height,portrait=aspect<.8,halfW=portrait?3.65:8.6;this.camera={aspect,portrait,halfW,halfH:halfW/aspect};}
-    draw(name,x,y,z,sx,sy,sz,color,rz=0,ry=0,alpha=1,glow=0,cast=true,rough=.45,metal=.4){const rgb=Array.isArray(color)?color:hex(color);const mm=model(x,y,z,sx,sy,sz,rz,ry).m,transform=['gear','wheel'].includes(name)?mul(mm,root.GameHD.matrix(0,0,0,1,1,1,0,Math.PI/2)):mm;this.scene.draw(name==='wheel'?'cylinder':name,transform,[rgb[0],rgb[1],rgb[2],alpha],[rough,metal,glow,0],cast);}
+    draw(name,x,y,z,sx,sy,sz,color,rz=0,ry=0,alpha=1,glow=0,cast=true,rough=.45,metal=.4,kind=0){const rgb=Array.isArray(color)?color:hex(color);const mm=model(x,y,z,sx,sy,sz,rz,ry).m,transform=['gear','wheel'].includes(name)?mul(mm,root.GameHD.matrix(0,0,0,1,1,1,0,Math.PI/2)):mm;this.scene.draw(name==='wheel'?'cylinder':name,transform,[rgb[0],rgb[1],rgb[2],alpha],[rough,metal,glow,kind],cast);}
     render(match,options){
-      if(this.lost||!match)return;this.resize();const HD=root.GameHD,level=this.engine.levels[match.level],player=match.actors[0],t=level.theme,lead=this.camera.portrait?2.3:3.4,cam=clamp(player.x+lead,this.camera.halfW-1,level.length-this.camera.halfW+1),eye=[cam,5.8,11],target=[cam,3,0],vp=mul(ortho(-this.camera.halfW,this.camera.halfW,-this.camera.halfH,this.camera.halfH,-40,45),lookAt(eye,target,[0,1,0])),lightVP=mul(ortho(-15,15,-12,12,1,60),lookAt([cam-8,19,14],[cam,3,0],[0,1,0]));
+      if(this.lost||!match)return;this.resize();const HD=root.GameHD,level=this.engine.levelFor(match),player=match.actors[0],t=level.theme,lead=this.camera.portrait?2.3:3.4,cam=clamp(player.x+lead,this.camera.halfW-1,level.length-this.camera.halfW+1),eye=[cam,5.8,11],target=[cam,3,0],vp=mul(ortho(-this.camera.halfW,this.camera.halfW,-this.camera.halfH,this.camera.halfH,-40,45),lookAt(eye,target,[0,1,0])),lightVP=mul(ortho(-15,15,-12,12,1,60),lookAt([cam-8,19,14],[cam,3,0],[0,1,0]));
       this.time=options?.reducedMotion?0:match.elapsed;this.camera.x=cam;this.scene.begin(vp,eye,this.time,{lightVP,clear:hex(t.sky),fog:hex(t.sky),light:[-.38,.83,.45]});
-      this.environment(level,t,cam,this.time,options);for(const o of level.obstacles)if(Math.abs(o.x-cam)<this.camera.halfW+2)this.obstacle(o,t);for(const s of level.sections)if(Math.abs(s.x-cam)<this.camera.halfW+1)this.portal(s,t);for(const actor of match.actors.slice().sort((a,b)=>b.kind.localeCompare(a.kind)))this.actor(actor,match,t,options);if(Math.abs(level.length-cam)<this.camera.halfW+2)this.finish(level,t);this.scene.flush();this.stats={...this.scene.debug(),actors:match.actors.length};
+      this.environment(level,t,cam,this.time,options);for(const o of level.obstacles)if(Math.abs(o.x-cam)<this.camera.halfW+2)this.obstacle(o,t);for(const s of level.sections)if(Math.abs(s.x-cam)<this.camera.halfW+1)this.portal(s,t);for(const actor of match.actors.slice().sort((a,b)=>b.kind.localeCompare(a.kind)))this.actor(actor,match,t,options);this.feedback(match,t,options);if(Math.abs(level.length-cam)<this.camera.halfW+2)this.finish(level,t);this.scene.flush();this.stats={...this.scene.debug(),actors:match.actors.length};
     }
     environment(level,t,c,time,options){
       const left=Math.floor(c-this.camera.halfW)-3,right=Math.ceil(c+this.camera.halfW)+3,d=this.draw.bind(this),beat=options?.reducedMotion?1:.9+.1*Math.cos(time*level.bpm/60*TAU),theme=level.id;
@@ -59,12 +59,19 @@
         d('wedge',o.x,y,-.75,o.w*.5,o.h*.5,1.28,'#c05d40',flip);d('wedge',o.x,y,.535,o.w*.5,o.h*.5,.018,t.hot,flip,0,1,.28);d('wedge',o.x,y-.06*(o.side==='ceiling'?-1:1),.56,o.w*.31,o.h*.31,.015,'#ffe9aa',flip,0,1,.1);
       }else if(o.type==='block'){
         const y=o.side==='ceiling'?6-o.h*.5:o.h*.5;
-        d('box',o.x,y,-.75,o.w*.5,o.h*.5,1.37,t.floor);d('box',o.x,y,.64,o.w*.37,o.h*.37,.025,'#26394d');d('box',o.x,y,.675,o.w*.29,o.h*.29,.012,t.accent,0,0,1,.18);
+        d('box',o.x,y,-.75,o.w*.5,o.h*.5,1.37,t.floor,0,0,1,0,true,.85,.1,6);d('box',o.x,y,.64,o.w*.37,o.h*.37,.025,'#26394d');d('box',o.x,y,.675,o.w*.29,o.h*.29,.012,t.accent,0,0,1,.18);
+        const top=o.side==='ceiling'?6-o.h:o.h;d('box',o.x,top,.10,o.w*.5,.018,.54,'#e7e7cb',0,0,1,.08);for(let k=-1;k<=1;k++)d('box',o.x+k*o.w*.25,top,.15,.032,.025,.29,t.accent,0,0,1,.25);
         for(const s of [-1,1])for(const v of [-1,1])d('sphere',o.x+s*o.w*.38,y+v*o.h*.38,.67,.028,.028,.025,'#e3dfbf');
       }else{
         const low=o.center-o.gap*.5,high=o.center+o.gap*.5;
         if(low>0)d('box',o.x,low*.5,-.75,o.w*.5,low*.5,1.37,t.floor);if(high<6)d('box',o.x,(high+6)*.5,-.75,o.w*.5,(6-high)*.5,1.37,t.floor);
         for(const [y,s]of [[low,-1],[high,1]]){d('box',o.x,y+s*.045,.65,o.w*.5,.045,.045,t.hot,0,0,1,.45);d('box',o.x,y+s*.16,.66,o.w*.28,.035,.025,t.accent,0,0,1,.2);}
+      }
+    }
+    feedback(match,t,options){
+      if(options?.reducedMotion)return;
+      for(const event of match.events){const age=match.elapsed-event.time;if(age<0||age>.42||!Number.isFinite(event.x)||!['land','jump','crash'].includes(event.type))continue;const actor=match.actors.find(a=>a.id===event.actor);if(!actor)continue;const z=actor.kind==='player'?.05:-.65-Number(actor.id.slice(-1)||0)*.4,contactY=event.y??actor.y,y=event.type==='crash'?contactY:contactY-(event.gravity??actor.gravity)*.36,burst=event.type==='crash',fade=1-age/.42;
+        for(let i=0;i<(burst?12:6);i++){const angle=i*2.399,r=age*(burst?3:1.8),size=(burst?.065:.034)*fade;this.draw(burst?'box':'sphere',event.x+Math.cos(angle)*r,y+Math.sin(angle)*r+(burst?0:actor.gravity*age*.6),z+Math.sin(angle*2)*r*.3,size,size,size,i%3?t.accent:t.hot,age*6,angle,fade,.32,false);}
       }
     }
     portal(s,t){if(s.x<=.1)return;const d=this.draw.bind(this),color=s.mode==='flight'?t.accent:t.hot;for(const y of [.65,5.35]){d('torus',s.x,y,.18,.42,.42,.09,color,0,0,1,.35);d('gear',s.x,y,.03,.32,.32,.08,'#8fa9ae',this.time*.2,0,1,0);d('sphere',s.x,y,.3,.11,.11,.08,'#fff8d5',0,0,1,.8);}for(let y=1.2;y<4.9;y+=.35)d('sphere',s.x,y,.12,.025,.06,.025,color,0,0,.45,.6,false);}

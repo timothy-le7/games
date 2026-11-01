@@ -34,6 +34,19 @@
     }
     return { blocked: false, moved: body[axis] - start };
   }
+  // Sneaking can overhang an edge, but cannot move the entire footprint off
+  // its current support. Substeps also protect long/diagonal moves at corners.
+  function sneakMove(getSolid, body, dx, dz) {
+    const steps=Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dz))/.1));
+    for(let i=0;i<steps;i++)for(const [axis,delta]of [['x',dx/steps],['z',dz/steps]]){
+      if(!delta)continue;const candidate={...body};move(getSolid,candidate,axis,delta);
+      if(supported(getSolid,candidate)){body[axis]=candidate[axis];continue;}
+      const distance=candidate[axis]-body[axis];let lo=0,hi=1;
+      for(let n=0;n<22;n++){const t=(lo+hi)/2;if(supported(getSolid,{...body,[axis]:body[axis]+distance*t}))lo=t;else hi=t;}
+      body[axis]+=distance*lo;
+    }
+    return body;
+  }
   // Repair an already intersecting imported/legacy pose using the actual body
   // footprint. Only intersected layers are crossed, not a distant tree canopy.
   function recover(getSolid, body) {
@@ -45,5 +58,5 @@
     }
     return repaired;
   }
-  return { RADIUS, HEIGHT, collides, supported, move, recover };
+  return { RADIUS, HEIGHT, collides, supported, move, sneakMove, recover };
 }));
