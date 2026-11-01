@@ -90,6 +90,7 @@
     actions.style.right = prefs.handedness === 'left' ? 'auto' : ''; actions.style.left = prefs.handedness === 'left' ? 'max(12px, env(safe-area-inset-left))' : '';
     actions.style.transformOrigin = prefs.handedness === 'left' ? 'bottom left' : 'bottom right';
     move.style.left = prefs.handedness === 'left' ? 'auto' : ''; move.style.right = prefs.handedness === 'left' ? 'max(12px, env(safe-area-inset-right))' : '';
+    const sneakButton=$('sneakButton');sneakButton.style.left=prefs.handedness==='left'?'auto':'';sneakButton.style.right=prefs.handedness==='left'?'max(28px, env(safe-area-inset-right))':'';
     const cameraButton = $('cameraButton');
     if (cameraButton) {
       const first = prefs.camera === 'first';
@@ -166,7 +167,7 @@
   }
   function getSummary() {
     const render = renderer && renderer.getStats ? renderer.getStats() : null;
-    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget, biome: render.biome } }, R.summary(state));
+    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, sneaking:!!input.sneak||input.keys.has('c'), cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget, biome: render.biome } }, R.summary(state));
   }
 
   const loaded = loadGame();
@@ -221,7 +222,7 @@
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
   }
   function settings() {
-    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">WASD moves; arrows or a right-side drag look. Space jumps; Shift runs; C walks slowly. Hold R or Mine to gather; Q/right click places; F strikes; E/I crafts; V changes view; 1–5 selects blocks; P/Escape pauses or goes back. Mouse look locks the desktop pointer: left click mines, right click places. Escape releases the mouse. On touch, move with the left thumb and look with the right; action buttons work with another finger.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
+    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">WASD moves; arrows or a right-side drag look. Space jumps; Shift runs; C or Sneak moves slowly and protects ledges while grounded. Hold R or Mine to gather; Q/right click places; F strikes; E/I crafts; V changes view; 1–5 selects blocks; P/Escape pauses or goes back. Mouse look locks the desktop pointer: left click mines, right click places. Escape releases the mouse. On touch, move with the left thumb and look with the right; action buttons work with another finger.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
     bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
     bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
     bind('sizeButton', () => { const sizes = [.92, 1, 1.1, 1.2, 1.28], index = sizes.indexOf(prefs.buttonSize); prefs.buttonSize = sizes[index < 0 || index === sizes.length - 1 ? 0 : index + 1]; savePrefs(); applyPrefs(); settings(); });
@@ -464,10 +465,11 @@
   function bodySolid(x, y, z) { const block = getBlock(x, y, z); return block && !fluid(block) && !['leaves', 'fern', 'flower'].includes(block.material); }
   function bodyPose() { return { x: pose.x, y: pose.y - EYE, z: pose.z }; }
   function collides(x, feet, z) { return P.collides(bodySolid, { x, y: feet, z }); }
-  function tryHorizontal(dx, dz) {
+  function tryHorizontal(dx, dz, sneak=false) {
     const body = bodyPose(), size = worldSize();
-    P.move(bodySolid, body, 'x', clamp(body.x + dx, .2, size - .2) - body.x);
-    P.move(bodySolid, body, 'z', clamp(body.z + dz, .2, size - .2) - body.z);
+    dx=clamp(body.x+dx,.2,size-.2)-body.x;dz=clamp(body.z+dz,.2,size-.2)-body.z;
+    if(sneak&&pose.grounded&&P.supported(bodySolid,body))P.sneakMove(bodySolid,body,dx,dz);
+    else{P.move(bodySolid,body,'x',dx);P.move(bodySolid,body,'z',dz);}
     pose.x = body.x; pose.z = body.z;
   }
   function isInWater() {
@@ -481,12 +483,12 @@
     pose.pitch=clamp(pose.pitch+((input.keys.has('arrowup')?1:0)-(input.keys.has('arrowdown')?1:0))*1.25*dt,-1.42,1.42);
     const forward = (input.keys.has('w') ? 1 : 0) - (input.keys.has('s') ? 1 : 0) - input.joy.y;
     const sideways = (input.keys.has('d') ? 1 : 0) - (input.keys.has('a') ? 1 : 0) + input.joy.x;
-    const length = Math.max(1,Math.hypot(forward, sideways)), sprint=input.keys.has('shift')||input.joy.y<-.93, sneak=input.keys.has('c'), speed = isInWater() ? 2 : sneak?1.35:sprint&&forward>0?5.1:3.55;
+    const length = Math.max(1,Math.hypot(forward, sideways)), sprint=input.keys.has('shift')||input.joy.y<-.93, sneak=input.keys.has('c')||!!input.sneak, speed = isInWater() ? 2 : sneak?1.35:sprint&&forward>0?5.1:3.55;
     if (forward || sideways) {
       const f = forward / length * speed * dt, s = sideways / length * speed * dt;
       // The renderer's contract is yaw 0 → -Z and positive yaw → -X.
       // Keep movement on exactly the same axes as the camera.
-      tryHorizontal(-Math.sin(pose.yaw) * f + Math.cos(pose.yaw) * s, -Math.cos(pose.yaw) * f - Math.sin(pose.yaw) * s);
+      tryHorizontal(-Math.sin(pose.yaw) * f + Math.cos(pose.yaw) * s, -Math.cos(pose.yaw) * f - Math.sin(pose.yaw) * s,sneak);
     }
     pose.vy += (isInWater() ? -7 : -17) * dt;
     pose.vy = Math.max(pose.vy, -11);
@@ -715,6 +717,7 @@
   }
 
   function clearInputs() {
+    input.sneak=false;$('sneakButton').setAttribute('aria-pressed','false');
     input.joy.x = input.joy.y = 0; input.joy.pointer = null; input.look = null; input.keys.clear(); jumpUntil = 0; endMine();
     const knob = $('joyKnob'); knob.style.transform = 'translate(-50%,-50%)';
   }
@@ -808,6 +811,7 @@
 
   $('menuButton').addEventListener('click', event => { event.stopPropagation(); menu(); });
   $('objectiveButton').addEventListener('click', event => { event.stopPropagation(); const node = event.currentTarget; node.setAttribute('aria-expanded', node.getAttribute('aria-expanded') !== 'true'); });
+  $('sneakButton').onclick=event=>{event.stopPropagation();if(!running)return;input.sneak=!input.sneak;$('sneakButton').setAttribute('aria-pressed',String(input.sneak));if(event.detail===0)canvas.focus({preventScroll:true});};
   $('jumpButton').addEventListener('click', event => { event.stopPropagation(); jump(); });
   $('cameraButton').addEventListener('click', event => { event.stopPropagation(); prefs.camera = prefs.camera === 'first' ? 'third' : 'first'; savePrefs(); applyPrefs(); say(prefs.camera === 'first' ? 'First-person view.' : 'Rear third-person view.'); });
   $('placeButton').addEventListener('click', event => { event.stopPropagation(); placeTarget(); });
