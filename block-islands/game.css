@@ -51,3 +51,5 @@
 .motion-reduced *,.motion-reduced *:before,.motion-reduced *:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
 
 .mouse-look{display:none}@media(pointer:fine) and (min-width:700px){.mouse-look{display:block;position:absolute;left:20px;bottom:22px;z-index:5;min-height:44px;padding:8px 16px;background:#193b50;color:#fff;border:1px solid #8ac1d0;border-radius:12px}}
+
+.sneak-button{position:absolute;left:max(28px,env(safe-area-inset-left));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 204px);min-width:72px;min-height:44px;padding:8px 14px;border:1px solid #ffffff66;border-radius:12px;background:#12303fdd;color:#fff;font-size:12px;font-weight:800;pointer-events:auto;touch-action:manipulation;z-index:2}.sneak-button[aria-pressed="true"]{background:#356e57;border-color:#ceffab}@media(max-height:500px) and (orientation:landscape){.sneak-button{bottom:145px}}
