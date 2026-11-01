@@ -294,7 +294,9 @@
     const nextId=match.queues.player[0];
     if (els['next-card'].dataset.card !== nextId) { els['next-card'].dataset.card=nextId; els['next-card-art'].innerHTML=cardPortrait(E.cardMap[nextId]); els['next-card'].setAttribute('aria-label','Next card: '+E.cardMap[nextId].name); }
   }
-  function selectCard(id) { if (!match || paused || match.phase!=='playing' || !els.modal.classList.contains('hidden') || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id; renderHand(true);els['game-canvas'].focus({preventScroll:true}); if (selectedCard && !profile.tutorialDone) showTutorial(E.cardMap[id].kind === 'spell' ? 'Spells can land anywhere. Tap a useful target area.' : 'Now tap your blue half. Units enter through the nearest lane.'); }
+  function selectCard(id) { if (!match || paused || match.phase!=='playing' || !els.modal.classList.contains('hidden') || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id;
+    if(selectedCard){const card=E.cardMap[selectedCard],lane=keyboardAim.x<500?280:720;keyboardAim=card.kind==='spell'?{x:500,y:760}:{x:lane,y:980};keyboardAiming=true;showTutorial(card.kind==='spell'?'Preview is live: move the target ring, then deploy when the area is useful.':'Preview is live: choose a lane and legal blue ground. Your troop keeps that lane through the bridge.');}
+    else {keyboardAiming=false;hideTutorial();}renderHand(true);els['game-canvas'].focus({preventScroll:true}); }
   function canvasPoint(clientX, clientY) { return renderer3d.screenToWorld(clientX,clientY); }
   function previewAt(clientX,clientY,id){const rect=els['game-canvas'].getBoundingClientRect(),inside=clientX>=rect.left&&clientX<=rect.right&&clientY>=rect.top&&clientY<=rect.bottom;dragPreview={id,inside,world:canvasPoint(clientX,clientY)};}
   function cancelDrag(pointerId){if(pointerDrag&&(pointerId==null||pointerDrag.pointerId===pointerId)){pointerDrag=null;dragPreview=null;renderHand(false);}}
@@ -303,8 +305,8 @@
     if (!selectedCard || !match || paused) { if (!selectedCard) toast('Choose a card first'); return; }
     const result=E.playCard(match,'player',selectedCard,point.x,point.y);
     if (!result.ok) { toast(result.reason); chirp(150,.08,'square'); return; }
-    selectedCard=null; renderHand(true); scheduleSave(); chirp(340,.06,'triangle');
-    if (!profile.tutorialDone) { profile.tutorialDone=true; hideTutorial(); scheduleSave(); }
+    selectedCard=null; keyboardAiming=false;hideTutorial(); renderHand(true); scheduleSave(); chirp(340,.06,'triangle');
+    if (!profile.tutorialDone) { profile.tutorialDone=true; scheduleSave(); }
   }
 
   function frame(now) {
@@ -359,7 +361,7 @@
     const scale=portrait?0:Math.min(shell.width/E.WIDTH,shell.height/E.HEIGHT);
     const cssWidth=Math.max(1,Math.floor(portrait?shell.width:E.WIDTH*scale)),cssHeight=Math.max(1,Math.floor(portrait?shell.height:E.HEIGHT*scale));
     if(canvas.style.width!==cssWidth+'px'||canvas.style.height!==cssHeight+'px'){canvas.style.width=cssWidth+'px';canvas.style.height=cssHeight+'px';}
-    renderer3d.render(match,{selectedCard,dragPreview:dragPreview||(keyboardAiming&&selectedCard?{id:selectedCard,inside:true,world:keyboardAim}:null),reducedEffects:prefs.reducedEffects});
+    renderer3d.render(match,{selectedCard,dragPreview:dragPreview||(selectedCard?{id:selectedCard,inside:true,world:keyboardAim}:null),reducedEffects:prefs.reducedEffects});
     drawBattleOverlay();
   }
   function drawBattleOverlay() {
@@ -451,7 +453,7 @@
   els.hand.addEventListener('click',(event)=>{const card=event.target.closest('[data-hand-card]');if(card&&!pointerDrag&&performance.now()>=suppressHandClickUntil)selectCard(card.dataset.handCard);});
   els.hand.addEventListener('pointerdown',(event)=>{const card=event.target.closest('[data-hand-card]');if(!card||event.button!==0||pointerDrag)return;pointerDrag={id:card.dataset.handCard,x:event.clientX,y:event.clientY,moved:false,pointerId:event.pointerId,node:card};try{card.setPointerCapture?.(event.pointerId);}catch(_){/* Synthetic and interrupted pointers may have no active capture. */}});
   document.addEventListener('pointermove',(event)=>{if(!pointerDrag||event.pointerId!==pointerDrag.pointerId)return;if(Math.hypot(event.clientX-pointerDrag.x,event.clientY-pointerDrag.y)>8){pointerDrag.moved=true;previewAt(event.clientX,event.clientY,pointerDrag.id);}});
-  document.addEventListener('pointerup',(event)=>{if(!pointerDrag||event.pointerId!==pointerDrag.pointerId)return;const drag=pointerDrag,wasMoved=drag.moved;pointerDrag=null;dragPreview=null;if(wasMoved){suppressHandClickUntil=performance.now()+160;const rect=els['game-canvas'].getBoundingClientRect();if(event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom){selectedCard=drag.id;renderHand(false);suppressCanvasPointerUntil=performance.now()+120;deployAt(canvasPoint(event.clientX,event.clientY));}else{selectedCard=null;renderHand(false);}}});
+  document.addEventListener('pointerup',(event)=>{if(!pointerDrag||event.pointerId!==pointerDrag.pointerId)return;const drag=pointerDrag,wasMoved=drag.moved;pointerDrag=null;dragPreview=null;if(wasMoved){suppressHandClickUntil=performance.now()+160;const rect=els['game-canvas'].getBoundingClientRect();if(event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom){selectedCard=drag.id;renderHand(false);suppressCanvasPointerUntil=performance.now()+120;deployAt(canvasPoint(event.clientX,event.clientY));}else{selectedCard=null;keyboardAiming=false;hideTutorial();renderHand(false);}}});
   document.addEventListener('pointercancel',(event)=>cancelDrag(event.pointerId));
   els.hand.addEventListener('lostpointercapture',(event)=>{if(pointerDrag&&pointerDrag.pointerId===event.pointerId&&event.buttons===0)cancelDrag(event.pointerId);});
   els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)cancelDrag(event.pointerId);});
@@ -464,14 +466,14 @@
     if(trapGameTab(event,!els.modal.classList.contains('hidden')?els.modal:null)||gameKeyBlocked(event))return;
     if(!els.modal.classList.contains('hidden')){if(!event.repeat&&(event.code==='Escape'||event.code==='KeyP'&&els['modal-kicker'].textContent==='PAUSED')){event.preventDefault();modalBack?.();}return;}
     if(currentScreen()!=='battle'||!match||match.phase!=='playing')return;
-    if((event.code==='Escape'||event.code==='KeyP')&&!event.repeat){event.preventDefault();if(event.code==='Escape'&&(selectedCard||pointerDrag)){cancelDrag();selectedCard=null;keyboardAiming=false;renderHand(false);}else pauseBattle();return;}
+    if((event.code==='Escape'||event.code==='KeyP')&&!event.repeat){event.preventDefault();if(event.code==='Escape'&&(selectedCard||pointerDrag)){cancelDrag();selectedCard=null;keyboardAiming=false;hideTutorial();renderHand(false);}else pauseBattle();return;}
     if(paused||nativeKeyActivation(event))return;
     if(/^[1-4]$/.test(event.key)&&!event.repeat){event.preventDefault();selectCard(match.hands.player[Number(event.key)-1]);keyboardAiming=!!selectedCard;return;}
     const delta={ArrowLeft:[-35,0],KeyA:[-35,0],ArrowRight:[35,0],KeyD:[35,0],ArrowUp:[0,-35],KeyW:[0,-35],ArrowDown:[0,35],KeyS:[0,35]}[event.code];
     if(delta&&selectedCard){event.preventDefault();keyboardAim={x:Math.max(35,Math.min(E.WIDTH-35,keyboardAim.x+delta[0])),y:Math.max(35,Math.min(E.HEIGHT-35,keyboardAim.y+delta[1]))};keyboardAiming=true;return;}
     if(['Space','Enter','NumpadEnter'].includes(event.code)){event.preventDefault();if(!event.repeat)deployAt(keyboardAim);}
   });
-  els['game-canvas'].addEventListener('pointermove',event=>{if(pointerDrag)return;const p=canvasPoint(event.clientX,event.clientY);if(Number.isFinite(p.x)&&Number.isFinite(p.y)){keyboardAim=p;keyboardAiming=false;}});
+  els['game-canvas'].addEventListener('pointermove',event=>{if(pointerDrag)return;const p=canvasPoint(event.clientX,event.clientY);if(Number.isFinite(p.x)&&Number.isFinite(p.y)){keyboardAim=p;keyboardAiming=!!selectedCard;}});
   document.addEventListener('visibilitychange',()=>{cancelDrag();if(document.hidden&&match&&match.phase==='playing'){paused=true;saveNow();}else{lastFrame=performance.now();if(match&&match.phase==='playing'&&currentScreen()==='battle'&&els.modal.classList.contains('hidden'))pauseBattle();}});
   window.addEventListener('blur',()=>{cancelDrag();if(match?.phase==='playing'&&!paused&&currentScreen()==='battle'&&els.modal.classList.contains('hidden'))pauseBattle();});
   window.addEventListener('orientationchange',()=>{cancelDrag();lastFrame=performance.now();});

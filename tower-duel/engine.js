@@ -86,7 +86,7 @@
     const mode = ['classic','frenzy','draft'].includes(options.mode) ? options.mode : 'classic';
     const arena = clamp(Number.isInteger(options.arena) ? options.arena : 0, 0, arenas.length - 1);
     const state = {
-      version: VERSION, rulesVersion: 3, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
+      version: VERSION, rulesVersion: 4, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
       rng: (options.seed >>> 0) || 19870621, nextId: 1, accumulator: 0, energy: { player: 5, enemy: 5 },
       units: [], projectiles: [], effects: [], casts: [], towers: makeTowers(),
       decks: { player: [], enemy: [] }, hands: { player: [], enemy: [] }, queues: { player: [], enemy: [] },
@@ -272,6 +272,18 @@
     return { x: bridgeX, y: target.y };
   }
 
+  // Fresh rules make ranged crews earn their range: they step back from a
+  // close threat, then use the same pathing and collision rules as every
+  // other troop. Released matches retain their direct rules-3 engagement.
+  function standoffGoal(state, unit, target) {
+    if (state.rulesVersion < 4 || unit.building || !unit.projectile || unit.range < 115) return null;
+    const gap = distance(unit, target) - (target.radius || 20) - unit.radius;
+    const desired = unit.flying ? unit.range * .52 : unit.range * .58;
+    if (gap >= desired * .55) return null;
+    const dx=unit.x-target.x,dy=unit.y-target.y,length=Math.hypot(dx,dy)||1,step=Math.min(150,desired-gap+44);
+    return {x:clamp(unit.x+dx/length*step,unit.radius,WIDTH-unit.radius),y:clamp(unit.y+dy/length*step,unit.radius,HEIGHT-unit.radius)};
+  }
+
   function moveWithStructures(state,unit,goal,target,dt,modifier){
     const obstacles=state.towers.concat(state.units.filter(q=>q.building));
     for(const o of obstacles){if(!o.alive||o.id===unit.id||o.id===target.id)continue;
@@ -316,6 +328,11 @@
       if (!target) continue;
       const gap = distance(unit, target) - (target.radius || 20) - unit.radius;
       if (gap <= unit.range) {
+        const space=standoffGoal(state,unit,target);
+        if(space){
+          const goal=movementGoal(unit,space);
+          moveWithStructures(state,unit,goal,target,dt,(unit.slow>0?.53:1)*(unit.haste>0?1.34:1));unit.lane=laneFor(unit.x);continue;
+        }
         if (unit.attackTimer <= 0) { if(state.rulesVersion>=3){const duration=unit.projectile?.22:.2;unit.windup={targetId:target.id,left:duration,duration};unit.heading=Math.atan2(target.y-unit.y,target.x-unit.x);unit.attackAnim=.24;}else{attack(state, unit, target); unit.attackTimer = unit.cooldown;} }
       } else if(!unit.building) {
         const goal = movementGoal(unit, target);
@@ -510,7 +527,7 @@
 
   function validateSnapshot(value) {
     if (!value || typeof value !== 'object' || value.version !== VERSION) return false;
-    if (value.rulesVersion != null && ![1,2,3].includes(value.rulesVersion)) return false;
+    if (value.rulesVersion != null && ![1,2,3,4].includes(value.rulesVersion)) return false;
     if(value.rulesVersion>=3){const ref=id=>id===null||typeof id==='string'&&id.length<40;
       if(!Array.isArray(value.casts)||value.casts.length>32||!value.casts.every(c=>c&&c.cardId==='comet'&&['player','enemy'].includes(c.side)&&[c.x,c.y,c.left,c.duration].every(Number.isFinite)&&c.x>=45&&c.x<=955&&c.y>=45&&c.y<=1355&&c.duration===.65&&c.left>0&&c.left<=c.duration))return false;
       if(!Array.isArray(value.units)||!value.units.every(u=>u&&ref(u.targetId)&&typeof u.building==='boolean'&&u.building===(cardMap[u.cardId]?.kind==='building')&&Number.isFinite(u.life)&&u.life>=0&&u.life<=30&&(u.windup===null||u.windup&&typeof u.windup.targetId==='string'&&u.windup.targetId.length<40&&[u.windup.left,u.windup.duration].every(Number.isFinite)&&u.windup.duration>0&&u.windup.duration<=.3&&u.windup.left>=0&&u.windup.left<=u.windup.duration)))return false;

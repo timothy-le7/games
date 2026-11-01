@@ -31,7 +31,7 @@
   const noise=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
   function Renderer(canvas,options){
     this.canvas=canvas;this.options=options||{};this.ready=false;this.lost=false;this.time=0;
-    this.eye=[16,23.5,28.5];this.target=[16,0,11];this.fov=.82;this.camera={};this.init();
+    this.eye=[16,23.5,28.5];this.target=[16,0,11];this.fov=.82;this.view='follow';this.camera={};this.init();
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true;this.options.onContextLost?.();});
     canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.init();this.options.onContextRestored?.();});
   }
@@ -43,6 +43,7 @@
   };
   Renderer.prototype.worldToScreen=function(x,y,z){const rel=[x-this.eye[0],y-this.eye[1],z-this.eye[2]],vx=dot(rel,this.camera.right),vy=dot(rel,this.camera.up),vz=dot(rel,this.camera.forward),t=Math.tan(this.fov/2);return{x:(.5+vx/(vz*t*this.camera.aspect)*.5)*this.canvas.clientWidth,y:(.5-vy/(vz*t)*.5)*this.canvas.clientHeight,visible:vz>0};};
   Renderer.prototype.screenToWorld=function(clientX,clientY){const r=this.canvas.getBoundingClientRect(),nx=(clientX-r.left)/r.width*2-1,ny=1-(clientY-r.top)/r.height*2,t=Math.tan(this.fov/2),d=norm(this.camera.forward.map((v,i)=>v+this.camera.right[i]*nx*t*this.camera.aspect+this.camera.up[i]*ny*t)),k=-this.eye[1]/d[1];return{x:clamp(this.eye[0]+d[0]*k,0,32),z:clamp(this.eye[2]+d[2]*k,0,22)};};
+  Renderer.prototype.setView=function(view){this.view=view==='overview'?'overview':'follow';};
   Renderer.prototype.part=function(name,x,y,z,sx,sy,sz,c,ry=0,rx=0,rz=0,glow=0,cast=true,rough=.52,metal=.25,kind=0){this.scene.draw(name,HD.matrix(x,y,z,sx,sy,sz,ry,rx,rz),c,[rough,metal,glow,kind],cast);};
   Renderer.prototype.floor=function(state,p){
     const d=this.part.bind(this);
@@ -304,12 +305,12 @@
   Renderer.prototype.render=function(state,aim,now,options){
     if(!this.ready||this.lost)return;
     const raw=state.entities.find(e=>e.id==='player'),alpha=clamp(state.accumulator/RivetRumbleEngine.STEP,0,1),player=raw?{...raw,x:(raw.prevX??raw.x)+(raw.x-(raw.prevX??raw.x))*alpha,z:(raw.prevZ??raw.z)+(raw.z-(raw.prevZ??raw.z))*alpha}:null,portrait=this.canvas.clientWidth/this.canvas.clientHeight<.8,focus=player?clamp(player.x,portrait?5:10,portrait?27:22):16,focusZ=player?clamp(player.z-1,5.5,16):11,dt=clamp((now-(this.previousTime??now))/1000,0,.1),fresh=this.previousState!==state;
-    const follow=1-Math.exp(-dt*9);this.focusX=fresh?focus:(this.focusX??focus)+(focus-(this.focusX??focus))*follow;this.focusZ=fresh?focusZ:(this.focusZ??focusZ)+(focusZ-(this.focusZ??focusZ))*follow;
-    this.previousState=state;this.previousTime=now;this.eye=[this.focusX,portrait?28:25,this.focusZ+(portrait?10:9)];this.target=[this.focusX,0,this.focusZ];this.fov=.70;
+    const overview=this.view==='overview',desiredX=overview?16:focus,desiredZ=overview?11:focusZ,follow=1-Math.exp(-dt*(overview?6:9));this.focusX=fresh?desiredX:(this.focusX??desiredX)+(desiredX-(this.focusX??desiredX))*follow;this.focusZ=fresh?desiredZ:(this.focusZ??desiredZ)+(desiredZ-(this.focusZ??desiredZ))*follow;
+    this.previousState=state;this.previousTime=now;this.eye=[this.focusX,overview?(portrait?33:30):(portrait?28:25),this.focusZ+(overview?(portrait?13:12):(portrait?10:9))];this.target=[this.focusX,0,this.focusZ];this.fov=overview?.88:.70;
     this.resize();this.time=this.options.reducedMotion?.()?0:now*.001;const p=PALETTES[state.arena]||PALETTES[0],lightVP=HD.multiply(HD.ortho(-25,25,-23,23,1,90),HD.lookAt([-6,36,30],[16,0,11],[0,1,0]));
     this.scene.begin(multiply(this.camera.p,this.camera.v),this.eye,this.time,{lightVP,clear:color(p.back).slice(0,3),fog:color(p.back).slice(0,3)});this.floor(state,p);this.scenery(state,p);this.launchPads(state);for(const e of state.entities)this.robot(state,{...e,x:(e.prevX??e.x)+(e.x-(e.prevX??e.x))*alpha,z:(e.prevZ??e.z)+(e.z-(e.prevZ??e.z))*alpha,airY:(e.prevAirY||0)+((e.airY||0)-(e.prevAirY||0))*alpha});this.action(state);this.smoke(state);this.aim(state,aim,options);this.scene.flush();
   };
-  Renderer.prototype.debug=function(){return{...this.scene?.debug(),lost:this.lost,webgl:!!this.gl,camera:{eye:this.eye.slice(),target:this.target.slice(),aspect:this.camera.aspect,fov:this.fov},playerScreen:this.previousState?(()=>{const p=this.previousState.entities.find(e=>e.id==='player');return p?this.worldToScreen(p.x,1.5,p.z):null})():null,renderer:'hd-landscape-arena',worldStyle:'continuous-terrain',layoutVersion:this.previousState?.layoutVersion};};
+  Renderer.prototype.debug=function(){return{...this.scene?.debug(),lost:this.lost,webgl:!!this.gl,camera:{eye:this.eye.slice(),target:this.target.slice(),aspect:this.camera.aspect,fov:this.fov,view:this.view},playerScreen:this.previousState?(()=>{const p=this.previousState.entities.find(e=>e.id==='player');return p?this.worldToScreen(p.x,1.5,p.z):null})():null,renderer:'hd-landscape-arena',worldStyle:'continuous-terrain',layoutVersion:this.previousState?.layoutVersion};};
   Renderer.prototype.destroy=function(){this.scene?.destroy();this.ready=false;};
   return {Renderer,color};
 });
