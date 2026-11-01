@@ -39,6 +39,11 @@
     const priorSpike={floor:null,ceiling:null},spikeRun={floor:0,ceiling:0};
     for(const o of level.obstacles){
       if(o.type==='block'){o.w=Math.max(o.w,1.18);o.h=Math.min(o.h,1.34);}
+      // Flight uses ordinary press/release timing rather than a perfect
+      // simulator trace. Give the new fixed-arc courses enough vertical gate
+      // clearance for a touch/key release between rendered browser frames;
+      // legacy/rules-2 geometry remains below in its own map.
+      if(o.type==='gate')o.gap=Math.max(o.gap,3.15);
       if(o.type==='spike'){
         const side=o.side||'floor',previous=priorSpike[side],originalX=o.x;
         if(previous&&originalX-previous.originalX<=3.8){o.x=previous.x+1.08;spikeRun[side]++;}else spikeRun[side]=1;
