@@ -7,14 +7,39 @@
   function lookAt(e,t,u){let zx=e[0]-t[0],zy=e[1]-t[1],zz=e[2]-t[2],q=Math.hypot(zx,zy,zz);zx/=q;zy/=q;zz/=q;let xx=u[1]*zz-u[2]*zy,xy=u[2]*zx-u[0]*zz,xz=u[0]*zy-u[1]*zx;q=Math.hypot(xx,xy,xz);xx/=q;xy/=q;xz/=q;const yx=zy*xz-zz*xy,yy=zz*xx-zx*xz,yz=zx*xy-zy*xx;return new Float32Array([xx,yx,zx,0,xy,yy,zy,0,xz,yz,zz,0,-xx*e[0]-xy*e[1]-xz*e[2],-yx*e[0]-yy*e[1]-yz*e[2],-zx*e[0]-zy*e[1]-zz*e[2],1]);}
   function model(x,y,z,sx,sy,sz,rz,ry){const cz=Math.cos(rz||0),szn=Math.sin(rz||0),cy=Math.cos(ry||0),syn=Math.sin(ry||0),r00=cz*cy,r01=-szn,r02=cz*syn,r10=szn*cy,r11=cz,r12=szn*syn,r20=-syn,r21=0,r22=cy;return{m:new Float32Array([r00*sx,r10*sx,r20*sx,0,r01*sy,r11*sy,r21*sy,0,r02*sz,r12*sz,r22*sz,0,x,y,z,1]),n:new Float32Array([r00,r10,r20,r01,r11,r21,r02,r12,r22])};}
   class Renderer{
-    constructor(canvas,engine){this.canvas=canvas;this.engine=engine;this.gl=null;this.lost=false;this.stats={drawCalls:0,triangles:0,dpr:1,actors:0};canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true;});canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.init();});this.init();}
-    init(){this.scene=new root.GameHD.Scene(this.canvas,{meshScale:2,shadowSize:1024,bloomStrength:.29});this.gl=this.scene.gl;}
+    constructor(canvas,engine){this.canvas=canvas;this.engine=engine;this.gl=null;this.lost=false;this.stats={drawCalls:0,triangles:0,dpr:1,actors:0};this.orientations=new Map();canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true;});canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.init();});this.init();}
+    init(){this.orientations.clear();this.scene=new root.GameHD.Scene(this.canvas,{meshScale:2,shadowSize:1024,bloomStrength:.29});this.gl=this.scene.gl;}
     resize(){const r=this.canvas.getBoundingClientRect();this.scene.resize(r.width,r.height,root.devicePixelRatio||1,6500000);const aspect=this.canvas.width/this.canvas.height,portrait=aspect<.8,halfW=portrait?3.65:8.6;this.camera={aspect,portrait,halfW,halfH:halfW/aspect};}
     draw(name,x,y,z,sx,sy,sz,color,rz=0,ry=0,alpha=1,glow=0,cast=true,rough=.45,metal=.4,kind=0){const rgb=Array.isArray(color)?color:hex(color);const mm=model(x,y,z,sx,sy,sz,rz,ry).m,transform=['gear','wheel'].includes(name)?mul(mm,root.GameHD.matrix(0,0,0,1,1,1,0,Math.PI/2)):mm;this.scene.draw(name==='wheel'?'cylinder':name,transform,[rgb[0],rgb[1],rgb[2],alpha],[rough,metal,glow,kind],cast);}
     render(match,options){
       if(this.lost||!match)return;this.resize();const HD=root.GameHD,level=this.engine.levelFor(match),player=match.actors[0],t=level.theme,lead=this.camera.portrait?2.3:3.4,cam=clamp(player.x+lead,this.camera.halfW-1,level.length-this.camera.halfW+1),eye=[cam,5.8,11],target=[cam,3,0],vp=mul(ortho(-this.camera.halfW,this.camera.halfW,-this.camera.halfH,this.camera.halfH,-40,45),lookAt(eye,target,[0,1,0])),lightVP=mul(ortho(-15,15,-12,12,1,60),lookAt([cam-8,19,14],[cam,3,0],[0,1,0]));
       this.time=options?.reducedMotion?0:match.elapsed;this.camera.x=cam;this.scene.begin(vp,eye,this.time,{lightVP,clear:hex(t.sky),fog:hex(t.sky),light:[-.38,.83,.45]});
       this.environment(level,t,cam,this.time,options);for(const o of level.obstacles)if(Math.abs(o.x-cam)<this.camera.halfW+2)this.obstacle(o,t);for(const s of level.sections)if(Math.abs(s.x-cam)<this.camera.halfW+1)this.portal(s,t);for(const actor of match.actors.slice().sort((a,b)=>b.kind.localeCompare(a.kind)))this.actor(actor,match,t,options);this.feedback(match,t,options);if(Math.abs(level.length-cam)<this.camera.halfW+2)this.finish(level,t);this.scene.flush();this.stats={...this.scene.debug(),actors:match.actors.length};
+    }
+    runRotation(a,m,options){
+      const elapsed=Number.isFinite(m.elapsed)?m.elapsed:0,sign=a.gravity===1?-1:1,orientations=this.orientations||(this.orientations=new Map()),prior=orientations.get(a.id),reset=!prior||elapsed+.0001<prior.elapsed||a.x<prior.x-.4;
+      // Rendering state is deliberately separate from the deterministic
+      // runner. A restored midair match begins from its historical visual
+      // phase; a fresh jump advances from the orientation it launched with,
+      // rather than deriving a new roll from the world's absolute x.
+      const state=reset?{angle:a.mode==='run'&&!a.grounded?a.x*2.4*sign:a.mode==='flight'?clamp(a.vy*.055,-.35,.35):0,x:a.x,elapsed,grounded:!!a.grounded,mode:a.mode,target:0,settling:false}:prior;
+      const dx=clamp(a.x-state.x,-1,1),dt=clamp(elapsed-state.elapsed,0,.1);
+      if(a.mode!=='run'){
+        state.angle=clamp(a.vy*.055,-.35,.35);state.target=state.angle;state.settling=false;
+      }else if(!a.grounded){
+        // Preserve the former 2.4 rad/unit roll cadence, but integrate it
+        // over this jump so a landing has a meaningful incoming phase.
+        state.angle+=dx*2.4*sign;state.target=state.angle;state.settling=false;
+      }else{
+        if(!state.grounded||state.mode!=='run'){
+          const quarter=Math.PI/2;state.target=Math.round(state.angle/quarter)*quarter;state.settling=true;
+        }
+        if(state.settling){
+          const settle=options?.reducedMotion?1:1-Math.exp(-20*dt);state.angle+=(state.target-state.angle)*settle;
+          if(Math.abs(state.target-state.angle)<.006){state.angle=state.target;state.settling=false;}
+        }
+      }
+      state.x=a.x;state.elapsed=elapsed;state.grounded=!!a.grounded;state.mode=a.mode;orientations.set(a.id,state);return state.angle;
     }
     environment(level,t,c,time,options){
       const left=Math.floor(c-this.camera.halfW)-3,right=Math.ceil(c+this.camera.halfW)+3,d=this.draw.bind(this),beat=options?.reducedMotion?1:.9+.1*Math.cos(time*level.bpm/60*TAU),theme=level.id;
@@ -76,7 +101,7 @@
     }
     portal(s,t){if(s.x<=.1)return;const d=this.draw.bind(this),color=s.mode==='flight'?t.accent:t.hot;for(const y of [.65,5.35]){d('torus',s.x,y,.18,.42,.42,.09,color,0,0,1,.35);d('gear',s.x,y,.03,.32,.32,.08,'#8fa9ae',this.time*.2,0,1,0);d('sphere',s.x,y,.3,.11,.11,.08,'#fff8d5',0,0,1,.8);}for(let y=1.2;y<4.9;y+=.35)d('sphere',s.x,y,.12,.025,.06,.025,color,0,0,.45,.6,false);}
     actor(a,m,t,options){
-      if(!a.alive&&!a.finished)return;const d=this.draw.bind(this),lane=Number(a.id.slice(-1)||0),z=a.kind==='player'?.05:-.65-lane*.4,alpha=a.kind==='player'?1:.68,spin=a.mode==='run'?(a.grounded?0:a.x*2.4*(a.gravity===1?-1:1)):clamp(a.vy*.055,-.35,.35),col=a.palette,contact=a.gravity===1?.02:5.98;
+      if(!a.alive&&!a.finished)return;const d=this.draw.bind(this),lane=Number(a.id.slice(-1)||0),z=a.kind==='player'?.05:-.65-lane*.4,alpha=a.kind==='player'?1:.68,spin=this.runRotation(a,m,options),col=a.palette,contact=a.gravity===1?.02:5.98;
       d('sphere',a.x,contact,z,.36,.025,.30,'#07111d',0,0,.22,0,false);
       // Rotating sealed chassis with inset faceplate, machined corners and six-sided lens.
       d('box',a.x,a.y,z,.34,.34,.26,'#192e44',spin,0,alpha);
@@ -94,7 +119,7 @@
       for(let i=0;i<a.trail.length;i+=4){const q=a.trail[i],fade=(i+1)/Math.max(1,a.trail.length);d('sphere',q.x,q.y,z-.04,.022+.035*fade,.022+.035*fade,.022, col,0,0,alpha*.22,.65,false);}
     }
     finish(level,t){this.draw('box',level.length+.15,3,0,.08,3,.9,t.accent,0,0,.4,.3,false);for(const y of [1,3,5]){this.draw('torus',level.length,y,.3,.45,.45,.09,t.hot,0,0,1,.4);this.draw('sphere',level.length,y,.4,.15,.15,.15,'#fff4c1',0,0,1,.6);}}
-    debug(){return{lost:this.lost,webgl:!!this.gl,width:this.canvas.width,height:this.canvas.height,camera:this.camera,renderer:'hd-foundry-diorama',...this.stats};}
+    debug(){const orientation=this.orientations?.get('player');return{lost:this.lost,webgl:!!this.gl,width:this.canvas.width,height:this.canvas.height,camera:this.camera,renderer:'hd-foundry-diorama',orientation:orientation&&{angle:orientation.angle,target:orientation.target,settling:orientation.settling,grounded:orientation.grounded,mode:orientation.mode},...this.stats};}
     destroy(){this.scene?.destroy();}
   }
   root.PulseFoundryRenderer=Renderer;
