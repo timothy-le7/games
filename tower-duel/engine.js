@@ -241,7 +241,7 @@
   }
 
   function launchProjectile(state, attacker, target, damage, splash) {
-    state.projectiles.push({ id: 'p' + state.nextId++, side: attacker.side, x: attacker.x, y: attacker.y, targetId: target.id, speed: attacker.projectile || 500, damage, splash: splash || 0, life: 2.5, color: cardMap[attacker.cardId] ? cardMap[attacker.cardId].color : '#fff',visual:{kind:attacker.cardId||'tower',height:attacker.type?(attacker.type==='base'?1.74:1.45):attacker.flying?1.7:attacker.building?.86:.95,distance:distance(attacker,target),travel:0} });
+    state.projectiles.push({ id: 'p' + state.nextId++, side: attacker.side, x: attacker.x, y: attacker.y, targetId: target.id, speed: attacker.projectile || 500, damage, splash: splash || 0, life: 2.5, color: cardMap[attacker.cardId] ? cardMap[attacker.cardId].color : '#fff' });
   }
 
   function attack(state, unit, target) {
@@ -344,7 +344,7 @@
         applyDamage(state, target, shot.damage, shot.side);
         if (shot.splash) state.units.filter((u) => u.alive && u.side !== shot.side && u.id !== target.id && distance(u, target) <= shot.splash).forEach((u) => applyDamage(state, u, shot.damage * .6, shot.side));
         shot.life = 0;
-      } else { shot.x += (target.x - shot.x) / d * stride; shot.y += (target.y - shot.y) / d * stride;if(shot.visual)shot.visual.travel+=stride; }
+      } else { shot.x += (target.x - shot.x) / d * stride; shot.y += (target.y - shot.y) / d * stride; }
     }
     state.projectiles = state.projectiles.filter((p) => p.life > 0);
   }
@@ -527,7 +527,7 @@
     })) return false;
     if (!Array.isArray(value.units) || value.units.length > 250 || !value.units.every((unit) => unit && typeof unit.id === 'string' && ['player','enemy'].includes(unit.side) && !!cardMap[unit.cardId] && [unit.x,unit.y,unit.hp,unit.maxHp,unit.damage,unit.speed,unit.range,unit.cooldown,unit.attackTimer,unit.radius].every(Number.isFinite) && unit.x >= -100 && unit.x <= WIDTH + 100 && unit.y >= -100 && unit.y <= HEIGHT + 100 && unit.maxHp > 0 && unit.hp >= 0 && unit.hp <= unit.maxHp * 1.01)) return false;
     if (!Array.isArray(value.towers) || value.towers.length !== 6 || !value.towers.every((tower) => tower && typeof tower.id === 'string' && ['player','enemy'].includes(tower.side) && ['base','lane'].includes(tower.type) && (tower.active == null || typeof tower.active === 'boolean') && [tower.x,tower.y,tower.hp,tower.maxHp,tower.range,tower.damage].every(Number.isFinite) && tower.maxHp > 0 && tower.hp >= 0 && tower.hp <= tower.maxHp)) return false;
-    if (!Array.isArray(value.projectiles) || value.projectiles.length > 500 || !value.projectiles.every((shot) => shot && typeof shot.id === 'string' && typeof shot.targetId==='string' && shot.targetId.length<80 && ['player','enemy'].includes(shot.side) && [shot.x,shot.y,shot.speed,shot.damage,shot.life].every(Number.isFinite) && typeof shot.color==='string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(shot.color) && (shot.visual===undefined||shot.visual&&['tower',...Object.keys(cardMap)].includes(shot.visual.kind)&&[shot.visual.height,shot.visual.distance,shot.visual.travel].every(Number.isFinite)&&shot.visual.height>=0&&shot.visual.height<=3&&shot.visual.distance>=0&&shot.visual.distance<=3000&&shot.visual.travel>=0&&shot.visual.travel<=10000))) return false;
+    if (!Array.isArray(value.projectiles) || value.projectiles.length > 500 || !value.projectiles.every((shot) => shot && typeof shot.id === 'string' && ['player','enemy'].includes(shot.side) && [shot.x,shot.y,shot.speed,shot.damage,shot.life].every(Number.isFinite))) return false;
     if (!Array.isArray(value.effects) || value.effects.length > 100 || !Array.isArray(value.events) || value.events.length > 36) return false;
     if (!value.stats || !['playerPlayed','enemyPlayed','playerDamage','enemyDamage'].every((key) => Number.isFinite(value.stats[key]) && value.stats[key] >= 0)) return false;
     if (value.phase === 'ended' && !['win','loss','tie'].includes(value.result)) return false;
