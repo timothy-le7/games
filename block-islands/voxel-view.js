@@ -245,7 +245,6 @@
       varying vec3 vNormal; varying vec3 vWorld; varying vec2 vUv; varying float vMaterial; varying float vOcclusion;
       vec3 sampleMaterial(float material, vec2 uv){ return texture2D(uAtlas,vec2((material+clamp(uv.x,.02,.98))/${atlasColumns},clamp(uv.y,.02,.98))).rgb; }
       float biome(float id){return 1.0-step(.25,abs(uBiome-id));}
-      float segmentDistance(vec2 p,vec2 a,vec2 b){vec2 ab=b-a;return length(p-a-ab*clamp(dot(p-a,ab)/dot(ab,ab),0.0,1.0));}
       void main(){
         float material=floor(vMaterial+.5); vec3 normal=normalize(vNormal); float distanceToCamera=length(vWorld-uCamera);
         if(uOverlay<-.5){ float edge=length(vUv-vec2(.5))*2.0; gl_FragColor=vec4(vec3(.015,.030,.050),.38*smoothstep(1.0,.18,edge)); return; }
@@ -276,11 +275,7 @@
         if(abs(material-11.0)<.5) color+=vec3(.31,.20,.04)*(.65+.35*sin(uTime*1.6));
         if(abs(material-13.0)<.5) color+=vec3(.36,.075,.012)*(.72+.28*sin(uTime*2.4+vWorld.x));
         float alpha=1.0;
-        if(abs(material-12.0)<.5){vec3 reflected=reflect(-view,normal);vec3 sky=mix(vec3(.20,.40,.49),vec3(.63,.84,.91),clamp(reflected.y*.5+.5,0.,1.))*mix(.3,1.,uDaylight);float fres=.16+.52*pow(1.-max(dot(normal,view),0.),4.);color=mix(color,sky,fres);}
-        if(uOverlay>0.0){
-          float cracks=0.;for(int i=0;i<8;i++){float f=float(i),angle=f*2.399,extent=clamp(uOverlay*1.6-f*.10,0.,1.);vec2 from=vec2(.48,.52),joint=from+vec2(cos(angle),sin(angle))*.29*extent,tip=joint+vec2(cos(angle+.6),sin(angle+.6))*.23*extent;float d=min(segmentDistance(vUv,from,joint+vec2(.00001)),segmentDistance(vUv,joint,tip+vec2(.00001)));cracks=max(cracks,1.-smoothstep(.008,.018,d));}
-          color=mix(color,vec3(.035,.045,.055),cracks*.88);alpha=.18+.66*cracks;
-        }
+        if(uOverlay>0.0){ float crack=max(step(.94,fract(vUv.x*13.0+vUv.y*5.0)),step(.96,fract(vUv.y*17.0-vUv.x*7.0))); color=mix(color,vec3(.06,.08,.10),crack*uOverlay); alpha=.12+.36*uOverlay; }
         gl_FragColor=vec4(color,alpha*uOpacity);
       }
     `;

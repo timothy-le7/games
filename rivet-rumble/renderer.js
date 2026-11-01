@@ -48,7 +48,7 @@
     const d=this.part.bind(this);
     // A continuous landscape replaces the elevated board and its gameplay-like grid.
     d('box',16,-.36,11,48,.6,38,p.back,0,0,0,0,false,1,0);
-    d('cube',16,-.09,11,32,.16,22,p.floor,0,0,0,0,false,1,0,5);
+    d('cube',16,-.09,11,32,.16,22,p.floor,0,0,0,0,false,1,0);
     // Quiet, continuous worn paths leave combat silhouettes and cover in focus.
     for(let z=1;z<22;z+=1.7)d('disc',16+Math.sin(z*.32)*2,.003,z,4.3,1,3.4,p.tile,0,0,0,0,false,1,0);
     for(let x=1.5;x<32;x+=2)d('disc',x,.004,11+Math.sin(x*.26)*1.6,4.4,1,2.6,p.tile,0,0,0,0,false,1,0);
@@ -136,7 +136,7 @@
         d('box',x,.70,z,2.3,1.5,1.8,p.stone,.15,0,.05,0,true,1,0);d('box',x-.2,1.55,z,1.7,.55,1.4,p.top,-.1,0,0,0,true,1,0);
         d('cylinder',x+1,.6,z+.7,.34,1.2,.34,p.grass,0,0,.1,0,true,1,0);d('sphere',x+1,1.2,z+.7,.36,.36,.36,p.tip,0,0,0,0,true,1,0);
       }else if(state.arena===5){
-        d('box',x,.06,z,2.5,.15,2.5,p.wood,0,0,0,0,true,1,0,7);for(const off of [-.9,.9])d('cylinder',x+off,.6,z,.2,1.2,.2,p.edge,0,0,0,0,true,1,0);
+        d('box',x,.06,z,2.5,.15,2.5,p.wood,0,0,0,0,true,1,0);for(const off of [-.9,.9])d('cylinder',x+off,.6,z,.2,1.2,.2,p.edge,0,0,0,0,true,1,0);
         d('box',x,1.3,z,1.5,2.6,.18,p.edge);d('box',x,2.7,z,1.8,.2,.65,p.top);d('box',x,2.55,z+.15,1.3,.08,.2,p.accent,0,0,0,.35);
       }else this.tree(x,z,p,state.arena===3);
     }
@@ -150,33 +150,14 @@
   function teamColor(e){return e.team==='blue'?C.blue:e.team==='red'?C.red:e.id==='player'?C.solo:'#c18bff';}
   Renderer.prototype.robot=function(state,e){
     if(!e.alive)return;const observer=state.entities.find(q=>q.id==='player');if(observer&&!RivetRumbleEngine.visibleTo(state,observer,e))return;const f=RivetRumbleEngine.fighterMap[e.fighter],shape=f.model||f.id,heavy=['anvil','knuckle'].includes(shape),slim=['vector','shroud'].includes(shape),tint=e.hit>0?'#fff3db':f.color,trim=f.trim,team=teamColor(e),dark='#203747',metal='#607b8b',x=e.x,z=e.z,r=Math.PI/2-e.heading,c=Math.cos(r),s=Math.sin(r),walk=Math.sin(e.walk),moving=Math.min(1,Math.hypot(e.vx,e.vz)/2),bob=Math.abs(walk)*.035*moving,width=heavy?1.15:slim?.72:shape==='tempo'?1.08:shape==='briar'?.93:.86;
-    const model=.82,d=(name,lx,y,lz,sx,sy,sz,col,rx=0,ry=0,rz=0,glow=0,cast=true,rough=.52,metal=.25,kind=0)=>this.part(name,x+(lx*c+lz*s)*model,y*model+bob+(e.airY||0),z+(-lx*s+lz*c)*model,sx*model,sy*model,sz*model,col,r+ry,rx,rz,glow,cast,rough,metal,kind);
+    const model=.82,d=(name,lx,y,lz,sx,sy,sz,col,rx=0,ry=0,rz=0,glow=0,cast=true)=>this.part(name,x+(lx*c+lz*s)*model,y*model+bob+(e.airY||0),z+(-lx*s+lz*c)*model,sx*model,sy*model,sz*model,col,r+ry,rx,rz,glow,cast);
     this.part('disc',x,.014,z,1.7,1,1.38,color('#102c40',.22),0,0,0,0,false);
     this.part('torus',x,.04,z,1.65,1.65,.23,team,0,-Math.PI/2,0,.25,false);
-    // A connected gait follows movement independently of the weapon's aim.
-    const pilot=['spark','rail','vector','shroud','lumen','briar'].includes(shape),variant=f.variant||0,skin=['#c98c65','#edbb91','#925938','#ddb39a'][variant%4],hair=['#43302c','#68412c','#242c3c','#e1bc74'][variant%4];
-    const bone=(from,to,w,depth,col,kind=0)=>{const dx=to[0]-from[0],dy=to[1]-from[1],dz=to[2]-from[2],length=Math.hypot(dx,dy,dz);d('capsule',(from[0]+to[0])/2,(from[1]+to[1])/2,(from[2]+to[2])/2,w,length,depth,col,Math.acos(clamp(dy/Math.max(.00001,length),-1,1)),Math.atan2(-dx,-dz),0,0,true,.85,0,kind);};
-    const vx=e.vx*c-e.vz*s,vz=e.vx*s+e.vz*c,speed=Math.max(.01,Math.hypot(vx,vz));
-    for(const sign of [-1,1]){const step=walk*sign*.24*moving,lift=Math.max(0,walk*sign)*.14*moving,hip=[sign*width*.27,.91,0],knee=[sign*width*.29+vx/speed*step*.45,.53+lift*.45,vz/speed*step*.45],foot=[sign*width*.3+vx/speed*step,.17+lift,vz/speed*step];
-      bone(hip,knee,.29,.28,pilot?tint:metal,8);bone(knee,foot,.22,.23,pilot?dark:trim,8);d('sphere',...knee,.25,.23,.25,trim);d('box',foot[0],foot[1]-.04,foot[2]+.09,.34,.21,.52,dark);d('box',foot[0],foot[1]-.13,foot[2]+.11,.35,.06,.56,'#182d35');
-    }
-    d('capsule',0,.99,0,width*.92,.24,.61,dark);d(pilot?'torso':'capsule',0,1.39,0,width,.83,.73,tint,0,0,0,0,true,.85,0,pilot?8:0);
-    d('box',0,1.04,.30,width*.86,.11,.09,dark);d('box',0,1.04,.36,.18,.12,.06,trim);
-    if(shape==='tempo'){d('cylinder',0,1.4,.45,.6,.2,.6,dark,Math.PI/2);d('torus',0,1.4,.57,.5,.5,.15,trim,0,0,0,.2);}else{d('capsule',0,1.5,.3,width*.76,.37,.18,trim);d('box',0,1.5,.405,width*.45,.1,.03,team,0,0,0,.25);}
-    for(const sign of [-1,1]){const shoulder=[sign*width*.62,1.65,.02],elbow=[sign*width*.70,1.30,.18],hand=[sign*width*.58,1.30,.65-(e.recoil||0)*.4];
-      d('sphere',...shoulder,heavy?.49:.35,.35,.39,tint);bone(shoulder,elbow,.25,.26,pilot?tint:metal,8);bone(elbow,hand,.22,.23,pilot?skin:trim,pilot?9:0);d('sphere',...hand,.25,.23,.26,pilot?skin:trim);d('sphere',sign*width*.35,1.73,.34,.065,.065,.045,metal);
-    }
+    // Separate ankle pivots, boots, knee plates and hip cylinders create a readable gait.
+    for(const sign of [-1,1]){const step=walk*sign*.14*moving;d('box',sign*width*.3,.21,.08+step,.36,.28,.6,dark);d('box',sign*width*.3,.33,.23+step,.31,.13,.24,trim);d('cylinder',sign*width*.3,.52,step,.19,.45,.19,metal);d('box',sign*width*.3,.67,.12+step,.30,.33,.28,tint,step);d('sphere',sign*width*.3,.85,0,.26,.26,.26,dark);}
+    d('box',0,.98,0,width*.92,.26,.61,dark);if(['briar','gyro','echo'].includes(shape))d('cylinder',0,1.38,0,width,.85,.78,shape==='briar'?'#9d6948':tint);else d('box',0,1.38,0,width,.72,.72,tint);if(shape==='tempo'){d('cylinder',0,1.4,.45,.6,.2,.6,dark,Math.PI/2);d('torus',0,1.4,.57,.5,.5,.15,trim,0,0,0,.2);}else d('box',0,1.48,.39,width*.76,.33,.12,trim);d('box',0,1.45,.46,width*.5,.15,.025,team,0,0,0,.55);
+    for(const sign of [-1,1]){d('sphere',sign*(width*.64),1.58,0,.36,.38,.38,metal);d('box',sign*(width*.67),1.63,.02,heavy?.53:.35,.33,.48,tint);d('cylinder',sign*(width*.65),1.28,.03,.2,.4,.2,dark);d('box',sign*(width*.64),1.12,.19,.29,.29,.37,trim);d('sphere',sign*width*.37,1.7,.39,.075,.075,.045,metal);}
     d('cylinder',0,1.85,0,.29,.22,.29,metal);
-    if(pilot){
-      d('capsule',0,2.13,0,.72,.70,.66,skin,0,0,0,0,true,.8,0,9);d('sphere',0,2.41,-.06,.77,.37,.72,hair);
-      for(const sign of [-1,1]){d('sphere',sign*.35,2.13,0,.14,.22,.14,skin);d('sphere',sign*.14,2.18,.30,.14,.13,.055,'#fff7e6');d('sphere',sign*.14,2.18,.335,.064,.085,.03,'#192f3d');d('capsule',sign*.14,2.28,.31,.18,.045,.045,hair,0,0,sign*.12);}
-      d('sphere',0,2.09,.34,.13,.17,.14,skin);d('capsule',0,1.98,.31,.19,.038,.04,'#8f5040');
-      if(shape==='rail'){d('cone',0,2.61,-.04,1.0,.35,.88,tint);d('cylinder',0,2.45,.08,1.16,.065,.95,trim);d('box',.28,2.30,.14,.19,.36,.25,dark);}
-      else if(shape==='shroud'){d('capsule',0,2.48,-.15,.91,.45,.8,tint);d('box',0,1.96,.28,.72,.22,.27,trim);d('capsule',0,1.25,-.43,1.05,1.2,.11,tint,.13);}
-      else if(shape==='briar'){for(let i=0;i<5;i++)d('capsule',Math.sin(i*1.4)*.28,2.51,Math.cos(i*1.4)*.2,.21,.39,.2,tint,0,i*1.4,.35);}
-      else{d('capsule',0,2.50,-.02,.81,.24,.73,tint);d('box',0,2.40,.34,.67,.065,.32,trim);if(shape==='vector')for(const sign of [-1,1])d('sphere',sign*.38,2.21,0,.19,.30,.25,dark);}
-      d('capsule',0,1.86,0,.48,.17,.48,trim);
-    }else{
     if(shape==='mortar'){d('sphere',0,2.17,0,.86,.65,.8,tint);d('cylinder',0,2.47,0,.95,.12,.85,trim);d('cylinder',0,2.59,-.04,.38,.17,.38,dark);}
     else if(['lumen','tempo'].includes(shape)){d('sphere',0,2.18,0,.79,.64,.74,tint);d('torus',0,2.6,0,.98,.98,.16,trim,-Math.PI/2,0,0,.18);}
     else if(shape==='shroud'){d('cone',0,2.3,-.05,1.2,.9,1.1,tint);d('box',0,2.12,.28,.69,.34,.3,dark);d('box',0,1.1,-.44,1.15,1.35,.13,tint,.2);}
@@ -188,7 +169,6 @@
     if(shape==='rail')d('sphere',0,2.18,.44,.25,.22,.12,team,0,0,0,.8);
     else for(const sign of [-1,1])d('box',sign*.16,2.19,.428,.12,.075,.035,team,0,0,0,.9);
     d('box',0,2.02,.422,.21,.035,.025,metal);d('cylinder',-.25,2.64,-.14,.065,.24,.065,dark);d('sphere',-.25,2.79,-.14,.115,.115,.115,team,0,0,0,.65);
-    }
     // Back-mounted power pack, fins and a role-specific weapon all face engine heading.
     d('box',0,1.52,-.46,.59,.68,.32,dark);for(const sign of [-1,1]){d('cylinder',sign*.2,1.5,-.64,.17,.50,.17,tint);d('box',sign*.2,1.6,-.74,.1,.29,.035,team,0,0,0,.3);}
     const recoil=e.recoil||0;

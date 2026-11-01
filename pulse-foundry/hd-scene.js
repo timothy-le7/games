@@ -33,21 +33,13 @@
     }return m;
   }
   function sphere(s=24,r=12){const m=mesh();for(let y=0;y<=r;y++)for(let x=0;x<=s;x++){const ph=y/r*Math.PI,th=x/s*TAU,n=[Math.sin(ph)*Math.cos(th),Math.cos(ph),Math.sin(ph)*Math.sin(th)];vertex(m,n.map(v=>v*.5),n);}for(let y=0;y<r;y++)for(let x=0;x<s;x++){const a=y*(s+1)+x,b=a+s+1;if(y>0)triangle(m,a,a+1,b+1);if(y<r-1)triangle(m,a,b+1,b);}return m;}
-  function lathe(profile,s=24){
-    const m=mesh();for(let y=0;y<profile.length;y++)for(let x=0;x<=s;x++){
-      const [h,r]=profile[y],lo=profile[Math.max(0,y-1)],hi=profile[Math.min(profile.length-1,y+1)],a=x/s*TAU;
-      const n=r===0?[0,y===0?-1:1,0]:normalize([Math.cos(a),-(hi[1]-lo[1])/(hi[0]-lo[0]),Math.sin(a)]);
-      vertex(m,[Math.cos(a)*r,h,Math.sin(a)*r],n);
-    }
-    for(let y=0;y<profile.length-1;y++)for(let x=0;x<s;x++){const a=y*(s+1)+x,b=a+s+1;if(profile[y][1]>0)triangle(m,a,b,a+1);if(profile[y+1][1]>0)triangle(m,a+1,b,b+1);}return m;
-  }
   function torus(s=32,t=8){const m=mesh();for(let k=0;k<=s;k++)for(let j=0;j<=t;j++){const a=k/s*TAU,b=j/t*TAU,r=.42+.08*Math.cos(b);vertex(m,[Math.cos(a)*r,Math.sin(a)*r,Math.sin(b)*.08],[Math.cos(a)*Math.cos(b),Math.sin(a)*Math.cos(b),Math.sin(b)]);}for(let k=0;k<s;k++)for(let j=0;j<t;j++){const a=k*(t+1)+j,b=a+t+1;m.i.push(a,b,b+1,a,b+1,a+1);}return m;}
   function ring(s=40){const m=mesh();for(let k=0;k<=s;k++){const a=k/s*TAU;vertex(m,[Math.cos(a)*.34,Math.sin(a)*.34,0],[0,0,1]);vertex(m,[Math.cos(a)*.5,Math.sin(a)*.5,0],[0,0,1]);}for(let k=0;k<s;k++){const a=k*2;m.i.push(a,a+1,a+3,a,a+3,a+2);}return m;}
   function disc(s=40){const m=mesh();for(let k=0;k<s;k++){const a=k/s*TAU,b=(k+1)/s*TAU,j=m.p.length/3;vertex(m,[0,0,0],[0,1,0]);vertex(m,[Math.cos(b)*.5,0,Math.sin(b)*.5],[0,1,0]);vertex(m,[Math.cos(a)*.5,0,Math.sin(a)*.5],[0,1,0]);triangle(m,j,j+1,j+2);}return m;}
   function wedge(){const m=mesh(),points=[[-.5,-.5,-.5],[.5,-.5,-.5],[0,.5,-.5],[-.5,-.5,.5],[0,.5,.5],[.5,-.5,.5]];for(const [a,b,c]of [[0,2,1],[3,5,4],[0,3,4],[0,4,2],[1,2,4],[1,4,5],[0,1,5],[0,5,3]]){const n=normalize(cross(points[b].map((v,i)=>v-points[a][i]),points[c].map((v,i)=>v-points[a][i]))),j=m.p.length/3;for(const q of [a,b,c])vertex(m,points[q],n);triangle(m,j,j+1,j+2);}return m;}
   function gear(teeth=12){const m=mesh(),s=teeth*4;for(let k=0;k<s;k++){const a=k/s*TAU,b=(k+1)/s*TAU,ra=k%4<2?.5:.43,rb=(k+1)%4<2?.5:.43,pa=[Math.cos(a)*ra,Math.sin(a)*ra],pb=[Math.cos(b)*rb,Math.sin(b)*rb],normal=normalize([pb[1]-pa[1],0,pa[0]-pb[0]]),j=m.p.length/3;vertex(m,[...pa.slice(0,1),-.10,pa[1]],normal);vertex(m,[pa[0],.10,pa[1]],normal);vertex(m,[pb[0],.10,pb[1]],normal);vertex(m,[pb[0],-.10,pb[1]],normal);m.i.push(j,j+1,j+2,j,j+2,j+3);for(const sign of [-1,1]){const q=m.p.length/3;vertex(m,[0,sign*.10,0],[0,sign,0]);vertex(m,[pa[0],sign*.10,pa[1]],[0,sign,0]);vertex(m,[pb[0],sign*.10,pb[1]],[0,sign,0]);if(sign>0)triangle(m,q,q+2,q+1);else triangle(m,q,q+1,q+2);}}return m;}
   function quad(){return {p:[-.5,-.5,0,.5,-.5,0,.5,.5,0,-.5,.5,0],n:[0,0,1,0,0,1,0,0,1,0,0,1],i:[0,1,2,0,2,3]};}
-  function meshes(scale=1){const all={box:box(),cube:box(0),sphere:sphere(),capsule:lathe([[-.5,0],[-.48,.2],[-.4,.4],[-.3,.49],[-.2,.5],[.2,.5],[.3,.49],[.4,.4],[.48,.2],[.5,0]]),torso:lathe([[-.5,0],[-.49,.30],[-.3,.34],[.05,.48],[.30,.5],[.43,.36],[.5,0]]),cylinder:cylinder(),cone:cylinder(24,.16,.5),torus:torus(),ring:ring(),disc:disc(),wedge:wedge(),gear:gear(),quad:quad()};if(scale!==1)for(const m of Object.values(all))m.p=m.p.map(v=>v*scale);return all;}
+  function meshes(scale=1){const all={box:box(),cube:box(0),sphere:sphere(),cylinder:cylinder(),cone:cylinder(24,.16,.5),torus:torus(),ring:ring(),disc:disc(),wedge:wedge(),gear:gear(),quad:quad()};if(scale!==1)for(const m of Object.values(all))m.p=m.p.map(v=>v*scale);return all;}
   const VERT=[
     'attribute vec3 aPosition,aNormal;attribute vec4 aM0,aM1,aM2,aM3,aTint,aMaterial;',
     'uniform mat4 uVP,uModel;uniform vec4 uColor,uMaterial;uniform float uInstanced;',
@@ -63,18 +55,12 @@
     'vec4 pack(float d){vec4 c=fract(d*vec4(16777216.,65536.,256.,1.));return c-c.xxyz*vec4(0.,.00390625,.00390625,.00390625);}',
     'float unpack(vec4 c){return dot(c,vec4(.000000059604645,.000015258789,.00390625,1.));}',
     'float hash(vec3 p){return fract(sin(dot(floor(p),vec3(127.1,311.7,74.7)))*43758.5453);}',
-    'float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}',
     'float shadow(vec3 N){if(uShadowReady<.5)return 0.;vec4 c=uLightVP*vec4(vWorld,1.);vec3 q=c.xyz/c.w*.5+.5;if(q.x<.002||q.x>.998||q.y<.002||q.y>.998)return 0.;float s=0.;float bias=max(.00065,.0017*(1.-dot(N,uLight)));for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){s+=step(unpack(texture2D(uShadow,q.xy+vec2(float(x),float(y))*uShadowTexel))+bias,q.z);}return s/9.;}',
     'void main(){if(uDepth>.5){gl_FragColor=pack(gl_FragCoord.z);return;}vec3 N=normalize(vNormal),V=normalize(uEye-vWorld),L=normalize(uLight),H=normalize(L+V);',
     'float rough=clamp(vMaterial.x,.12,1.),metal=vMaterial.y,emission=vMaterial.z,kind=vMaterial.w,occ=shadow(N);vec3 base=pow(max(vColor.rgb,vec3(0.)),vec3(2.2));',
     'float grain=(hash(vWorld*65.)-.5)*.035;float brushed=sin(vWorld.y*125.+vWorld.x*12.)*.012;',
     'float surface=1.+grain+brushed*metal;if(kind>1.5&&kind<2.5){vec2 g=abs(fract(vWorld.xz*.5)-.5);float seams=step(.487,max(g.x,g.y));surface*=1.-seams*.16;}',
     'if(kind>3.5&&kind<4.5)surface*=.86+hash(vWorld*8.)*.12;',
-    'if(kind>4.5&&kind<5.5){float patch=noise(vWorld*2.2),tuft=noise(vWorld*13.);surface*=.82+.23*patch+.07*tuft;rough=.96;}',
-    'if(kind>5.5&&kind<6.5){float pore=noise(vWorld*23.);surface*=.85+.21*noise(vWorld*4.)+.05*pore;rough=.86;}',
-    'if(kind>6.5&&kind<7.5){float grain=sin(vWorld.y*14.+noise(vWorld*1.7)*5.);surface*=.84+.12*grain+.12*noise(vWorld*5.);rough=.75;}',
-    'if(kind>7.5&&kind<8.5){surface*=.96+.035*sin(vLocal.y*110.)*sin(vLocal.x*110.);rough=.96;metal=0.;}',
-    'if(kind>8.5&&kind<9.5){surface*=.97+.04*noise(vLocal*8.);rough=.72;metal=0.;}',
     'vec3 ambient=mix(vec3(.28,.35,.46),vec3(.60,.71,.80),clamp(N.y*.5+.5,0.,1.));',
     'vec3 lit=base*surface*(ambient*.78+vec3(1.,.88,.69)*max(dot(N,L),0.)*1.16*(1.-occ*.72));',
     'float spec=pow(max(dot(N,H),0.),mix(100.,9.,rough))*mix(.18,.85,metal)*(1.-occ*.78);vec3 specColor=mix(vec3(1.,.96,.87),sqrt(base),metal*.7);lit+=specColor*spec;',
@@ -132,5 +118,5 @@
     debug(){return {...this.stats};}
     destroy(){this.disposeTargets();const gl=this.gl;if(this.shadow)this.disposeTarget(this.shadow);for(const m of Object.values(this.meshes)){gl.deleteBuffer(m.buffer);gl.deleteBuffer(m.index);}gl.deleteBuffer(this.quadBuffer);gl.deleteBuffer(this.instanceBuffer);gl.deleteProgram(this.program);gl.deleteProgram(this.post);}
   }
-  return {Scene,meshes,box,cylinder,sphere,lathe,torus,ring,disc,wedge,gear,quad,matrix,multiply,identity,ortho,lookAt,rgba,normalize};
+  return {Scene,meshes,box,cylinder,sphere,torus,ring,disc,wedge,gear,quad,matrix,multiply,identity,ortho,lookAt,rgba,normalize};
 });
