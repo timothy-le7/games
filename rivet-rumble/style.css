@@ -24,3 +24,5 @@
 .crew-picker .roster button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;min-height:118px!important;padding:9px!important;text-align:center;user-select:none;-webkit-user-select:none}
 .crew-picker .roster .crew-mark{flex:none}
 .crew-picker .roster strong,.crew-picker .roster small{max-width:100%;overflow-wrap:anywhere}
+
+.special-button{touch-action:none}.special-button.aiming{border-color:#ffe6a3;box-shadow:0 0 0 5px #f7cd6a55}
