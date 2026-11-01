@@ -2,17 +2,24 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:block-islands:";
-const RELEASE = "29f02db3b6f2fd75ccd4";
+const RELEASE = "b90fab7bdb4697e00af1";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./body-physics.js","./game-pwa.js","./game.css","./game.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./rules.js","./voxel-view.js"];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
     try {
-      // addAll either obtains every required local asset or the partial cache is removed.
-      const requests = ASSETS.map(asset => new Request(new URL(asset, self.registration.scope), { cache: 'reload' }));
-      await cache.addAll(requests);
+      // Fetch every asset before writing the release cache.  Besides retaining
+      // all-or-nothing installation, this avoids WebKit's empty-cache result
+      // from Cache.addAll() for a newly installed scoped worker.
+      const responses = await Promise.all(ASSETS.map(async asset => {
+        const request = new Request(new URL(asset, self.registration.scope), { cache: 'reload' });
+        const response = await fetch(request);
+        if (!response.ok || response.type === 'opaque') throw new Error('Could not cache ' + request.url);
+        return [request, response];
+      }));
+      const cache = await caches.open(CACHE_NAME);
+      for (const [request, response] of responses) await cache.put(request, response);
     } catch (error) {
       await caches.delete(CACHE_NAME);
       throw error;
