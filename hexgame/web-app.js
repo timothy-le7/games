@@ -163,7 +163,7 @@
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (applyingUpdate) location.reload();
   });
-  navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' }).then(async reg => {
+  navigator.serviceWorker.register('./sw-gated.js', { scope: './', updateViaCache: 'none' }).then(async reg => {
     registration = reg;
     const watchInstall = () => {
       const worker = reg.installing;

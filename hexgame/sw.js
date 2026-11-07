@@ -1,5 +1,5 @@
 'use strict';
-const RELEASE = '1ce422d7304939730a77';
+const RELEASE = '6408b6a3243fb6da70b2';
 // Include the scope so unrelated apps on the same host cannot delete our caches.
 const PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
 const CACHE = PREFIX + RELEASE;
@@ -9,15 +9,14 @@ const urlFor = file => new URL(file, self.registration.scope).href;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     try {
-      // Consume one body at a time. Waiting to put every fetched response can
-      // exhaust a browser's per-worker connection budget. This cache cannot
-      // control pages until installation succeeds, and failures delete it.
-      const cache = await caches.open(CACHE);
-      for (const file of ASSETS) {
+      // Fetch everything before committing any entries. A partial release must not install.
+      const responses = await Promise.all(ASSETS.map(async file => {
         const response = await fetch(new Request(urlFor(file), { cache: 'reload' }));
         if (!response.ok || response.type === 'opaque') throw new Error('Could not cache ' + file);
-        await cache.put(urlFor(file), response);
-      }
+        return [urlFor(file), response];
+      }));
+      const cache = await caches.open(CACHE);
+      await Promise.all(responses.map(([url, response]) => cache.put(url, response)));
     } catch (error) {
       await caches.delete(CACHE);
       throw error;

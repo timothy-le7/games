@@ -186,7 +186,7 @@
       return;
     }
     try {
-      const registration = await navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' });
+      const registration = await navigator.serviceWorker.register('./sw-gated.js', { scope: './', updateViaCache: 'none' });
       state.registration = registration;
       const observe = worker => worker?.addEventListener('statechange', () => {
         if (worker.state === 'redundant' && !registration.active) state.failed = true;
