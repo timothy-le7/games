@@ -1,53 +1,52 @@
+/*
+ * One-time scoped transition worker for installs that predate the encrypted
+ * Pages gate. It intentionally does not own a release cache or delete legacy
+ * caches. A first online navigation gets the current encrypted document from
+ * the network; after unlock, old cached game assets can still render the real
+ * save-before-update UI while sw-gated.js waits behind that controlled page.
+ */
 'use strict';
-const RELEASE = '6408b6a3243fb6da70b2';
-// Include the scope so unrelated apps on the same host cannot delete our caches.
-const PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
-const CACHE = PREFIX + RELEASE;
-const ASSETS = ['index.html', 'web-app.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'privacy.html'];
-const urlFor = file => new URL(file, self.registration.scope).href;
 
-self.addEventListener('install', event => {
-  event.waitUntil((async () => {
-    try {
-      // Fetch everything before committing any entries. A partial release must not install.
-      const responses = await Promise.all(ASSETS.map(async file => {
-        const response = await fetch(new Request(urlFor(file), { cache: 'reload' }));
-        if (!response.ok || response.type === 'opaque') throw new Error('Could not cache ' + file);
-        return [urlFor(file), response];
-      }));
-      const cache = await caches.open(CACHE);
-      await Promise.all(responses.map(([url, response]) => cache.put(url, response)));
-    } catch (error) {
-      await caches.delete(CACHE);
-      throw error;
-    }
-  })());
-});
+const CACHE_PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
+
+async function legacyResponse(request) {
+  const names = await caches.keys();
+  for (const name of names) {
+    if (!name.startsWith(CACHE_PREFIX)) continue;
+    const response = await (await caches.open(name)).match(request);
+    if (response) return response;
+  }
+  return null;
+}
 
 self.addEventListener('activate', event => {
-  event.waitUntil((async () => {
-    const names = await caches.keys();
-    await Promise.all(names.filter(name => name.startsWith(PREFIX) && name !== CACHE).map(name => caches.delete(name)));
-    await self.clients.claim();
-  })());
+  // Deliberately retain prior scoped caches until the player has used the real
+  // game save/update control to activate the gated worker.
+  event.waitUntil(self.clients.claim());
 });
 
-// Updates wait until the game closes, or until the player explicitly saves and updates.
 self.addEventListener('message', event => {
-  if (event.data?.type === 'POLY_TOP_APPLY_UPDATE') event.waitUntil(self.skipWaiting());
+  if (event.data && event.data.type === 'GAMES_PWA_APPLY_UPDATE') self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
+  const requestUrl = new URL(event.request.url);
   const scope = new URL(self.registration.scope);
-  if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
-  const relative = url.pathname.slice(scope.pathname.length) || 'index.html';
-  if (!ASSETS.includes(relative)) return;
+  if (requestUrl.origin !== scope.origin || !requestUrl.pathname.startsWith(scope.pathname)) return;
   event.respondWith((async () => {
-    const cache = await caches.open(CACHE);
-    const key = urlFor(relative);
-    const response = await cache.match(key);
-    return response || fetch(event.request);
+    // Never serve a cached pre-gate document while online. It is still a
+    // fallback for a genuinely offline old installation, which cannot be
+    // retroactively revoked and is documented as a static-hosting limit.
+    if (event.request.mode === 'navigate') {
+      try {
+        return await fetch(event.request);
+      } catch {
+        const cached = await legacyResponse(event.request);
+        if (cached) return cached;
+        throw new Error('No offline legacy document is available.');
+      }
+    }
+    return (await legacyResponse(event.request)) || fetch(event.request);
   })());
 });
