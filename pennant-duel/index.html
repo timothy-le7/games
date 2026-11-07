@@ -1,93 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-games-access-gate="v1">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#101d3d">
-  <meta name="description" content="Pennant Duel — a quick original two-lane strategy game.">
-  <title>Pennant Duel</title>
-  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
-<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protected games</title>
+<style>
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:#101827;color:#f8fafc;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.gate{width:min(29rem,100%);padding:clamp(24px,6vw,42px);border:1px solid #ffffff24;border-radius:20px;background:#17263b;box-shadow:0 20px 60px #0008}h1{margin:0 0 10px;font-size:clamp(1.5rem,5vw,2.1rem);line-height:1.15}p{margin:0 0 22px;color:#d8e3f0}label{display:block;margin-bottom:8px;font-weight:700}input,button{width:100%;min-height:48px;border-radius:11px;font:inherit}input{border:1px solid #9db1c7;background:#0c1522;color:inherit;padding:11px 12px}button{margin-top:16px;border:0;background:#d8b85a;color:#17202c;font-weight:800;cursor:pointer}button:disabled{cursor:wait;opacity:.72}input:focus-visible,button:focus-visible{outline:3px solid #8ec5ff;outline-offset:3px}.status{min-height:1.5em;margin:14px 0 0;color:#d8e3f0}.status[data-error="true"]{color:#ffb4ab}.hint{font-size:.9rem;color:#b9c7d8}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
 </head>
 <body>
-  <main id="app">
-    <section id="home" class="screen home-screen" aria-labelledby="game-title">
-      <div class="brand-mark" aria-hidden="true"><span></span><i></i><span></span></div>
-      <p class="eyebrow">SKYLINE LEAGUE</p>
-      <h1 id="game-title">Pennant Duel</h1>
-      <p class="tagline">Outsmart two lanes. Build a bold push. Topple the rival beacon.</p>
-      <button id="continue-button" class="primary jumbo" type="button">Start a duel</button>
-      <div class="mode-grid" aria-label="Battle modes">
-        <button class="mode-card" data-mode="classic" type="button"><b>Classic</b><span>3-minute tactical battle</span></button>
-        <button class="mode-card" data-mode="frenzy" type="button"><b>Frenzy</b><span>Double spark, nonstop action</span></button>
-        <button class="mode-card" data-mode="draft" type="button"><b>Draft Challenge</b><span>Choose every card, then duel</span></button>
-      </div>
-      <button id="collection-button" class="quiet wide" type="button">Deck &amp; arenas</button>
-      <button id="settings-button" class="quiet wide" type="button">Settings &amp; local save</button>
-      <p id="save-note" class="microcopy">Progress stays on this browser. Export a backup before changing device or app mode.</p>
-      <div class="site-actions">
-        <button type="button" data-install-game>Install game</button>
-        <a data-all-games href="../">All games</a>
-      </div>
-      <p data-game-offline-status class="offline-status" aria-live="polite">Offline status checks after the published game loads.</p>
-    </section>
-
-    <section id="collection" class="screen panel-screen hidden" aria-labelledby="collection-title">
-      <header><button class="back-button" data-back type="button" aria-label="Back">←</button><div><p class="eyebrow">HANGAR</p><h2 id="collection-title">Deck &amp; arenas</h2></div></header>
-      <div id="arena-list" class="arena-list"></div>
-      <h3>Battle deck <span id="deck-count">8 / 8</span></h3>
-      <p class="microcopy">Tap an unlocked card to add or remove it. A battle deck needs exactly eight.</p>
-      <div id="card-library" class="card-library"></div>
-    </section>
-
-    <section id="draft" class="screen panel-screen hidden" aria-labelledby="draft-title">
-      <header><button class="back-button" data-back type="button" aria-label="Cancel draft">←</button><div><p class="eyebrow">DRAFT CHALLENGE</p><h2 id="draft-title">Pick your crew</h2></div></header>
-      <div class="draft-progress"><span id="draft-step">Pick 1 of 8</span><div><i id="draft-bar"></i></div></div>
-      <p>Choose one card from each pair. Your rival brings its arena deck.</p>
-      <div id="draft-choices" class="draft-choices"></div>
-      <div id="draft-deck" class="draft-deck" aria-label="Drafted cards"></div>
-    </section>
-
-    <section id="battle" class="screen battle-screen hidden" aria-label="Pennant Duel battle">
-      <div id="top-hud" class="top-hud">
-        <div><span id="arena-name">Rooftop Rally</span><small id="mode-name">Classic</small></div>
-        <div class="battle-center"><div id="battle-clock" class="clock">3:00</div><div id="battle-score" class="battle-score" aria-label="Tower score">◆ 0 · 0 ◆</div></div>
-        <button id="pause-button" type="button" aria-label="Pause battle">Ⅱ</button>
-      </div>
-      <div id="canvas-shell">
-        <canvas id="game-canvas" width="1000" height="1400" tabindex="0" aria-label="Two-lane battle arena. 1 to 4 selects cards. Arrows aim; Enter or Space deploys. P or Escape pauses. Touch: tap or drag onto legal ground."></canvas>
-        <canvas id="battle-overlay" aria-hidden="true"></canvas>
-        <div id="tutorial-tip" class="tutorial-tip hidden" role="status"></div>
-        <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-      </div>
-      <div class="hand-zone">
-        <div class="energy-row"><span>Spark</span><div id="energy-track" class="energy-track" aria-label="Energy: 5 of 10"></div><b id="energy-number">5</b></div>
-        <div class="hand-strip">
-          <div id="next-card" class="next-card" aria-label="Next card"><span>Next</span><div id="next-card-art"></div></div>
-          <div id="hand" class="hand" aria-label="Your hand"></div>
-        </div>
-      </div>
-    </section>
-
-    <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div class="modal-card">
-        <p id="modal-kicker" class="eyebrow">PAUSED</p>
-        <h2 id="modal-title">Take a breather</h2>
-        <div id="modal-body"></div>
-        <div id="modal-actions" class="modal-actions"></div>
-      </div>
-    </div>
-
-    <input id="import-file" class="visually-hidden" type="file" accept="application/json,.json">
-  </main>
-  <script src="engine.js"></script>
-  <script src="tower-renderer.js"></script>
-  <script src="game.js"></script>
-<script data-games-pwa-runtime src="./game-pwa.js"></script>
+<main class="gate" aria-labelledby="gate-title">
+<h1 id="gate-title">Unlock games</h1>
+<p>Enter the shared password to open this page.</p>
+<form id="games-access-gate-form" novalidate>
+<label for="games-access-gate-password">Password</label>
+<input id="games-access-gate-password" name="password" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="games-access-gate-hint games-access-gate-status">
+<p class="hint" id="games-access-gate-hint">The password is not kept by this page.</p>
+<button type="submit">Unlock</button>
+<p class="status" id="games-access-gate-status" role="status" aria-live="polite"></p>
+</form>
+<noscript><p class="status" data-error="true">JavaScript is required to unlock this page.</p></noscript>
+</main>
+<script id="games-access-gate-payload" type="application/json">{"v":1,"i":310000,"s":"AspMtS8iPezMCBR+3/Ba+A==","k":"543e06614ec9bad77472dee1","n":"BSX4QyOrJDBCxH3T","c":"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"}</script>
+<script>
+(()=>{'use strict';const text=new TextEncoder(),decode=new TextDecoder(),payload=JSON.parse(document.getElementById('games-access-gate-payload').textContent),form=document.getElementById('games-access-gate-form'),input=document.getElementById('games-access-gate-password'),button=form.querySelector('button'),status=document.getElementById('games-access-gate-status'),storageKey='games-access-gate:'+payload.v+':'+payload.k;const b64=v=>{const raw=atob(v),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out},toB64=v=>{let raw='';for(const byte of v)raw+=String.fromCharCode(byte);return btoa(raw)},message=(value,error=false)=>{status.textContent=value;status.dataset.error=error?'true':''};const importKey=bytes=>crypto.subtle.importKey('raw',bytes,{name:'AES-GCM'},false,['decrypt']);async function derive(password){const material=await crypto.subtle.importKey('raw',text.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64(payload.s),iterations:payload.i,hash:'SHA-256'},material,256);const bytes=new Uint8Array(bits);return {key:await importKey(bytes),session:toB64(bytes)}}async function unlock(key){const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(payload.n),additionalData:text.encode('games-access-gate:'+payload.v+':'+payload.k)},key,b64(payload.c));document.open();document.write(decode.decode(plain));document.close()}function stored(){try{const value=sessionStorage.getItem(storageKey);return value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null}catch{return null}}function remember(value){try{sessionStorage.setItem(storageKey,value)}catch{}}function forget(){try{sessionStorage.removeItem(storageKey)}catch{}}async function tryStored(){if(!globalThis.crypto?.subtle)return;const value=stored();if(!value)return;try{await unlock(await importKey(b64(value)))}catch{forget()}}form.addEventListener('submit',async event=>{event.preventDefault();if(!globalThis.crypto?.subtle){message('This browser cannot unlock this page.',true);return}const password=input.value;if(!password){message('Enter the password to continue.',true);input.focus();return}button.disabled=true;message('Unlocking…');try{const result=await derive(password);input.value='';remember(result.session);await unlock(result.key)}catch{input.value='';message('The password did not unlock this page.',true);input.focus()}finally{button.disabled=false}});input.focus();tryStored()})();
+</script>
 </body>
 </html>
