@@ -8,6 +8,17 @@
 'use strict';
 
 const CACHE_PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
+// The shared packages and Hexgame keep distinct, established update message
+// contracts. A transition build supplies the messages its real legacy update
+// UI can send; accepting only the shared name would leave an old Hex update
+// control unable to activate a waiting transition worker.
+const UPDATE_MESSAGE_TYPES = new Set(["GAMES_PWA_APPLY_UPDATE","POLY_TOP_APPLY_UPDATE"]);
+// A package with an independently maintained PWA controller can name the
+// controller script here. Fetching that one script from the current release
+// after unlock prevents an old cached controller from registering this
+// transition endpoint again after the gated worker has taken over. It still
+// falls back to the retained legacy copy for an offline old installation.
+const NETWORK_FIRST_FILES = new Set(["web-app.js"]);
 
 async function legacyResponse(request) {
   const names = await caches.keys();
@@ -26,7 +37,7 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'GAMES_PWA_APPLY_UPDATE') self.skipWaiting();
+  if (event.data && UPDATE_MESSAGE_TYPES.has(event.data.type)) self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
@@ -45,6 +56,16 @@ self.addEventListener('fetch', event => {
         const cached = await legacyResponse(event.request);
         if (cached) return cached;
         throw new Error('No offline legacy document is available.');
+      }
+    }
+    const relative = requestUrl.pathname.slice(scope.pathname.length);
+    if (NETWORK_FIRST_FILES.has(relative)) {
+      try {
+        return await fetch(event.request);
+      } catch {
+        const cached = await legacyResponse(event.request);
+        if (cached) return cached;
+        throw new Error('No offline legacy asset is available.');
       }
     }
     return (await legacyResponse(event.request)) || fetch(event.request);
