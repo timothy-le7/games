@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:pulse-foundry:";
-const RELEASE = "0f4a9a869b14bb25d8f0";
+const RELEASE = "15b3f82d5cad036e183b";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./gate-migration.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
 
