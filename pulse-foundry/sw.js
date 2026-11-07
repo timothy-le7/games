@@ -2,24 +2,24 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:pulse-foundry:";
-const RELEASE = "9660892df8df0da2d72b";
+const RELEASE = "efec98efc969e92b1f72";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     try {
-      // Consume one response before requesting the next. Holding every body
-      // open until a later cache.put can exhaust a browser's per-worker HTTP
-      // connection budget and leave installation stuck. The cache is inactive
-      // until install completes; the catch below deletes any partial release.
-      const cache = await caches.open(CACHE_NAME);
-      for (const asset of ASSETS) {
+      // Fetch every asset before writing the release cache.  Besides retaining
+      // all-or-nothing installation, this avoids WebKit's empty-cache result
+      // from Cache.addAll() for a newly installed scoped worker.
+      const responses = await Promise.all(ASSETS.map(async asset => {
         const request = new Request(new URL(asset, self.registration.scope), { cache: 'reload' });
         const response = await fetch(request);
         if (!response.ok || response.type === 'opaque') throw new Error('Could not cache ' + request.url);
-        await cache.put(request, response);
-      }
+        return [request, response];
+      }));
+      const cache = await caches.open(CACHE_NAME);
+      for (const [request, response] of responses) await cache.put(request, response);
     } catch (error) {
       await caches.delete(CACHE_NAME);
       throw error;
