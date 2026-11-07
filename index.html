@@ -1,75 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-games-access-gate="v1">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f4f5ee">
-  <meta name="description" content="Five original local games: strategy, voxel exploration, lane tactics, rhythm platforming and CPU arena action.">
-  <title>Games</title>
-  <link rel="icon" href="./hexgame/icon-192.png" type="image/png">
-  <link rel="stylesheet" href="./library.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protected games</title>
+<style>
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:#101827;color:#f8fafc;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.gate{width:min(29rem,100%);padding:clamp(24px,6vw,42px);border:1px solid #ffffff24;border-radius:20px;background:#17263b;box-shadow:0 20px 60px #0008}h1{margin:0 0 10px;font-size:clamp(1.5rem,5vw,2.1rem);line-height:1.15}p{margin:0 0 22px;color:#d8e3f0}label{display:block;margin-bottom:8px;font-weight:700}input,button{width:100%;min-height:48px;border-radius:11px;font:inherit}input{border:1px solid #9db1c7;background:#0c1522;color:inherit;padding:11px 12px}button{margin-top:16px;border:0;background:#d8b85a;color:#17202c;font-weight:800;cursor:pointer}button:disabled{cursor:wait;opacity:.72}input:focus-visible,button:focus-visible{outline:3px solid #8ec5ff;outline-offset:3px}.status{min-height:1.5em;margin:14px 0 0;color:#d8e3f0}.status[data-error="true"]{color:#ffb4ab}.hint{font-size:.9rem;color:#b9c7d8}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
 </head>
 <body>
-  <a class="skip-link" href="#games">Skip to games</a>
-  <div class="shell">
-    <header class="site-header">
-      <a class="brand" href="./" aria-label="Games home">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        games<span class="brand-dot">.</span>
-      </a>
-      <span class="header-note">A little time. A new adventure.</span>
-    </header>
-    <main>
-      <section class="intro" aria-labelledby="page-title">
-        <p class="eyebrow">YOUR NEXT MOVE</p>
-        <h1 id="page-title">Small worlds.<br><span>Big adventures.</span></h1>
-        <p class="intro-copy">Choose a game and jump in.</p>
-      </section>
-      <section id="games" class="game-grid" aria-label="Games">
-        <article class="game-card">
-          <div class="game-art"><img src="./assets/hexgame-preview.png" alt="Actual Hexgame gameplay with a city courtyard, faction borders, a warrior, visible mountains and forests, and defined fog tiles" width="1200" height="840" fetchpriority="high"></div>
-          <div class="game-copy"><p class="genre">Turn-based strategy</p><h2>Hexgame</h2>
-            <p class="description">Explore a new world, grow your cities and outthink rival tribes.</p>
-            <ul class="details"><li>Single player</li><li>16 tribes</li><li>Saves on this device</li></ul>
-            <a class="play-link" href="./hexgame/">Play Hexgame<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
-          </div>
-        </article>
-<article class="game-card">
-          <div class="game-art"><img src="./assets/block-islands-preview.png" alt="Actual Block Islands rear-view gameplay showing the original explorer in a wooded voxel camp with touch controls and target reticle" width="1200" height="840" fetchpriority="high"></div>
-          <div class="game-copy"><p class="genre">Voxel survival &amp; building</p><h2>Block Islands</h2>
-            <p class="description">Mine, craft and build through a living voxel wilderness as your own field explorer across twelve expeditions.</p>
-            <ul class="details"><li>12-island campaign</li><li>Creative sandbox</li><li>Saves on this device</li></ul>
-            <a class="play-link" href="./block-islands/">Play Block Islands<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
-          </div>
-        </article>
-<article class="game-card">
-          <div class="game-art"><img src="./assets/tower-duel-preview.png" alt="Actual Pennant Duel battle with modeled friendly and rival towers, bridges, moving units, tactical card hand and energy meter" width="1200" height="840" fetchpriority="high"></div>
-          <div class="game-copy"><p class="genre">Real-time lane tactics</p><h2>Pennant Duel</h2>
-            <p class="description">Build a push, pull attackers with defenses and counterattack through two lanes with original troops and spells.</p>
-            <ul class="details"><li>8 arenas</li><li>Draft challenge</li><li>Saves on this device</li></ul>
-            <a class="play-link" href="./pennant-duel/">Play Pennant Duel<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
-          </div>
-        </article>
-<article class="game-card">
-          <div class="game-art"><img src="./assets/pulse-foundry-preview.png" alt="Actual Pulse Foundry CPU-race gameplay with a machined player craft, ghost racers, lit foundry machinery and high-contrast hazards" width="1200" height="840" fetchpriority="high"></div>
-          <div class="game-copy"><p class="genre">3D rhythm platformer</p><h2>Pulse Foundry</h2>
-            <p class="description">Leap, glide and flip through six original foundry courses alone, in practice, or against local CPU rivals.</p>
-            <ul class="details"><li>6 authored courses</li><li>Local CPU races</li><li>Saves on this device</li></ul>
-            <a class="play-link" href="./pulse-foundry/">Play Pulse Foundry<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
-          </div>
-        </article>
-<article class="game-card">
-          <div class="game-art"><img src="./assets/rivet-rumble-preview.png" alt="Actual Rivet Rumble match in a grassy courtyard with segmented walls, timber cover, concealing bushes, water banks, articulated machines and touch controls" width="1200" height="840" fetchpriority="high"></div>
-          <div class="game-copy"><p class="genre">3D arena action</p><h2>Rivet Rumble</h2>
-            <p class="description">Choose from 120 original fighters across seven classes, with bursts, hooks, poison, frost, deployables and tactical team battles.</p>
-            <ul class="details"><li>120 fighters · 7 classes</li><li>4 CPU levels · 3 modes</li><li>Saves on this device</li></ul>
-            <a class="play-link" href="./rivet-rumble/">Play Rivet Rumble<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
-          </div>
-        </article>
-      </section>
-      <p class="install-note"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg>On iPhone, open a game in Safari to add its icon to your Home Screen.</p>
-    </main>
-    <footer>Free to play <span aria-hidden="true">·</span> No account needed <span aria-hidden="true">·</span> <a href="./privacy.html">Privacy &amp; saves</a></footer>
-  </div>
+<main class="gate" aria-labelledby="gate-title">
+<h1 id="gate-title">Unlock games</h1>
+<p>Enter the shared password to open this page.</p>
+<form id="games-access-gate-form" novalidate>
+<label for="games-access-gate-password">Password</label>
+<input id="games-access-gate-password" name="password" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="games-access-gate-hint games-access-gate-status">
+<p class="hint" id="games-access-gate-hint">The password is not kept by this page.</p>
+<button type="submit">Unlock</button>
+<p class="status" id="games-access-gate-status" role="status" aria-live="polite"></p>
+</form>
+<noscript><p class="status" data-error="true">JavaScript is required to unlock this page.</p></noscript>
+</main>
+<script id="games-access-gate-payload" type="application/json">{"v":1,"i":310000,"s":"AspMtS8iPezMCBR+3/Ba+A==","k":"543e06614ec9bad77472dee1","n":"DP5VWuCA8HTZfnsd","c":"pM4tKTUo8q6WXvwddMN6PHjQZOvwazQKsXQocpaZApN8RV6o/xbW73P5SuCU9iYoqCYRpLj4CVoWBU7QHRRpEa5uisErAnG+3wUXUHdIDKj2zcULy/4DLYf0+L+PuAQWnrZQsd728eK58tjs/ERkJ3iebVojvGGwiVOkz1vlVRDhTIP6XD7eenHCPmGXwkN1lscGm1A24rUzrFhRAXdnfahbYlnIcRYjYgR4AO2Zd7cC9vH3Dv6+wENzd+JZmdbCazakNYQrN4AibXTEiVf+i+HUDWmTTwJVYsJ14G8lczGXoUUsgwXgB1mDFhtwdP9yijeFCI1ZrQYZWs9QbGVCWYNFyZ9zJB1iA0jAOJlw6ix3dWz6FLGVvMR/i2Szy93V4e3qgHnsuhps1KeNbnKU83Tjrh4ex/tEdrvFc/SnfV4nJpRjl5CylO4vzkDNIeQPgLTD/55bKWvIVvLDqLUR7xt4gpZ83lZlZmrqJfwZOAxz3sxW5fVz9EP2uusewUplaH+Xe2d+fvHFK8XGGv+mmnecaywwCh+63+bf1oDfRptB2uBrWVnYZbm/5vx6doXhhALXchawFPcN/2yy75lr7jaK4iGzq/EJ9ISacr6p1Ji/1bacrcc478gZ8xQaOSK1ZNkiPYsQlyCVqr5xD2ZXbZVGQPGEVMy0jaNHVblMkyd1NHKDacN4iWNxLksLfOaGJqGTlKmcu6/Gc99yXkZSEsZBjpM5fY8LyIaGdkObrRhL0WmPZ5Lj0wueKnnXahEto4RmLyEEUgUCrqAV5xhPvp4Ocq8p4m4GSrH8XhtpM/5nKoPvOyYhCH+835awwUSELYNDy17r+n8pAsCTQZssdS6TmU9EvoHJSpvxEhfSnKltE+bBx1iSTMJdfKhSwyk0GHab4tLoecHtzV45AajW168SDj9gNXhwMy68RH8Jbdoiwymxk4MzRYB0W5YMAlc5pd1bzb3vmtKj2oOR5btPvP/RqcrerwQMnTY07grBszp6cgvc55l9MXrf3J7ytT7cAmhIrXONDe8E/alxkZpF2c9IAViBbTl/S4AJlarIt1IRFsJptTBat7xcC68x2rzY+IB6PZw2wg2g2CqTgtOJ+KPyu676/C9ayXwOfiEvLEnEbpA6EJjcJv5caY1dOf047TscSP6WLaVZXjh8onkkKW02hgxrwC8xnOKr6QbikXy8dxv98mw6931Sci+iVoMzNLjURNuHlhtB4NhWlQnWYJ29blMfWjBnKFDWiIAK2gUDektI0e6B7G3zSV/MBQN+vl1z8mYdC/XmYNOT65Mv5scul7A2dA+q1/X6tM8C0A129FMTnFihbl5tV7ZgTchIn7K7Rju1pPMBFzhW5cRzfsNqGHs1PJshsP+bibTWKsc7mX/ooNbinQYOWQ8NYpiCeKfk7+LphjvBEkEUVC+TTB2sggiBMf6/3183DGbKm2p19g+qyyD9T2rIHZNqgWw/mbPcvm9asz0yzBDNs6qZGMSI2kDO+G18SvI26ojfGcfKX5iD2YpTL31SEaCmf+o49jRFkbENT2XyGMQ4V0t1osWzTLdNJ+BOz2mAYBZba6QMG2/TcD4dRGu5ZsLHW9o2ibvXIblWb9xmkKXxS+naeyK9GX6a4t67egLG0gPWXQz+vlaw/r4bsRo7pA3yR3574Mz+0pdTE0OrROpHlPw5rsNVMtUCw13fDxCayxCdbgD+kqkFFhnYE9J+EBu6kzGJ6KDtP6ccME5jTJmFanbVTKCr0aII/yx7E6b8HqtnjmpVuBA39W+pRRmBo8p88mTIuhF403VrDW2ky0BeczUgrIzGQaZLerSyeCLPxL0YOIAaRLC1LB8Yv83CCFySSAygokmUmDl+oyH5zAj8gsN8EWOGU5hxFfOei+n0znJy5to8iFpa4Xy8pzxc8tA5LpSK27dFBHcZwgOyZXpNpVaml7TpA84vHFKnIqxcKafqjAbsN6uSaHnReEYq+U3t47j9ZmYfyVr3Z/qLnJTPD8OCRk23RXX1OL34IzdHlua0cHnsA4aSYzRZd8KA+U2mIhL640Bnt/b4nSrF4r1rSpfYnhq9G5OvIXZ01UojfFwBwOfbfxBBZuuSk7PyNlh2MsfpVXM1a0DL0irCgKOdnroDKLtteQUEuyJEBIPBlGvoU61FMcRFFS3R9bTSPt/UcnXa8ULMoxXashSBgW6upvLe5JIIgWxBC7TM8Zlr9MkMh81eJ0ZKuroAVFRv4Qm2noSDBMUZwdDcBFG0uOMQG8VCCCF5kp0G1TOFsQHQ7EJizKoes5jJB6yMecQZWvJ3k+wRsqKmWayNX7uSn7JG90XqE2ytcwYQBqxPSLabPC0BRiZpEYVR0NgbpdUBvsgSIba5d695ankK42Xnoiu81xOpivt2VXNNVXmuahEoPYtXF7Mh+OaAuW2E5x1sqbz/1qTUpjkn1wHfK3+nfzRlpcWREb5d9gYuchLBXRysGqO0UUVzXuHPsO1WPNVAem0j63S7ijFbVGuamuGoX7v7NZx0htV9kNxObtFwVr58OS9zLBQu2rX4H8Z+dixoPApCXe0w7Pck1zApx2OquUjyYNlEixxHsGk1F3aKGMCu20KJwX8b68jto+Lcrnpap6jLa6zNgRPIy5APq1c5AUdZipfwZbjKs6SSDu61+/VzcK6zbKwOhSwNEOrWjMZg1TP5oc7hJTdWJcTmky9RbzZWXr7LhyUbS3umzRfphLGjimpj5ZGUR1JUU/gxFKqc0fmq725O9dJGsaDKlq2d4W5TgAdDzh2zVgjD+A+AN6txFFT8cXamPDwxMoLq5ltgDHfcw+wd5tWcXGdianAetnPbz+fkg4n40DeKpY32itIXrVfh68CVti7QaGnk/L915U3/gtE78FgIUHM6yQZEKn62ewRz3JKSmv78N6y8WG6Y4H7yqNBpqXqdH8VukoUhB8d+8DDCDZx7HPou3cTbDNnrYI38V1rg7zH2YIPzaNNsVv2N1s9U7oEkGFRK5jlgTrgU4ihqcW+Ye13DKds6TQkrhUbgbkhClXTXQjEeP88LTC8IolOmYEcDLbuuj8xbdPR+RrBrG7GOpMxLZYkH72QZLFWfWKGHBdVzfn7339xTRtwKmZItvxIU64IWoWMJGzYyM56N63j5S0PknITzLEZUYwi6VhY+nGNVDFH4v1SudpUWMgr6CJqG4hLzotGrc/gPGQvpkWxbtn60zclmqR+XoaR/1wLzj3qWYx/JpX6z5iYwiMuGgK1e2O28gzSO3Hc7Q2C7OLGjglSXInmXryqLWkwXJB+6pCPyOnpNGWqqn4OspFBt4B2fMQqk1t1UOQ7/0+0LSnN4OMTQbBH0jEcZUXO3Blp55P+r842wVh1XcxNNYQ5bAEos3agKCUe+A/1dVojh1wV7a8btVZL9X259QdLb9il3nEeIKT9mnDPmQ5tbP8V1NGWAIi/vHU0ZpE4/x51033/sxkAm++XB3XiHDAvsLa/Wd44tT5ebsBZOf2vsMTUx6KoXWQPxR9x/jDGrDdVP9O5q+Uql/mLHn3Vzu+M9usvVs8X5LEvjNiz1tys2qgYjMlrocVdO4V+owGSIxOr82sM0Qf4U/A/h4HoHlpA7jYkEPimw2RUSp8HSDVbtu9H6zC3QBOx24zstfVWaKWqVhxcSZiBEhaJc0y/e9a8k4zs0lZxY8frUsBpbTee5PjX3G061TJDdsY/aJd5qamHwHlWiHTqDsB+shMmL+5rn2aQ82+/twc8hb9YyYS4EAon5XS8FysK1p6y8KKdKdxtDhzTcekt2c8BTqnXNFxsLbuo58Hoo9hX8U+QhGa1K3obuQ9KzFXWZB1wyuIkCXjakR9NYZw/Njt921MYU+yqz4csSSnOoAnYqqYr/6F0cUxXaA6lfYjxq8fP63IYdVxD0EwHxFqnfggPdfMnkPejrvU3rfzoqW+wixNCirxMUGtKfy95AnrTqteBNp+M8r39gCny/7J5vNtnX7PlhL0Jtq+mxr9ymFgPKDdlAR8iuMcEuC/QncWBbcVQMYhvQ94JIWk7nY4sbI8GFrTv6g1OLFwxspPDLKRKcWSDUiOh1Sr71OyBelEsTwuNq6RnwCT9EfQlaQ0jrTcq4RAliTEEMm/Otm/ynU+z3mhG8UlTxk+hzJlmgmTotz3MinBCGAgXupWeIePpDBqjKq6OcqjYhRG3jomW6LeRkFiNh0yfq3HKERUNhqvYI2Rka/YOsmwhMFxocUXg4FH51C7SPQoeZSN3F6NZ7f0pAgKaf34GeAuyVIVVf0UFu6VHI8kLRVIrkJCoQIoILvP6Wek+fYJ6haPt0hzYTUKrnqIvQIbNyLq8RWy8I8T6V9Q6uVOM/Cz9i8Qx9H60tEL8niXFVKZw/vDEXPCkpquvoTz4EPCEacraBznFgwzoxOuJlPK6KiQqzJCT0pGZ5ikj6If56izDo6n/pCDUa9ZGH+NuSoSDXoQH6taAE5JRmN8mSQt9C5ygdUjHV9bh8Z5A0KYpMJqSyXdPLQhLJPENJy6j2LWy+ZXtqy0+d9wIlyfgiGPG4VFg/J7rJO3mPjB1bzY9n0vu5738dzAGETyDr93elj4ZmTo3Tq60tW7oUUjd3S/xGuEKCoJbpFPdJENdYlfs0JVhbNJ0mvevjVEAUWI3BZwk7tXhkhgxW6lChPi8AjDsmAmI3AcLEmMystlvpm2RaeCGezW5Ct9p+Zm4plSty0tMZA2O5JKvSKiI75Dik78zTpY+qzT8Uest2Dojmg8cntRLk+gUV1GvtIwaGKzDbeqXlCpFwHALqdEcWLi6W4b4/UN0CcDtHjQKL/MxDGdqKOiMVlZK1+/5siwF4gZ3aT/jvTvwqRNVw5eKvQnCV7nd/Nv2KyqV+XnowwDE9lxpPYI4lC1P1El+X/FTjrQ5ilSVxlSPrySZ8ceyauvxMnYb1/EW3pejcAFvb3RUR3e0Jte6NE3Yugct3C7+EfCBoCDmYf7KLEWVbNexi8zapJh2iAc3LPxgC2utTsekW6RtVkrkGTDsQRvz0e9ITq3tDzOxDtohYIT2dM8Gd6m4r3oKvtukY6bpZnuApZEID+K02kiijtwSdTTZHAObmL/sq2a+n6Uj+mOh/VbRqu1GyxdkxJr68xbcIjtmM+Wt0+R+oi75edxm9Ecy6t0BAZso/Oj34Cdus9ZSEEucQ9spSt9B/W73Yh9kqhNdbunkKyFtefVfzTsQ9+tfPwMGBOyWWiBkOHiui9nxV2YgMU9k80cq1vM0Bg0fwzmfIBvtIHA3n7ZITJPfcxhI+G01cboroAZA6pQCSViF8CTAEIh1fAsQZVhp/f0bUarfZVs1ODq4mKRZTbA8gnT9z8NGOj+Bg54MIHTxRkXaNn6wHe4ZsH8/p0PP8ZJHtUmS6afHP8O38WL7QssImPoS0/3b07gBVGEgassLV20jqCVNoSul0Vj17jc4o4ZPcz3jkJdzL0Tn3vJ4sIWrDp+O7v9xaq4ayouKk5TxX/RKqF26S92LzDNGDaahDDuTSw+QyMXgbM8QFFA3NHIBYRJdqKpcXszJm8srniyym6vgAUM1e5KLbdxJHzNuN2es0B8wk3dMBvQftU4yKUnDJy4nOrhd/LQz/Ae/8WBVorxYzUAfCTf6xFH191RYKNKdJ/m6Hj1sKQHNzNrmHdAh8fig2AU0rUMOmVOYQ0HfWKnSOS4vS3AQgaO0j18HTQdXEZvVm5mCjzpA3eMNR7fNZTds+wgHPl7ZvSvb2S7zL7qbrITQbNeNEW/3uk09/u5eT60WSsautYYW/CKsZT3kYr7ZEe5qn/ga8bJPAhrJYS+O9pDMLCW0LUmSJCzQPObxRmjKtyhhnOtLHiEudJBbV6oCwNJ/08qTUTPYFVICHq0kYmhsJMXgcYbaPoOpMv8zhFAVe7WbXNFyS/fEN1tJoUPE+56wffDym4MhVH+R6tMH2QxihYpzw2u7Bz+5cdeLbiY3O5fEjC1m3iSMgk/ei2ToGYDxa7kdKV+TROxI8a14TA9ZcR4azkUslxRjXRppJpuq6qWaSc9TTlQENgOMTyJQ4bzIa/FcWPC0OkaHmrNa6N3HZnefzwCXnovA3gAu3mtRZi6aXUjOzqcJR7TEaOmO+pJzPXDA/5ENoasAZFvVoBp4sZxx+XWutHKFzJfVvqxALQdT8k9th87yR+sI0WucbImWdeWRjMTmmwGqXwIlwTfwvQaBI8T/7+SGjan4yEZRgFKy5K+dTEVYnNn/gku8HzZelrNKP7yGDZEOO7GPEi2RkpdkshWglCCBI4r8/Huszpzg3EuDqF1lpBLlPUhY8XThlFa+erxqnI9EPuDyOyfOxKjoS0eYMOZ8CCgjGw6u5PBDQj0xd6E2mwTgD66hpgVFCILjPkxQeS5dVfdrpzhxh2RKXlWT41Mc+02hP6JG8sa9bbhC1BgAOXBKiS3AMrh0U+Xd+4D99XtFuZaYFguubae+qsu3wdh8LAuP88e647kTU4dnun+QyUpE7RrrDed696dY212374FPqV3RGG6prr2WiSlIYya1qcfFNn3BtyzI3a0hIExWEIzsduU1QXML3Qn00eu0zlkCBovbQ9gOzFnI1UVUUZdBGNF/MyFEgpG1C9YFgU3QohSdYyuECnUQ2HmGb+fAYGhTeAgWEqcnJxHfNB/IJ1S6WyXa0bV50Tb3Rf9Bkm3G7/jl4tUhltnoNmwonTlBanJvs6VkpWJKAgAs05AQlHjlZaPu1ZfuuIjq+WH0voasYN8sZvsIvyADK0LY/vC791ohHWZccAbpKupdjIyLSjCU6WXZjH5TpGSoOj7DQlTIN1J7dD0sU+7RYhQgAkORo1IdzZz41A+aEN38wVz4fkkJ5g2BMyF0D0DwiAMpuAyB628RD7GJ3ROKt3wfCreIAROZkpWfiFk2iIaArt8rXPsRa2zQzv35bXYauPUXNbtqbIKB+Jv1OdZk37oPAg6DIzwmugmf2jboH7sx+vbrQsUcTIJ6jmGPZ7c/PXYTyL4Vu9sQVkhnV3hmrl3hkPcXY1gx9v9yPvFpK1fj1kGFOZQ3UtcE+vKQuyx9XHNvRkFhsegNc8HGpOScBYQ/0G+suhXh6DIy/kWA0nU5FjzMBwisfDW2/7mKYsMYyEDkm2NimTkgh3iFmnadXIyznh2gcOQjI4BcLEwPApxKcCbjKtlVO61o5t8HxGjY8Mryjtkbgzh7ulbGHMrmyrEEFTHITPsvp+AC2TDsKyeSM7rNpenhFBRWSYVt3jap5xro8ZhAGvcKFkB55hyEyjdP3Bxj/BwqG3aj0amUAqQj7l94h8kz429TUIUl7EySVdiJMljGy+YtLeTyimw4xfZhHszisdhuAVKJG3GwIKK/bUe7eIa6O034D9OetZ4sK9sAtrUlQ2ml9Pe5Kk+K3yXKohV1jvveY5fm4g0jnZkTpZtKrchIehM6mMiNdDLJ3p4M5fyM7ytt2FKJn6FEG90hy3S0QT78Qy/vNVP/3BRbHZi5VHgf1To2nXm6ldlM3f6dr3h/CYHYjR9YVhwaRG8/BopnfefF+t5y2DzuoX3PpnhNKn+qicNSSTolmO/Vm8LZSeK3fOAqLVXELtZwD1CQ3q5cKOcwQ9OMEKU0oWOWu8C7IN/Msr23yzm8JZviYfHodlk7GmMswNhm8ec2IGWlzevU4I0YRulwmX3khZsA3sbl4+GEh9kLZ3U5nH5KifY5AHdddsZf2+HGoLODCL9lnUe+FMDJ46Z0eGvjsef9v3J6yg2WBahzEFryFGIuPJ+rE+ttOifhBAH2j3Feo9aWtzCFMPJlW2fba5TAKWXNtnF0OkyMlL5tYPzF+yqccDR9piiJj7lt4cFUYj3qNTaX+lTFHl/1QjmHLllfzs2vdoM5yKJFoYwPhNDL9blERWoMgzPUDRNS4Zx3/H4oSsYST/MTS4nCMFB4ruvAy5W/FCRWmryQiU3sJrCuCcm0MejxNALgl5/axqkPLP1vIOsZGjje7Jr4CcP7c9siv2SlwiBotnqasuRvvS+L7ar3isDhGuVtmg4D0D/U/c4HbrjRQEE2VbDRtxLtts5pOnLkC410xShMf9G9eH5e1o6PxfqKKzsJepVE3veTtZkdoKuZa5Gxjw1tQVn+rBsZBvkS6fzsNtG/qh9MmUcDGuFmTx2Q0F7ohtJuXLhP1xkBluwBolAI0VfWSEKw9JkQqNE5se3tDF8oswUbNH0kND6tzDZZB+UcOXXgehaUXHpnnoyrSKqMrYKJ6ja60L/BVBRL2IsULvyFzKY1BPPsKpLZ5ZJNRFDLnycy/yPyGjHamccL3B1mr7BujK8iYfTaZDO+sG3e3ootLc76UG7RP+CLUnQcjlkjJUqdo75uCX0kR7wfnIrnFXXaIBFHZqs6l9rt/HtQQWR0JxK38xRC4d7JoBL5CXldJpGjU7TO8"}</script>
+<script>
+(()=>{'use strict';const text=new TextEncoder(),decode=new TextDecoder(),payload=JSON.parse(document.getElementById('games-access-gate-payload').textContent),form=document.getElementById('games-access-gate-form'),input=document.getElementById('games-access-gate-password'),button=form.querySelector('button'),status=document.getElementById('games-access-gate-status'),storageKey='games-access-gate:'+payload.v+':'+payload.k;const b64=v=>{const raw=atob(v),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out},toB64=v=>{let raw='';for(const byte of v)raw+=String.fromCharCode(byte);return btoa(raw)},message=(value,error=false)=>{status.textContent=value;status.dataset.error=error?'true':''};const importKey=bytes=>crypto.subtle.importKey('raw',bytes,{name:'AES-GCM'},false,['decrypt']);async function derive(password){const material=await crypto.subtle.importKey('raw',text.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64(payload.s),iterations:payload.i,hash:'SHA-256'},material,256);const bytes=new Uint8Array(bits);return {key:await importKey(bytes),session:toB64(bytes)}}async function unlock(key){const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(payload.n),additionalData:text.encode('games-access-gate:'+payload.v+':'+payload.k)},key,b64(payload.c));document.open();document.write(decode.decode(plain));document.close()}function stored(){try{const value=sessionStorage.getItem(storageKey);return value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null}catch{return null}}function remember(value){try{sessionStorage.setItem(storageKey,value)}catch{}}function forget(){try{sessionStorage.removeItem(storageKey)}catch{}}async function tryStored(){if(!globalThis.crypto?.subtle)return;const value=stored();if(!value)return;try{await unlock(await importKey(b64(value)))}catch{forget()}}form.addEventListener('submit',async event=>{event.preventDefault();if(!globalThis.crypto?.subtle){message('This browser cannot unlock this page.',true);return}const password=input.value;if(!password){message('Enter the password to continue.',true);input.focus();return}button.disabled=true;message('Unlocking…');try{const result=await derive(password);input.value='';remember(result.session);await unlock(result.key)}catch{input.value='';message('The password did not unlock this page.',true);input.focus()}finally{button.disabled=false}});input.focus();tryStored()})();
+</script>
 </body>
 </html>

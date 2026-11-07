@@ -1,53 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-games-access-gate="v1">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#182d42">
-  <title>Block Islands</title>
-  <link rel="stylesheet" href="./game.css">
-<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protected games</title>
+<style>
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:#101827;color:#f8fafc;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.gate{width:min(29rem,100%);padding:clamp(24px,6vw,42px);border:1px solid #ffffff24;border-radius:20px;background:#17263b;box-shadow:0 20px 60px #0008}h1{margin:0 0 10px;font-size:clamp(1.5rem,5vw,2.1rem);line-height:1.15}p{margin:0 0 22px;color:#d8e3f0}label{display:block;margin-bottom:8px;font-weight:700}input,button{width:100%;min-height:48px;border-radius:11px;font:inherit}input{border:1px solid #9db1c7;background:#0c1522;color:inherit;padding:11px 12px}button{margin-top:16px;border:0;background:#d8b85a;color:#17202c;font-weight:800;cursor:pointer}button:disabled{cursor:wait;opacity:.72}input:focus-visible,button:focus-visible{outline:3px solid #8ec5ff;outline-offset:3px}.status{min-height:1.5em;margin:14px 0 0;color:#d8e3f0}.status[data-error="true"]{color:#ffb4ab}.hint{font-size:.9rem;color:#b9c7d8}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
 </head>
 <body>
-  <main id="app" aria-label="Block Islands voxel island adventure">
-    <canvas tabindex="0" id="world" aria-label="Voxel island. Look with the right side of the screen, move with the left joystick, then hold Mine or tap Place."></canvas>
-    <header class="top-hud hud">
-      <button id="menuButton" class="round" aria-label="Open pause and save menu">☰</button>
-      <div class="island-readout"><span id="stageNumber">ISLAND 1 / 12</span><strong id="stageName">Mosslight Camp</strong></div>
-      <div class="vitals" aria-label="Health"><span>♥</span><b id="healthText">8</b><small id="dayClock">DAY</small></div>
-    </header>
-    <button id="objectiveButton" class="objective hud" aria-expanded="false"><b>OBJECTIVE</b><span id="questProgress">Mine wood + stone; craft campfire.</span></button>
-    <div id="statusLine" class="status hud" role="status">Aim at a trunk or pale rock.</div>
-    <button id="mouseButton" type="button" class="mouse-look hud">Capture mouse</button>
-    <div id="crosshair" class="crosshair hud" aria-hidden="true"><i></i><i></i></div>
-    <div id="targetTag" class="target-tag hud" hidden></div>
-    <div id="mineProgress" class="mine-progress hud" aria-hidden="true"><i></i></div>
-    <aside id="heldReadout" class="held-readout hud" aria-live="polite">Plank · 0</aside>
-    <section id="hotbar" class="hotbar hud" role="group" aria-label="Hotbar"></section>
-    <section class="touch-layer hud" aria-label="Touch game controls">
-      <div id="moveZone" class="move-zone" aria-label="Move with this joystick"><span id="joyBase"></span><span id="joyKnob"></span></div>
-      <button id="sneakButton" class="sneak-button" aria-label="Toggle sneak and ledge protection" aria-pressed="false">Sneak</button>
-      <div id="lookZone" class="look-zone" aria-label="Drag to look around"></div>
-      <div class="action-cluster" aria-label="Actions">
-        <button id="cameraButton" class="round action-button camera" aria-label="Switch to first-person view">◉</button>
-        <button id="jumpButton" class="round action-button jump" aria-label="Jump">↑</button>
-        <button id="mineButton" class="action-button mine" aria-label="Hold to mine">Mine</button>
-        <button id="placeButton" class="action-button place" aria-label="Place selected block">Place</button>
-        <button id="strikeButton" class="round action-button strike" aria-label="Strike creature">Strike</button>
-        <button id="craftButton" class="round action-button craft" aria-label="Open crafting">Craft</button>
-      </div>
-    </section>
-    <div id="overlay" class="overlay open" role="dialog" aria-modal="true" aria-labelledby="overlayTitle"><section id="panel" class="panel"></section></div>
-    <input id="importInput" type="file" accept="application/json,.json" hidden>
-  </main>
-  <script src="./rules.js"></script>
-  <script src="./voxel-view.js"></script>
-  <script src="./body-physics.js"></script>
-  <script src="./game.js"></script>
-<script data-games-pwa-runtime src="./game-pwa.js"></script>
+<main class="gate" aria-labelledby="gate-title">
+<h1 id="gate-title">Unlock games</h1>
+<p>Enter the shared password to open this page.</p>
+<form id="games-access-gate-form" novalidate>
+<label for="games-access-gate-password">Password</label>
+<input id="games-access-gate-password" name="password" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="games-access-gate-hint games-access-gate-status">
+<p class="hint" id="games-access-gate-hint">The password is not kept by this page.</p>
+<button type="submit">Unlock</button>
+<p class="status" id="games-access-gate-status" role="status" aria-live="polite"></p>
+</form>
+<noscript><p class="status" data-error="true">JavaScript is required to unlock this page.</p></noscript>
+</main>
+<script id="games-access-gate-payload" type="application/json">{"v":1,"i":310000,"s":"AspMtS8iPezMCBR+3/Ba+A==","k":"543e06614ec9bad77472dee1","n":"oG3Xv1HAzAwRvo7/","c":"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"}</script>
+<script>
+(()=>{'use strict';const text=new TextEncoder(),decode=new TextDecoder(),payload=JSON.parse(document.getElementById('games-access-gate-payload').textContent),form=document.getElementById('games-access-gate-form'),input=document.getElementById('games-access-gate-password'),button=form.querySelector('button'),status=document.getElementById('games-access-gate-status'),storageKey='games-access-gate:'+payload.v+':'+payload.k;const b64=v=>{const raw=atob(v),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out},toB64=v=>{let raw='';for(const byte of v)raw+=String.fromCharCode(byte);return btoa(raw)},message=(value,error=false)=>{status.textContent=value;status.dataset.error=error?'true':''};const importKey=bytes=>crypto.subtle.importKey('raw',bytes,{name:'AES-GCM'},false,['decrypt']);async function derive(password){const material=await crypto.subtle.importKey('raw',text.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64(payload.s),iterations:payload.i,hash:'SHA-256'},material,256);const bytes=new Uint8Array(bits);return {key:await importKey(bytes),session:toB64(bytes)}}async function unlock(key){const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(payload.n),additionalData:text.encode('games-access-gate:'+payload.v+':'+payload.k)},key,b64(payload.c));document.open();document.write(decode.decode(plain));document.close()}function stored(){try{const value=sessionStorage.getItem(storageKey);return value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null}catch{return null}}function remember(value){try{sessionStorage.setItem(storageKey,value)}catch{}}function forget(){try{sessionStorage.removeItem(storageKey)}catch{}}async function tryStored(){if(!globalThis.crypto?.subtle)return;const value=stored();if(!value)return;try{await unlock(await importKey(b64(value)))}catch{forget()}}form.addEventListener('submit',async event=>{event.preventDefault();if(!globalThis.crypto?.subtle){message('This browser cannot unlock this page.',true);return}const password=input.value;if(!password){message('Enter the password to continue.',true);input.focus();return}button.disabled=true;message('Unlocking…');try{const result=await derive(password);input.value='';remember(result.session);await unlock(result.key)}catch{input.value='';message('The password did not unlock this page.',true);input.focus()}finally{button.disabled=false}});input.focus();tryStored()})();
+</script>
 </body>
 </html>

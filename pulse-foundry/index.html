@@ -1,57 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-games-access-gate="v1">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#132441">
-  <meta name="application-name" content="Pulse Foundry">
-  <meta name="description" content="Pulse Foundry — an original one-touch 3D rhythm platformer with optional local CPU rivals.">
-  <title>Pulse Foundry</title>
-  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
-<meta data-games-pwa-runtime name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protected games</title>
+<style>
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:#101827;color:#f8fafc;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.gate{width:min(29rem,100%);padding:clamp(24px,6vw,42px);border:1px solid #ffffff24;border-radius:20px;background:#17263b;box-shadow:0 20px 60px #0008}h1{margin:0 0 10px;font-size:clamp(1.5rem,5vw,2.1rem);line-height:1.15}p{margin:0 0 22px;color:#d8e3f0}label{display:block;margin-bottom:8px;font-weight:700}input,button{width:100%;min-height:48px;border-radius:11px;font:inherit}input{border:1px solid #9db1c7;background:#0c1522;color:inherit;padding:11px 12px}button{margin-top:16px;border:0;background:#d8b85a;color:#17202c;font-weight:800;cursor:pointer}button:disabled{cursor:wait;opacity:.72}input:focus-visible,button:focus-visible{outline:3px solid #8ec5ff;outline-offset:3px}.status{min-height:1.5em;margin:14px 0 0;color:#d8e3f0}.status[data-error="true"]{color:#ffb4ab}.hint{font-size:.9rem;color:#b9c7d8}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
 </head>
 <body>
-  <main id="app">
-    <section id="home" class="screen home" aria-labelledby="title">
-      <div class="brand" aria-hidden="true"><i></i><b></b><i></i></div>
-      <p class="eyebrow">KINETIC WORKS</p>
-      <h1 id="title">Pulse Foundry</h1>
-      <p class="tagline">Jump the beat. Hold the glide. Outrun the local CPU crew.</p>
-      <div id="mode-tabs" class="mode-tabs" aria-label="Play style">
-        <button type="button" data-mode="solo" aria-pressed="true"><b>Solo</b><span>Pure course run</span></button>
-        <button type="button" data-mode="rivals"><b>CPU Race</b><span>Two local ghost rivals</span></button>
-        <button type="button" data-mode="practice"><b>Practice</b><span>Safe checkpoints</span></button>
-      </div>
-      <div id="level-grid" class="level-grid" aria-label="Foundry courses"></div>
-      <button id="start" class="primary" type="button">Start Ignition Walk</button>
-      <button id="new-run" class="hidden" type="button">Start a new run with selected options</button>
-      <button id="settings" class="quiet" type="button">Sound, motion &amp; local save</button>
-      <p class="save-copy">Records stay in this browser. Export a backup before changing device or Home Screen mode.</p>
-      <div class="site-actions"><button type="button" data-install-game>Install / offline help</button><a data-all-games href="../">All games</a></div>
-      <span data-game-offline-status class="offline" role="status">Offline status checks after the published game loads.</span>
-    </section>
-
-    <section id="battle" class="screen battle hidden" aria-label="Pulse Foundry course">
-      <header class="hud"><div><b id="course-name">Ignition Walk</b><span id="run-mode">Solo run</span></div><div class="readout"><b id="percent">0%</b><span id="best">BEST 0%</span></div><button id="pause" type="button" aria-label="Pause run">Ⅱ</button></header>
-      <div id="stage-shell">
-        <canvas id="stage" tabindex="0" aria-label="Foundry course. Space, W or Arrow Up jumps; hold to fly. P or Escape pauses."></canvas>
-        <div id="section-callout" class="callout" role="status">TAP TO JUMP</div>
-        <div id="rival-strip" class="rivals" aria-label="Race positions"></div>
-      </div>
-      <button id="pulse" class="pulse" type="button" aria-label="Jump; hold only while flying"><span>PRESS / HOLD</span><small>Fixed jump · hold to fly · Space / W / ↑</small></button>
-    </section>
-
-    <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-card"><p id="modal-kicker" class="eyebrow">PAUSED</p><h2 id="modal-title">Foundry paused</h2><div id="modal-body"></div><div id="modal-actions" class="modal-actions"></div></div></div>
-    <input id="import-file" class="visually-hidden" type="file" accept="application/json,.json">
-  </main>
-  <script src="engine.js"></script>
-  <script src="hd-scene.js"></script><script src="renderer.js"></script>
-  <script src="game.js"></script>
-<script data-games-pwa-runtime src="./game-pwa.js"></script>
+<main class="gate" aria-labelledby="gate-title">
+<h1 id="gate-title">Unlock games</h1>
+<p>Enter the shared password to open this page.</p>
+<form id="games-access-gate-form" novalidate>
+<label for="games-access-gate-password">Password</label>
+<input id="games-access-gate-password" name="password" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="games-access-gate-hint games-access-gate-status">
+<p class="hint" id="games-access-gate-hint">The password is not kept by this page.</p>
+<button type="submit">Unlock</button>
+<p class="status" id="games-access-gate-status" role="status" aria-live="polite"></p>
+</form>
+<noscript><p class="status" data-error="true">JavaScript is required to unlock this page.</p></noscript>
+</main>
+<script id="games-access-gate-payload" type="application/json">{"v":1,"i":310000,"s":"AspMtS8iPezMCBR+3/Ba+A==","k":"543e06614ec9bad77472dee1","n":"n89xQh+gNzCxnhnQ","c":"OjJ5MymkJbeJf9qouUhenS/M/utnJJQ1RifNX4mpQxwV+CP34YB3/G3fUF5H6GFS973XtE2Sgd365t49qx1DjUWbLIihFTqorZAexkHS7ihK0sKwZBWZj9oMcU8mmeiJfQw+B3WFsNcTYA0bA1HgX9kNtpL34Ffnvykrkxc8kHVZG/+4y10BnxfBhNcmm3vhqrfX6oZCRwejMql5NHoBdqMZKQb5wZVAZBa+wi91FCRVjgmURH3oHwXNYPYONqrDlgf36/eHht9DwoWY/rmOd8f+51JXNYALiZ6yF1FLwzpAIzHFmySkO9LD3oZhL9YFkNaIm/olj70e5cAROl2jrNiejZyXbGDw5LDtcWS8gbJ/vn6zVRW+4rUDxYym0ODXDhLjB5cr6JuM7Q5h1EPT4hmppBG0P8a7NseM2B/GcoxrJRmfKNiYvmZLaN+Y8uG4/zobY4xem3lQEWMvwHpaSNtISlTEplHAqpvLaiCvyyW+61DID0NVbkZEt2xfhuJ7Wx0vAnEFtKNo7Bjovn3B/lK8hxvmttYh5Z5dnWpzMVe+vT3xsl/+4biFdHUtQxJWsbqe8y254lZBa+EUkNormYDkT8xzkPuBox/dnG3/9CUN/zAayPAs0HDkk4IbsrR73VwED7lpkB19j6CICiGpPPMoUQHSvN5TzxlTIgf7BrXwywHmB2yqofBF4WPMaSPAdfPuxX5Q0oumHKoi+NcNpk8iJ3aCQ6tQ/Ls9T6C+kY6c8eeqrEt7PLbGZlXGoUwfOLum9XEZpBHzaCbVPavptZF6R/H4d9ei79nP799YdpVcmxH1W5pCZU91Cag58OwbeBFc3cbdiwaHkONjvI63rro9LEWjPqJ/0a0BOqL/DR1SJAttBvfc6r8FJ0Ul+hIP0chj+H0IGWrf5RQIyVUjiRLmuivbqnMjm0EHOvDBE6BvOOffuesrmJaL4hLRLj6ravR+qcXhbxN0WA6SErNMQj6x4jC0iBJ62lTRErJnhrzKXRd/Cxeioq9vYTbnf50eFyfiRZCekn3JTy5NylT3tz0RHWIfSJfC6j4UvLfUZdwHY9mr+HmRvgJuSIZyXg8pTTuJiWylVLJjpF07J1ssmMbL3AvdzPRB+JiGwDOi1aokw2N8o5G1zDZIN9h6qcbeO1BKKhDlWWqoYV+qbjMdi7V4fbpsiIOVqKvjIW+eiO0FRv7QIkSOUZwWD5gpx29JmHXKSAAXm5k7v1kLoI62byTu5qQSUpYm2eYR4eQsTivGHZvr5TH2ipwBwzLiH5yOYkiIAqq6OffRckp4GjzjnD1PwOPsbaCuFky7n1bsM2we4QM2xxDF4IF9nItTO1iBJvNXKMb67kqd5NlVaTP3Qz2FfU08nsPH7cqak5pyrFtG6S6vIRs54tsaNauU/2cQQzfi1VChj+se8IZACw0i/4p/CfhhljWBb1RhdmeRlJcGGygt5qGNNjMd5AvCerVyzbb9VRfQ/JTxOzhiSQDMbJRlB4qLIVGKxBM+/MDSptyHtVmCHnVJrkM6qNI7SJ05OChdW0eTnSJowtzs3DSsyvTn52Fci63NppjFX6KFu1sGivsnfSlIikgDNytE/zMLpBM4OPE07nB7h0TX9Q9LtTQS4biRxJ2UyvxMiHBS249InM/b0PEMXJisal1R43rWGQpGJyCIhArvFhpw00Wc9OR18Q5uopW2EDULKpfBhGvH+dqhngEw1sxJirkfGuRySmQ+U7NdFakZZbxbzLRJDa1OA+94LvKZRGf85mQwIIGU8hl5hjDHQw0Q/HejME7Nx00Wfe6t8t/KbzDIfY+lZTukx98Q/uPKJTsCXQaNh4hGpUpj8wfBSXbkmVDPMqkqoU2Y+E5a+lkWQ1nwl6siHbBHHkRY7pXaTeidiqCLOb1Y7QQWKLI3lrRl3uTFlz73sQjXhe9rQuTLP1MilYzdl/4bfQwlW+KtgCfCCibI/J02s1saebCHaBabN2Ncay13Ny41R3Yg4fd7U9vHhjLgQTwEqmK9UgXQbSiUmLZK4BFO+QL+KlmA8LAhI4+inXBJuLMK5F71ZgSbiRl2hqZipHkURJ+ria4zgTn7Hey7yhAS8U7JXEARnLGY3Ba3ZvwZI5AWvJvFI6gQqve6N8Qh+e39f8WzSB5zQcmR1jlKM9EX5hiVBoktCyOxhYR3pb0OTlRR5WUhuctijCTAwa9sRPTdpiFJ8SJd1hID/WtcysQWSMksOJis+MhLdHa7VB6+x5a4zz9cRlxbTiIp/hNiwSed/gv1Dvmm6eMkmqq4u3Nxf+e7YQpvy+NU7NP7Yd/VDF+Y51SMnNc6SHqzWP8mBbIdheBPX5UCSnGCjjYe/J4zx70FqyfCYesssPs5aN6AoawIR3/rNxc59j/v0NcGshtBhpf4hne09szs/y/vQPTe56dHTiZCcxEJlm3Abjp5McxgATVEogiZyz/C1RMb8FhHZT66KWU/7rBDiraTzlnCwOeiXzyfHeUcT4nOUpVP95XnMBpvUhwU32KNGrlCmMdi6u74c2zSFunyLoAJWsp6GnUR4zZm/xA9B3eUggQVKDYrxZvNY21PWoD0TUFbXTLGk/6FHfFG/pXdBc0Bxgop0x+xVFfxc3KqRGo7RQ2bGFHALxa2m/KdIzXqmYD5pngvyf+v9zEiKWAVUkSgBl2ZszSlGkg3GHVoh0PYBK15oRqVjAWWxfVo/BUiQMdscg0d8IMYF2Q/V8p9douwJhrG1VTRX0YOCeaN77T+P231UAot1W8ICshR/7KBsZYqd+NJQy4DAb6905OW4RGRd7yS663pKZ3USF/oNYkwtXAxGAGIC5OXTeSP9qWJFJxS0Z5X/0GQ3K0nXab0Jg2rdZ32VALMfeOqZHUQ38X+9ieLWunOaDv+iorwLnrcDjKA+JMoGrsgZjBH3phHTRfeH50mFXzRkcHZDOfCE2t0hZ3q3Xkl1C8haoWITxi5HmjSeFHPN0CVhxLZyz9/TLEnbWOfpFCNcShNXEmf71snurPewnPe5rMs7VaSJDJol4z8UCT+Tl672QrCZGU3ax044aC4b1fa8topSOtZXeR9j+rS0P5NrDjf8QqDNJ4H4G1XsaacMAVtzqvfxz/xV5Vfpqm+4HBIX9/LS4VE/ORZMlWAuPxdId8oOhbBl6+z5/sS2lhE3yCYvOYHpn5DGko0uGGWwNLLn2+JpkZ5YjiDkfywHUe9Mkyq+CTDMqPEALQ+D6RocFlKnX0fcuo1BBK8Vk69O6lHVWGreK5UYl++Arhuv3AO6cA9y9KO2TAzav7o94Jv8GFvAfknOR8LuqB4DIqNStQSL61KD5HU04kQBOlO5sDRCu2u5KUMv8JSV+oRYxMxPu2UruVUPE2grKm4YZh15Yy00/Q5riUumNaMtxcJwnbU/78v21mIigluYYSq6MrlvpHIokKAaoTYamB+rDzla6npdzgBt9gpUd0d73ftJ6h3050a1Zu28c7rl2W1CxkJEwhwZ9aqKWZR0LZdjJOCLy1/AvEJm4+4UOjX8qrQZeXOqXU7uigzvH6cI8OwtchVBt1/03B+Bra0rj0oj0b3s1f0IyBimzZfFuMJ25kXZaDJonwSU8ZVETFD+znu6ILBfrWC+vPpqkhMbtoOoYIPp3ZGL1FYJb3Y4+botwIg/upw/d/ZdyDA4cozMW5YWZ1aSxjBeD0+0Ge5Ip4tDlSOEz4GwqZBrJ4jxQz563eeY8HZURQpnAVcLfJKWJVqjj0zCHRoXpR/0CfXOxCgMZKQ12N1wEoBcPmMMVpEcWJR0ySq4VpNjSiz+Tn0IUgnGW9w7YL5fBHIUywzdttHHtDvMDKbId1VStStxzoJ/6h5hQRR27O7y8rkMVKku8g6+UaYUE/xnQko2ikzKQAlour1B0+faoPFno9EZq4G3sllXkIMQd3J3ZxLxA7WL9ZCn/Tre0u7/C0BIq2WYwFnbB+qfKzjOWRP6ATi+/2VGo2P/+UWv2x1YqYaipTohvlhZW5mqpWbfmGoC6Vq2c9whDqgOM7UDWXSzvcrpELQiiMPU4/E6w0QES7X7H8cGXodjPXSYRYxUraWS/WWzQBOPwaIOdraa+jhwBkEbe2KTNQfkKLKZEQfyHDfydz7Pm9Ii+T3GePn6lruLFxurmDaPolZ7Rawl/hgLzeL1szIct5nZ28CsL1Bl0k2pM53Uf6UCz9ghRsR9CQTPeYi9SBshePCjXVJtmEXUg8Ge201pMF4hhM8QDIEbjOf7cgdI7B7bg8/X78iFchqeowqmc6yRMuQl7N3LVo1Srl1cWppoLFlj5Iq5bi5kk8+2FFkSUzv4FpPfN4OLoWGELuw3R0ZOLz+MM9Tcw2UugG5bp1tXcf7k+6BzPMUDO4JfiVbZzyrrp2ayOYGU5LaAZnLCTbbj7fDIfOq4bU5Q3Rj9fVUeYbZhya9TXKN7GdptEsnxU3LCreEMlbq37eMs+UVW7mrZweeseS/njMZ4CaJqjaw0CwzpMLjlLMsnaVLUMsPuiALfftY5w5PwFjtncfxlXzWdf9bgvfTclviEHHYCZmSo+Kk28bhFm5l5QL61tQtTGv4aBBOFQDlBL/6RHSHRSoQXyLwd38Tn5phLRVJAMs9eQljo/SYuUsNeKQvHujPQ8yU5lL8pSkZdN4XJF7i4kYhK/QL48UVt1yZ8owYchIjy71gK0eAXsuyesXOQWiq/+sATy7QMk+9QEOd8zszMrPNHhBkDhwl47x52ND6NM1Me+gZ/w95vxksEcPYLVu6sJL50qEhDruZ00BFHfSdw0W2x9y7uANe80YBPmDPurIUHwAwaDnDLYiDJlFCeUOCHa8TXguWLeVv8z1kZczsM7/a0WDaLqPHhLjCU0u1ekI/c2KzoaoqefcorzShg80uVIzI3AGrUNxk3WoN3/mTLI5QkHnIGwVu6Fx58yl+d5fqDrGWTKTupPu3xKExnsoe89MhLuPyc1cZPl7tCSCh2I59OJK7IyOCIdifrAyJkbwJ+vSXfiMU250DT61jPKj4ibHS6v6Mk2ZdyRlJTKVBlgpA5m1ybBx2VSECKTtpWgZXvpvWMwAO70LKMELzmuD6WsSCkndQuo6EsBWscr3QvpscbfxkB1z/+w2hBSkS9nRKkgOzUtoMv5Glq0lv6gtQ+AvBCjlzStyYbIu0xZ/OGbL064aTv1BOdXS5g2zv0Q2tQAJWyDBSGOwgc/HnJVRZas7xz+9Xkpt13UhTwxQv1qro6oSF8wAHxPT6QZd+3D2csrvGvDMgLKB7KoiP2SXa+Ac2T0Ja0w90vzzly1j5EsjEG4G74TsfV+CepehS5lUICzSGt23MYaP7EayRmg=="}</script>
+<script>
+(()=>{'use strict';const text=new TextEncoder(),decode=new TextDecoder(),payload=JSON.parse(document.getElementById('games-access-gate-payload').textContent),form=document.getElementById('games-access-gate-form'),input=document.getElementById('games-access-gate-password'),button=form.querySelector('button'),status=document.getElementById('games-access-gate-status'),storageKey='games-access-gate:'+payload.v+':'+payload.k;const b64=v=>{const raw=atob(v),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out},toB64=v=>{let raw='';for(const byte of v)raw+=String.fromCharCode(byte);return btoa(raw)},message=(value,error=false)=>{status.textContent=value;status.dataset.error=error?'true':''};const importKey=bytes=>crypto.subtle.importKey('raw',bytes,{name:'AES-GCM'},false,['decrypt']);async function derive(password){const material=await crypto.subtle.importKey('raw',text.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64(payload.s),iterations:payload.i,hash:'SHA-256'},material,256);const bytes=new Uint8Array(bits);return {key:await importKey(bytes),session:toB64(bytes)}}async function unlock(key){const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(payload.n),additionalData:text.encode('games-access-gate:'+payload.v+':'+payload.k)},key,b64(payload.c));document.open();document.write(decode.decode(plain));document.close()}function stored(){try{const value=sessionStorage.getItem(storageKey);return value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null}catch{return null}}function remember(value){try{sessionStorage.setItem(storageKey,value)}catch{}}function forget(){try{sessionStorage.removeItem(storageKey)}catch{}}async function tryStored(){if(!globalThis.crypto?.subtle)return;const value=stored();if(!value)return;try{await unlock(await importKey(b64(value)))}catch{forget()}}form.addEventListener('submit',async event=>{event.preventDefault();if(!globalThis.crypto?.subtle){message('This browser cannot unlock this page.',true);return}const password=input.value;if(!password){message('Enter the password to continue.',true);input.focus();return}button.disabled=true;message('Unlocking…');try{const result=await derive(password);input.value='';remember(result.session);await unlock(result.key)}catch{input.value='';message('The password did not unlock this page.',true);input.focus()}finally{button.disabled=false}});input.focus();tryStored()})();
+</script>
 </body>
 </html>
