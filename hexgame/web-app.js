@@ -28,8 +28,33 @@
   const standalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   const offlineStatus = () => offlineReady ? 'Available offline' : registrationFailed ? 'Open online to enable offline play' : 'Preparing offline play…';
   const welcomeKey = 'cairncoast-web-welcome-v1';
+  const transitionWorkerUrl = new URL('./sw.js', location.href).href;
   const shareIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V2m-4 4 4-4 4 4M7 10H4v11h16V10h-3"/></svg>';
   const homeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 7v10m-5-5h10"/></svg>';
+
+  function finalMigrationReady() {
+    return !!window.GamesGateMigration?.needsApprovedFinalActivation?.(registration);
+  }
+
+  function updateCopy() {
+    const waiting = registration?.waiting?.scriptURL;
+    const active = registration?.active?.scriptURL;
+    if (waiting === transitionWorkerUrl) return {
+      menu: 'Save progress: continue update',
+      notice: 'Update ready · save progress for step 1 of 2',
+      toast: 'Progress saved. Continuing protected update…'
+    };
+    if (finalMigrationReady()) return {
+      menu: 'Save progress: finish update',
+      notice: 'Update ready · save progress for step 2 of 2',
+      toast: 'Progress saved. Finishing protected update…'
+    };
+    return {
+      menu: 'Save progress and update',
+      notice: 'Update ready · Save progress and reload',
+      toast: 'Progress saved. Updating Hexgame…'
+    };
+  }
 
   function welcomeSeen() {
     try { if (localStorage.getItem(welcomeKey)) return true; } catch {}
@@ -54,29 +79,47 @@
   }
 
   function refreshStatus() {
+    const copy = updateCopy();
+    const finalReady = finalMigrationReady();
     const label = document.getElementById('web-app-menu-status');
-    if (label) label.textContent = registration?.waiting ? 'Update ready' : offlineStatus();
+    if (label) label.textContent = registration?.waiting || finalReady ? 'Update ready' : offlineStatus();
     const status = document.getElementById('web-app-offline-status');
     if (status) status.textContent = offlineStatus();
     const update = document.getElementById('web-app-update');
     if (update) {
       update.hidden = false;
-      update.disabled = !registration || checkingUpdate || applyingUpdate || (!registration.waiting && !!registration.installing);
-      update.textContent = registration?.waiting ? 'Save progress and update' : checkingUpdate || registration?.installing ? 'Checking for updates…' : 'Check for updates';
+      update.disabled = !registration || checkingUpdate || applyingUpdate || (!registration.waiting && !finalReady && !!registration.installing);
+      update.textContent = registration?.waiting || finalReady ? copy.menu : checkingUpdate || registration?.installing ? 'Checking for updates…' : 'Check for updates';
     }
     const menuUpdate = document.getElementById('web-app-check-update');
     if (menuUpdate) {
-      menuUpdate.disabled = !registration || checkingUpdate || applyingUpdate || (!registration.waiting && !!registration.installing);
-      menuUpdate.textContent = registration?.waiting ? 'Save progress and update' : checkingUpdate || registration?.installing ? 'Checking for updates…' : 'Check for updates';
+      menuUpdate.disabled = !registration || checkingUpdate || applyingUpdate || (!registration.waiting && !finalReady && !!registration.installing);
+      menuUpdate.textContent = registration?.waiting || finalReady ? copy.menu : checkingUpdate || registration?.installing ? 'Checking for updates…' : 'Check for updates';
     }
-    updateNotice.hidden = !registration?.waiting;
+    updateNotice.hidden = !registration?.waiting && !finalReady;
+    updateNotice.textContent = copy.notice;
   }
 
-  function applyUpdate() {
-    if (!registration?.waiting || applyingUpdate) return;
+  async function applyUpdate() {
+    const migration = window.GamesGateMigration;
+    const finalReady = !!migration?.needsApprovedFinalActivation?.(registration);
+    if ((!registration?.waiting && !finalReady) || applyingUpdate) return;
     if (!save()) { toast('Export a save before updating. Autosave is unavailable.'); return; }
     applyingUpdate = true;
-    toast('Progress saved. Updating Hexgame…');
+    toast(updateCopy().toast);
+    if (finalReady) {
+      try {
+        const result = await migration.activateApprovedFinalWorker();
+        if (result?.approved) return;
+        throw new Error('Final worker was not awaiting approved activation.');
+      } catch {
+        applyingUpdate = false;
+        toast('The protected update could not be prepared. Your saved progress is unchanged; try again while online.');
+        refreshStatus();
+        return;
+      }
+    }
+    if (!registration?.waiting) return;
     registration.waiting.postMessage({ type: 'POLY_TOP_APPLY_UPDATE' });
   }
 
@@ -86,7 +129,7 @@
       return;
     }
     if (!registration || checkingUpdate || applyingUpdate) return;
-    if (registration.waiting) { refreshStatus(); return; }
+    if (registration.waiting || finalMigrationReady()) { refreshStatus(); return; }
     checkingUpdate = true; refreshStatus();
     try {
       await registration.update();
@@ -95,7 +138,7 @@
       if (manual) toast('Could not check for updates. Reconnect and try again; your saves are unchanged.');
     } finally { checkingUpdate = false; refreshStatus(); }
   }
-  const updateAction = () => registration?.waiting ? applyUpdate() : checkForUpdates(true);
+  const updateAction = () => registration?.waiting || finalMigrationReady() ? applyUpdate() : checkForUpdates(true);
 
   const updateNotice = document.createElement('button');
   updateNotice.id = 'web-app-update-notice';
@@ -163,21 +206,33 @@
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (applyingUpdate) location.reload();
   });
-  navigator.serviceWorker.register('./sw-gated.js', { scope: './', updateViaCache: 'none' }).then(async reg => {
-    registration = reg;
-    const watchInstall = () => {
-      const worker = reg.installing;
-      worker?.addEventListener('statechange', () => {
-        if (worker.state === 'redundant' && !reg.active) registrationFailed = true;
-        setTimeout(refreshStatus, 0);
-      });
-    };
-    reg.addEventListener('updatefound', watchInstall);
-    watchInstall();
-    await navigator.serviceWorker.ready;
-    offlineReady = true;
-    refreshStatus();
-    checkForUpdates();
-    if (standalone()) navigator.storage?.persist?.().catch(() => {});
-  }).catch(() => { registrationFailed = true; refreshStatus(); });
+  (async () => {
+    try {
+      // If the bridge found an existing ./sw.js transition waiter, that worker
+      // must remain the first save-guarded activation. Current Hexgame code
+      // only stages ./sw-gated.js after that transition controls this page.
+      const migration = await Promise.resolve(window.GamesGateMigrationReady).catch(() => null);
+      const reg = migration?.phase && migration.phase !== 'unavailable'
+        ? await navigator.serviceWorker.getRegistration()
+        : await navigator.serviceWorker.register('./sw-gated.js', { scope: './', updateViaCache: 'none' });
+      if (!reg) throw new Error('No scoped worker registration after migration bridge.');
+      registration = reg;
+      const watchInstall = () => {
+        const worker = reg.installing;
+        worker?.addEventListener('statechange', () => {
+          if (worker.state === 'redundant' && !reg.active) registrationFailed = true;
+          setTimeout(refreshStatus, 0);
+        });
+      };
+      reg.addEventListener('updatefound', watchInstall);
+      watchInstall();
+      await navigator.serviceWorker.ready;
+      offlineReady = true;
+      refreshStatus();
+      checkForUpdates();
+      if (standalone()) navigator.storage?.persist?.().catch(() => {});
+    } catch {
+      registrationFailed = true; refreshStatus();
+    }
+  })();
 })();

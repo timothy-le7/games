@@ -1,14 +1,33 @@
 'use strict';
-const RELEASE = '69488698611acb17b8c0';
+const RELEASE = '3f0bec02790ad4f6887d';
 // Include the scope so unrelated apps on the same host cannot delete our caches.
 const PREFIX = 'poly-top:' + encodeURIComponent(self.registration.scope) + ':';
 const CACHE = PREFIX + RELEASE;
 const ASSETS = ['index.html', 'web-app.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'privacy.html'];
 const urlFor = file => new URL(file, self.registration.scope).href;
+// A legacy compatible migration may leave this scoped marker only after the
+// second real durable-save guard succeeds. The current transition-unregister
+// handoff consumes its marker before the fresh registration begins; this
+// defensive path keeps a compatible marker-gated install from promoting a
+// later ordinary update, which has no marker and stays behind its visible save
+// guard.
+const APPROVAL_CACHE = 'games-gate:approved-activation:' + encodeURIComponent(self.registration.scope);
+const APPROVAL_URL = new URL('./__games-gate-approved-activation__', self.registration.scope).href;
+
+async function consumeApprovedActivation() {
+  if (!(await caches.keys()).includes(APPROVAL_CACHE)) return false;
+  const cache = await caches.open(APPROVAL_CACHE);
+  const approval = await cache.match(APPROVAL_URL);
+  if (!approval) return false;
+  await cache.delete(APPROVAL_URL);
+  if ((await cache.keys()).length === 0) await caches.delete(APPROVAL_CACHE);
+  return true;
+}
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     try {
+      if (await consumeApprovedActivation()) self.skipWaiting();
       // Consume one body at a time. Waiting to put every fetched response can
       // exhaust a browser's per-worker connection budget. This cache cannot
       // control pages until installation succeeds, and failures delete it.
@@ -35,7 +54,10 @@ self.addEventListener('activate', event => {
 
 // Updates wait until the game closes, or until the player explicitly saves and updates.
 self.addEventListener('message', event => {
-  if (event.data?.type === 'POLY_TOP_APPLY_UPDATE') event.waitUntil(self.skipWaiting());
+  // Keep the established Hexgame update action usable while this worker waits
+  // behind a transition-controlled page. The direct call is intentional: it
+  // is the same activation contract as the shared scoped workers.
+  if (event.data?.type === 'POLY_TOP_APPLY_UPDATE') self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
