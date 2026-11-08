@@ -32,6 +32,10 @@
     node.textContent = message;
   }
 
+  function finalMigrationReady() {
+    return !!window.GamesGateMigration?.needsApprovedFinalActivation?.(state.registration);
+  }
+
   function saveBeforeLeaving() {
     const app = window.GameApp;
     if (!app || typeof app.save !== 'function') {
@@ -85,9 +89,10 @@
     const button = document.querySelector('[data-games-pwa-update]');
     if (!button) return;
     const waiting = !!state.registration?.waiting;
+    const finalReady = finalMigrationReady();
     button.hidden = isFilePreview() || !('serviceWorker' in navigator) || !window.isSecureContext;
-    button.disabled = state.applying || state.checking || (!waiting && !!state.registration?.installing) || !state.registration;
-    button.textContent = state.applying ? 'Updating…' : waiting ? 'Save progress and update' : state.checking || state.registration?.installing ? 'Checking for updates…' : 'Check for updates';
+    button.disabled = state.applying || state.checking || (!waiting && !finalReady && !!state.registration?.installing) || !state.registration;
+    button.textContent = state.applying ? 'Updating…' : waiting ? 'Save progress and update' : finalReady ? 'Save progress and finish protected update' : state.checking || state.registration?.installing ? 'Checking for updates…' : 'Check for updates';
     button.setAttribute('aria-label', button.textContent + ' ' + gameName());
     if (state.notifyInstalled && waiting) {
       state.notifyInstalled = false;
@@ -96,12 +101,27 @@
     setStatus();
   }
 
-  function applyUpdate() {
+  async function applyUpdate() {
     const waiting = state.registration?.waiting;
-    if (!waiting || state.applying) return;
+    const migration = window.GamesGateMigration;
+    const finalReady = !!migration?.needsApprovedFinalActivation?.(state.registration);
+    if ((!waiting && !finalReady) || state.applying) return;
     if (!saveBeforeLeaving()) return;
     state.applying = true;
-    toast('Progress saved. Applying update…');
+    toast(finalReady ? 'Progress saved. Finishing protected update…' : 'Progress saved. Applying update…');
+    if (finalReady) {
+      try {
+        const result = await migration.activateApprovedFinalWorker();
+        if (result?.approved) return;
+        throw new Error('Final worker was not awaiting approved activation.');
+      } catch {
+        state.applying = false;
+        toast('The protected update could not be prepared. Your saved progress is unchanged; try again while online.');
+        updateControl();
+        return;
+      }
+    }
+    if (!waiting) return;
     waiting.postMessage({ type: 'GAMES_PWA_APPLY_UPDATE' });
   }
 
@@ -111,7 +131,7 @@
       return;
     }
     if (!state.registration || state.checking || state.applying) return;
-    if (state.registration.waiting) { updateControl(); return; }
+    if (state.registration.waiting || finalMigrationReady()) { updateControl(); return; }
     state.checking = true;
     updateControl();
     try {
@@ -173,7 +193,7 @@
       if (update.dataset.gamesPwaUpdateBound) continue;
       update.dataset.gamesPwaUpdateBound = '1';
       update.classList.add('games-pwa-update');
-      update.addEventListener('click', () => state.registration?.waiting ? applyUpdate() : checkForUpdates(true));
+      update.addEventListener('click', () => state.registration?.waiting || finalMigrationReady() ? applyUpdate() : checkForUpdates(true));
     }
     setStatus();
     updateControl();
@@ -186,7 +206,15 @@
       return;
     }
     try {
-      const registration = await navigator.serviceWorker.register('./sw-gated.js', { scope: './', updateViaCache: 'none' });
+      // The decrypted bridge has one job for pre-gate installs: if the old
+      // endpoint is already waiting, leave it as the first save-guarded
+      // activation. Otherwise it has either staged the gated endpoint or
+      // requested the transition endpoint before this current runtime starts.
+      const migration = await Promise.resolve(window.GamesGateMigrationReady).catch(() => null);
+      const registration = migration?.phase && migration.phase !== 'unavailable'
+        ? await navigator.serviceWorker.getRegistration()
+        : await navigator.serviceWorker.register('./sw-gated.js', { scope: './', updateViaCache: 'none' });
+      if (!registration) throw new Error('No scoped worker registration after migration bridge.');
       state.registration = registration;
       const observe = worker => worker?.addEventListener('statechange', () => {
         if (worker.state === 'redundant' && !registration.active) state.failed = true;

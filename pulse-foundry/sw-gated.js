@@ -2,13 +2,32 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:pulse-foundry:";
-const RELEASE = "e59c9329cc1690e2f217";
+const RELEASE = "1a6c50820e6486bfe522";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./gate-migration.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
+// A legacy compatible migration may leave this scoped marker only after the
+// current game's durable-save guard has succeeded. The current transition
+// unregister handoff consumes its marker before the fresh registration begins;
+// this defensive path keeps a compatible marker-gated install from promoting
+// a later ordinary update, which has no marker and retains the usual explicit
+// save-before-update behavior.
+const APPROVAL_CACHE = 'games-gate:approved-activation:' + encodeURIComponent(self.registration.scope);
+const APPROVAL_URL = new URL('./__games-gate-approved-activation__', self.registration.scope).href;
+
+async function consumeApprovedActivation() {
+  if (!(await caches.keys()).includes(APPROVAL_CACHE)) return false;
+  const cache = await caches.open(APPROVAL_CACHE);
+  const approval = await cache.match(APPROVAL_URL);
+  if (!approval) return false;
+  await cache.delete(APPROVAL_URL);
+  if ((await cache.keys()).length === 0) await caches.delete(APPROVAL_CACHE);
+  return true;
+}
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     try {
+      if (await consumeApprovedActivation()) self.skipWaiting();
       // Consume one response before requesting the next. Holding every body
       // open until a later cache.put can exhaust a browser's per-worker HTTP
       // connection budget and leave installation stuck. The cache is inactive
