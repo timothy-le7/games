@@ -50,6 +50,24 @@
 
 .motion-reduced *,.motion-reduced *:before,.motion-reduced *:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
 
-.mouse-look{display:none}@media(pointer:fine) and (min-width:700px){.mouse-look{display:block;position:absolute;left:20px;bottom:22px;z-index:5;min-height:44px;padding:8px 16px;background:#193b50;color:#fff;border:1px solid #8ac1d0;border-radius:12px}}
+/* Control layouts. The touch layer is removed (hidden: no paint, no hit area,
+   no focus) in the keyboard-and-mouse layout so the whole world receives the
+   mouse; the layout is chosen from pointer capability, never width alone. */
+.touch-layer[hidden],.desktop-hint[hidden]{display:none!important}
+/* The aim marks sit exactly where a player clicks to aim/mine; they must
+   never swallow that click. */
+.crosshair,.target-tag,.mine-progress{pointer-events:none}
+.slot .key{display:none}
+.layout-desktop .slot .key{display:block;position:absolute;left:4px;top:3px;color:#cfe9df;font-size:9px;font-style:normal;line-height:1}
+.layout-desktop .hotbar{bottom:max(14px,env(safe-area-inset-bottom));gap:6px;padding:3px}
+.layout-desktop .slot{flex-basis:58px;min-width:58px;min-height:58px;border-radius:11px;font-size:9px}
+.layout-desktop .slot span{width:24px;height:24px}
+.desktop-hint{left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));z-index:5;display:flex;flex-direction:column;gap:5px;max-width:min(340px,31vw);padding:8px 10px;border:1px solid #ffffff38;border-radius:12px;background:#0b2230d0;color:#eafff6;font-size:11px;line-height:1.35;box-shadow:0 2px 10px #07162955}
+.desktop-hint p{margin:0}.desktop-hint .keys{color:#bfe0d4;font-size:10px}
+.desktop-hint .mouse-look{align-self:flex-start;min-height:34px;padding:6px 12px;border:1px solid #8ac1d0;border-radius:10px;background:#227965;color:#fff;font-size:12px;font-weight:850}
+.desktop-hint[data-mouse="captured"] .mouse-look{background:#37635c;border-color:#ceffab}
+.desktop-hint[data-mouse="refused"] #desktopMouseText,.desktop-hint[data-mouse="unavailable"] #desktopMouseText{color:#ffe39a;font-weight:800}
+@media (max-width:1099px){.desktop-hint{bottom:calc(max(14px,env(safe-area-inset-bottom)) + 74px);max-width:min(340px,calc(100vw - 28px))}}
+@media (max-height:520px){.desktop-hint .keys{display:none}}
 
 .sneak-button{position:absolute;left:max(28px,env(safe-area-inset-left));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 204px);min-width:72px;min-height:44px;padding:8px 14px;border:1px solid #ffffff66;border-radius:12px;background:#12303fdd;color:#fff;font-size:12px;font-weight:800;pointer-events:auto;touch-action:manipulation;z-index:2}.sneak-button[aria-pressed="true"]{background:#356e57;border-color:#ceffab}@media(max-height:500px) and (orientation:landscape){.sneak-button{bottom:145px}}

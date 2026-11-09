@@ -76,8 +76,32 @@
   function readPrefs() {
     try {
       const raw = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
-      return { sound: raw.sound !== false, motion: raw.motion !== false, sensitivity: clamp(Number(raw.sensitivity) || 1, .45, 2.1), buttonSize: clamp(Number(raw.buttonSize) || 1, .92, 1.28), handedness: raw.handedness === 'left' ? 'left' : 'right', camera: raw.camera === 'first' ? 'first' : 'third' };
-    } catch (_) { return { sound: true, motion: true, sensitivity: 1, buttonSize: 1, handedness: 'right', camera: 'third' }; }
+      // Older preferences have no control layout and migrate to Auto; every
+      // existing comfort setting keeps its previous value.
+      return { sound: raw.sound !== false, motion: raw.motion !== false, sensitivity: clamp(Number(raw.sensitivity) || 1, .45, 2.1), buttonSize: clamp(Number(raw.buttonSize) || 1, .92, 1.28), handedness: raw.handedness === 'left' ? 'left' : 'right', camera: raw.camera === 'first' ? 'first' : 'third', controls: ['auto', 'desktop', 'touch'].includes(raw.controls) ? raw.controls : 'auto' };
+    } catch (_) { return { sound: true, motion: true, sensitivity: 1, buttonSize: 1, handedness: 'right', camera: 'third', controls: 'auto' }; }
+  }
+  // ---- Control layout: Auto / Keyboard & mouse / Touch -----------------------
+  // Auto follows pointer capability (coarse, hover-less primary pointer means
+  // touch) and then the kind of pointer the player actually presses, so a
+  // touchscreen laptop driven by its mouse never gets the joystick, and a
+  // tablet that is touched switches to thumb controls. Width never decides.
+  const media = q => window.matchMedia ? window.matchMedia(q) : { matches: false, addEventListener() {} };
+  const coarseQuery = media('(pointer: coarse)'), hoverQuery = media('(hover: hover)'), anyFineQuery = media('(any-pointer: fine)');
+  let layout = null, pressedPointerKind = null, mouseState = 'free';
+  function capabilityLayout() {
+    if (coarseQuery.matches && !hoverQuery.matches) return 'touch';
+    if (anyFineQuery.matches || hoverQuery.matches) return 'desktop';
+    return navigator.maxTouchPoints > 0 ? 'touch' : 'desktop';
+  }
+  function effectiveLayout() {
+    if (prefs.controls === 'desktop' || prefs.controls === 'touch') return prefs.controls;
+    return pressedPointerKind ? (pressedPointerKind === 'touch' ? 'touch' : 'desktop') : capabilityLayout();
+  }
+  function layoutReason() {
+    if (prefs.controls !== 'auto') return 'chosen in Controls';
+    if (pressedPointerKind) return pressedPointerKind === 'touch' ? 'the screen was touched' : 'a mouse or trackpad was used';
+    return capabilityLayout() === 'touch' ? 'a touch screen is the main pointer' : 'a precise pointer was detected';
   }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (_) {} }
   function applyPrefs() {
@@ -97,6 +121,43 @@
       cameraButton.textContent = first ? '1P' : '3P';
       cameraButton.setAttribute('aria-label', first ? 'Switch to third-person view' : 'Switch to first-person view');
     }
+    applyLayout();
+  }
+  const CANVAS_LABEL = {
+    desktop: 'Voxel island. W A S D move, Space jumps, Shift runs, C sneaks. Click to aim with the mouse or use the arrow keys. Hold left click or R to mine, right click or Q to place, wheel or 1 to 5 choose a block, E crafts, V changes view, Escape pauses.',
+    touch: 'Voxel island. Move with the left joystick, drag the right side to look, then hold Mine or tap Place.'
+  };
+  function applyLayout() {
+    const next = effectiveLayout();
+    if (next !== layout) {
+      const previous = layout; layout = next;
+      // Switching never leaves walking, mining, sneak, jump or a look drag held.
+      if (previous) clearInputs();
+      if (next === 'touch' && document.pointerLockElement === canvas) { releasingMouseForPanel = true; document.exitPointerLock?.(); }
+    }
+    const desktop = layout === 'desktop';
+    document.documentElement.classList.toggle('layout-desktop', desktop);
+    document.documentElement.classList.toggle('layout-touch', !desktop);
+    $('touchLayer').hidden = desktop; $('desktopHint').hidden = !desktop;
+    canvas.setAttribute('aria-label', CANVAS_LABEL[layout]);
+    // Keep any open intro/pause instructions true to the active layout.
+    const grid = $('howGrid'); if (grid && grid.dataset.layout !== layout) grid.outerHTML = howGrid();
+    const line = $('controlsLine'); if (line) line.textContent = controlsSummary();
+    updateMouseHint(); renderNeeded = true;
+  }
+  function updateMouseHint() {
+    const hint = $('desktopHint'), text = $('desktopMouseText'), buttonNode = $('mouseButton');
+    if (!hint) return;
+    hint.dataset.mouse = mouseState;
+    const copy = {
+      free: ['Aim with mouse', 'Click the world to aim · drag or arrow keys also look · Esc pauses'],
+      captured: ['Mouse aim on', 'Mouse aim on · left hold mines · right click places · Esc releases and pauses'],
+      refused: ['Try mouse aim again', 'The browser did not grant mouse aim. Click the world to try again, or drag / use the arrow keys to look; hold R to mine, Q to place.'],
+      unavailable: ['Mouse aim unavailable', 'This browser cannot capture the mouse. Drag the world or use the arrow keys to look; hold R to mine, right click or Q to place.']
+    }[mouseState];
+    if (buttonNode.textContent !== copy[0]) buttonNode.textContent = copy[0];
+    buttonNode.disabled = mouseState === 'unavailable' || mouseState === 'captured';
+    if (text.textContent !== copy[1]) text.textContent = copy[1];
   }
   function makeCreative() {
     const next = R.createGame(R.DEFAULT_SEED ^ 0x51f15e);
@@ -167,7 +228,7 @@
   }
   function getSummary() {
     const render = renderer && renderer.getStats ? renderer.getStats() : null;
-    return Object.assign({ mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, sneaking:!!input.sneak||input.keys.has('c'), cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget, biome: render.biome } }, R.summary(state));
+    return Object.assign({ controls: { preference: prefs.controls, layout, mouse: mouseState, pointerLocked: document.pointerLockElement === canvas, keysHeld: [...input.keys], joystick: input.joy.pointer !== null || !!(input.joy.x || input.joy.y), looking: !!input.look, mining: mineOwners.size > 0 }, mode: activeMode, hasCampaign: !!profiles.campaign, hasCreative: !!profiles.creative, firstPerson: prefs.camera === 'first', camera: prefs.camera, cameraDistance: lastRenderCamera.distance, sneaking:!!input.sneak||input.keys.has('c'), cameraCollision: lastRenderCamera.collision, cameraAim: { point: lastRenderCamera.aimPoint && lastRenderCamera.aimPoint.slice(), distance: lastRenderCamera.targetDistance, projected: lastRenderCamera.projectedAim, avatarHead: lastRenderCamera.avatarHead, avatarVisible: lastRenderCamera.avatarVisible }, target: target && target.material, targetBlock: target && [target.x, target.y, target.z], pose: { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: pose.pitch }, render: render && { blocks: render.blocks, faces: render.faces, drawCalls: render.drawCalls, frames: render.frames, width: render.width, height: render.height, dpr: render.dpr, pixelBudget: render.pixelBudget, biome: render.biome } }, R.summary(state));
   }
 
   const loaded = loadGame();
@@ -200,13 +261,25 @@
   function button(id, text, cls) { return '<button id="' + id + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>'; }
   function bind(id, fn) { const node = $(id); if (node) node.addEventListener('click', fn); }
   function open(html,back=close) { overlayBack=back; renderNeeded = true; clearInputs();if(document.pointerLockElement===canvas){releasingMouseForPanel=true;document.exitPointerLock?.();} panel.innerHTML = html; overlay.classList.add('open'); running = false;panel.querySelector('button,input,select')?.focus({preventScroll:true}); }
+  // Start/Continue/Resume hand focus straight to the world, so keys move the
+  // explorer immediately. Mouse aim is never grabbed implicitly: one click on
+  // the world (shown in the hint) aims again, and the cursor stays usable.
   function close() { if(graphicsLost){say('The 3D view is recovering. Resume when it returns.');return;} overlay.classList.remove('open'); running = true; completionOpen = false; lastTime = performance.now();canvas.focus({preventScroll:true}); }
 
   function welcome(recovered) {
     const continued = profiles.campaign.completed.length || profiles.campaign.time > 1;
     const rendererNote = V ? '' : '<p class="tiny"><strong>3D view is loading.</strong> This build needs its local voxel renderer before play can begin.</p>';
-    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p><div class="how-grid"><div><strong>1 · Move</strong>Drag the left joystick or use WASD. Push fully forward or hold Shift to run; hold C to walk slowly.</div><div><strong>2 · Look</strong>Drag the open right side, use arrow keys, or click the world once to capture the desktop mouse.</div><div><strong>3 · Mine</strong>Hold Mine or R on a block in the crosshair. After capture, hold left click.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place, Q, or right click.</div></div>' + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">You begin in rear view. Tap 3P / 1P beside Jump to switch views. Space jumps · 1–5 hotbar · E/I crafting · V camera · P/Esc pause/back. Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
+    open('<p class="eyebrow">ORIGINAL VOXEL EXPEDITION</p><h1>Block Islands</h1><p class="lead">Explore twelve hand-built islands as a field explorer. Gather, craft, build bridges and make it to the aurora summit.</p>' + howGrid() + button('startButton', continued ? 'Continue expedition' : 'Start expedition') + button('creativeButton', profiles.creative ? 'Continue creative sandbox' : 'Start creative sandbox', 'secondary') + rendererNote + '<p class="tiny">' + (layout === 'desktop' ? 'You begin in rear view; V switches to first person. E/I crafting · F strike · P/Esc pause/back. Prefer thumb controls? Pause → Controls → Touch.' : 'You begin in rear view. Tap 3P / 1P beside Jump to switch views. Using a keyboard and mouse? Pause → Controls → Keyboard &amp; mouse.') + ' Campaign and Creative saves stay separate; export from pause before moving to another browser or Home Screen app.' + (recovered ? '<br><strong>' + escape(recovered) + '</strong>' : '') + '</p>');
     bind('startButton', () => activateMode('campaign')); bind('creativeButton', () => activateMode('creative'));
+  }
+  function howGrid() {
+    if (layout === 'desktop') return '<div class="how-grid" id="howGrid" data-layout="desktop"><div><strong>1 · Move</strong>W A S D walk at once — no click needed. Space jumps, Shift runs, C sneaks.</div><div><strong>2 · Look</strong>Click the world to aim with the mouse (Esc releases). Dragging or the arrow keys also look.</div><div><strong>3 · Mine</strong>Hold left click on the block in the crosshair, or hold R.</div><div><strong>4 · Build</strong>Wheel or 1–5 picks a block; right click or Q places it.</div></div>';
+    return '<div class="how-grid" id="howGrid" data-layout="touch"><div><strong>1 · Move</strong>Drag the left joystick; push fully forward to run. Sneak walks slowly and guards ledges.</div><div><strong>2 · Look</strong>Drag the open right side of the screen.</div><div><strong>3 · Mine</strong>Hold Mine on a block in the crosshair.</div><div><strong>4 · Build</strong>Choose a hotbar block, then tap Place.</div></div>';
+  }
+  function controlsSummary() {
+    return layout === 'desktop'
+      ? 'WASD move · Space jump · Shift run · C sneak · mouse or arrows look (click the world to aim, Esc releases) · hold left click or R mine · right click or Q place · wheel/1–5 block · E/I craft · F strike · V view · P/Esc pause.'
+      : 'Left thumb moves, right thumb drags to look; Jump, Mine (hold), Place, Strike, Craft, Sneak and 3P/1P are separate buttons that work with another finger.';
   }
   function activateMode(mode) {
     syncProfile(); if (mode === 'creative' && !profiles.creative) profiles.creative = makeCreative();
@@ -214,7 +287,7 @@
   }
   function menu() {
     const offline = document.querySelector('[data-game-offline-status]')?.textContent || 'Offline status will appear after the local game is cached.';
-    open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>' + (prefs.camera === 'first' ? 'First-person' : 'Rear third-person') + ' view · meaningful actions save automatically.</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('modeButton', state.creative ? 'Return to campaign' : profiles.creative ? 'Open creative sandbox' : 'Start creative sandbox', 'secondary') + button('settingsButton', 'Controls and accessibility', 'secondary') + button('exportButton', 'Export both saves', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(offline) + '</p>');
+    open('<p class="eyebrow">BLOCK ISLANDS</p><h2>' + escape(R.STAGES[state.stage].name) + '</h2><p class="lead">Island ' + (state.stage + 1) + ' of 12 · ' + (state.creative ? 'Creative sandbox' : 'Campaign') + '<br>' + (prefs.camera === 'first' ? 'First-person' : 'Rear third-person') + ' view · meaningful actions save automatically.</p><p class="tiny" id="controlsLine">' + escape(controlsSummary()) + '</p>' + button('resumeButton', 'Resume') + button('stagesButton', 'Choose unlocked island', 'secondary') + button('modeButton', state.creative ? 'Return to campaign' : profiles.creative ? 'Open creative sandbox' : 'Start creative sandbox', 'secondary') + button('settingsButton', 'Controls and accessibility', 'secondary') + button('exportButton', 'Export both saves', 'secondary') + button('importButton', 'Import save', 'secondary') + '<button data-install-game class="secondary" id="installButton">Install / offline help</button><a data-all-games href="../" class="button-link secondary" id="allGames">All games</a><p class="offline-status" data-game-offline-status>' + escape(offline) + '</p>');
     $('resumeButton').disabled=graphicsLost; if(graphicsLost)panel.insertAdjacentHTML('beforeend','<p id=renderRecovery role=status>The 3D view is recovering. Play is paused; your progress is kept.</p>');
     bind('resumeButton', close); bind('stagesButton', stages); bind('modeButton', () => activateMode(state.creative ? 'campaign' : 'creative')); bind('settingsButton', settings); bind('exportButton', downloadSave); bind('importButton', () => $('importInput').click());
     if (typeof window.GamesPWARefreshControls === 'function') window.GamesPWARefreshControls();
@@ -222,7 +295,11 @@
     const all = $('allGames'); if (all) all.addEventListener('click', event => { if (!durableSave()) { event.preventDefault(); say('Could not save. Export a backup before leaving.'); } });
   }
   function settings() {
-    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead">WASD moves; arrows or a right-side drag look. Space jumps; Shift runs; C or Sneak moves slowly and protects ledges while grounded. Hold R or Mine to gather; Q/right click places; F strikes; E/I crafts; V changes view; 1–5 selects blocks; P/Escape pauses or goes back. Click the desktop world once to lock the mouse; left click mines, right click places, and the wheel changes the hotbar. Escape releases it. On touch, move with the left thumb and look with the right; action buttons work with another finger.</p><div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
+    const choice = (value, label, note) => '<button class="recipe-card" data-controls="' + value + '" aria-pressed="' + (prefs.controls === value) + '"><strong>' + label + (prefs.controls === value ? ' ✓' : '') + '</strong><span>' + note + '</span></button>';
+    open('<p class="eyebrow">CONTROLS</p><h2>Make it comfortable</h2><p class="lead" id="controlsLine">' + escape(controlsSummary()) + '</p>'
+      + '<div class="settings-grid" role="group" aria-label="Control layout" id="layoutChoice">' + choice('auto', 'Auto', 'Now using ' + (layout === 'desktop' ? 'keyboard &amp; mouse' : 'touch') + ' — ' + escape(layoutReason())) + choice('desktop', 'Keyboard &amp; mouse', 'No on-screen joystick; WASD + mouse') + choice('touch', 'Touch', 'Joystick, look pad and action buttons') + '</div>'
+      + '<div class="settings-grid"><button class="recipe-card" id="sensitivityButton"><strong>Look sensitivity</strong><span>' + Math.round(prefs.sensitivity * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="handButton"><strong>Touch action hand</strong><span>' + (prefs.handedness === 'right' ? 'Right actions' : 'Left actions') + '</span></button><button class="recipe-card" id="sizeButton"><strong>Touch button size</strong><span>' + Math.round(prefs.buttonSize * 100) + '% · tap to cycle</span></button><button class="recipe-card" id="soundButton"><strong>Sound</strong><span>' + (prefs.sound ? 'On' : 'Off') + '</span></button><button class="recipe-card" id="motionButton"><strong>Motion</strong><span>' + (prefs.motion ? reducedMotion.matches ? 'Reduced by device' : 'On' : 'Reduced') + '</span></button></div>' + button('backMenu', 'Back', 'secondary'),menu);
+    panel.querySelectorAll('[data-controls]').forEach(node => node.addEventListener('click', () => { prefs.controls = node.dataset.controls; if (prefs.controls !== 'auto') pressedPointerKind = null; savePrefs(); applyLayout(); settings(); panel.querySelector('[data-controls="' + prefs.controls + '"]')?.focus({ preventScroll: true }); }));
     bind('sensitivityButton', () => { prefs.sensitivity = prefs.sensitivity >= 1.9 ? .7 : +(prefs.sensitivity + .25).toFixed(2); savePrefs(); settings(); });
     bind('handButton', () => { prefs.handedness = prefs.handedness === 'right' ? 'left' : 'right'; savePrefs(); applyPrefs(); settings(); });
     bind('sizeButton', () => { const sizes = [.92, 1, 1.1, 1.2, 1.28], index = sizes.indexOf(prefs.buttonSize); prefs.buttonSize = sizes[index < 0 || index === sizes.length - 1 ? 0 : index + 1]; savePrefs(); applyPrefs(); settings(); });
@@ -714,7 +791,7 @@
     $('healthText').textContent = Math.max(0, Math.ceil(state.player.health)); updateClock();
     $('heldReadout').textContent = selectedBlock + ' · ' + (state.creative ? '∞' : state.inventory[selectedBlock] || 0);
     const colors = { plank: '#b77b49', dirt: '#8e6745', stone: '#8997a0', basalt: '#59616b', beacon: '#91e4d6' };
-    $('hotbar').innerHTML = ['plank', 'dirt', 'stone', 'basalt', 'beacon'].map(item => '<button class="slot ' + (selectedBlock === item ? 'selected' : '') + '" data-block="' + item + '"' + (!state.creative && !state.inventory[item] ? ' disabled' : '') + '><span style="background:' + colors[item] + '"></span>' + item + '<em>' + (state.creative ? '∞' : state.inventory[item] || 0) + '</em></button>').join('');
+    $('hotbar').innerHTML = ['plank', 'dirt', 'stone', 'basalt', 'beacon'].map((item, index) => '<button class="slot ' + (selectedBlock === item ? 'selected' : '') + '" data-block="' + item + '"' + (!state.creative && !state.inventory[item] ? ' disabled' : '') + '><i class="key" aria-hidden="true">' + (index + 1) + '</i><span style="background:' + colors[item] + '"></span>' + item + '<em>' + (state.creative ? '∞' : state.inventory[item] || 0) + '</em></button>').join('');
     $('hotbar').querySelectorAll('[data-block]').forEach(node => node.addEventListener('click', event => { event.stopPropagation(); selectedBlock = node.dataset.block; updateUI(); say('Selected ' + selectedBlock + '.'); }));
   }
 
@@ -741,17 +818,17 @@
     if (!input.look || event.pointerId !== input.look.pointer) return;
     event.preventDefault(); const factor = .006 * prefs.sensitivity; pose.yaw -= (event.clientX - input.look.x) * factor; pose.pitch = clamp(pose.pitch - (event.clientY - input.look.y) * factor, -1.42, 1.42); input.look.x = event.clientX; input.look.y = event.clientY;
   }
+  // Mouse capture is only ever requested from a real click. Refusal or a
+  // missing API leaves a persistent, specific hint and a working drag/keyboard
+  // fallback rather than a transient generic toast.
   function captureMouse() {
-    if (!running || document.pointerLockElement === canvas) return true;
+    if (!running || layout !== 'desktop' || document.pointerLockElement === canvas) return true;
+    if (typeof canvas.requestPointerLock !== 'function') { mouseState = 'unavailable'; updateMouseHint(); return false; }
     try {
-      const request = canvas.requestPointerLock?.();
-      if (!canvas.requestPointerLock) throw Error('pointer lock unavailable');
-      request?.catch(() => say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.'));
+      const request = canvas.requestPointerLock();
+      if (request && typeof request.catch === 'function') request.catch(() => { if (document.pointerLockElement !== canvas) { mouseState = 'refused'; updateMouseHint(); } });
       return true;
-    } catch (_) {
-      say('Mouse capture is unavailable; drag to look, hold R to mine and Q to place.');
-      return false;
-    }
+    } catch (_) { mouseState = 'refused'; updateMouseHint(); return false; }
   }
   function cycleHotbar(delta) {
     const slots=[...$('hotbar').querySelectorAll('[data-block]:not(:disabled)')];
@@ -853,14 +930,33 @@
   $('lookZone').addEventListener('pointerdown', lookStart); $('lookZone').addEventListener('pointermove', lookMove); ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => $('lookZone').addEventListener(type, event => { if (input.look && event.pointerId === input.look.pointer) input.look = null; }));
   for(const node of [canvas,$('lookZone')]){
     node.addEventListener('contextmenu',event=>{if(running)event.preventDefault();});
-    node.addEventListener('pointerdown',event=>{if(!running||event.pointerType!=='mouse')return;if(event.button===2){event.preventDefault();placeTarget();return;}if(document.pointerLockElement===canvas){if(event.button===0)beginMine(event);}else if(node===canvas){event.preventDefault();captureMouse();lookStart(event);}});
+    // One consistent mouse flow over the whole world: right click places;
+    // with capture, left hold mines; without it, a left press asks for
+    // capture (a real gesture) and immediately drag-looks as the fallback.
+    node.addEventListener('pointerdown',event=>{if(!running||event.pointerType!=='mouse')return;if(event.button===2){event.preventDefault();placeTarget();return;}if(event.button!==0)return;if(document.pointerLockElement===canvas){beginMine(event);return;}event.preventDefault();canvas.focus({preventScroll:true});if(layout==='desktop')captureMouse();lookStart(event);});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])node.addEventListener(type,event=>{endMine(event);if(input.look?.pointer===event.pointerId)input.look=null;});
   }
   canvas.addEventListener('pointermove',lookMove);
-  $('mouseButton').addEventListener('click',captureMouse);
+  // Auto layout follows the pointer the player actually presses.
+  document.addEventListener('pointerdown',event=>{
+    const kind=event.pointerType==='mouse'?'mouse':event.pointerType==='touch'||event.pointerType==='pen'?'touch':null;
+    if(!kind||prefs.controls!=='auto'||kind===pressedPointerKind)return;
+    const before=effectiveLayout();pressedPointerKind=kind;if(effectiveLayout()!==before)applyLayout();
+  },true);
+  for(const query of [coarseQuery,hoverQuery,anyFineQuery])query.addEventListener?.('change',()=>{pressedPointerKind=null;applyLayout();});
+  $('mouseButton').addEventListener('click',event=>{event.stopPropagation();captureMouse();canvas.focus({preventScroll:true});});
   document.addEventListener('mousemove',event=>{if(document.pointerLockElement===canvas&&running){pose.yaw-=event.movementX*.0025*prefs.sensitivity;pose.pitch=clamp(pose.pitch-event.movementY*.0025*prefs.sensitivity,-1.42,1.42);}});
-  canvas.addEventListener('wheel',event=>{if(!running||document.pointerLockElement!==canvas)return;event.preventDefault();cycleHotbar(event.deltaY);},{passive:false});
-  document.addEventListener('pointerlockchange',()=>{clearInputs();if(document.pointerLockElement===canvas)canvas.focus({preventScroll:true});else{const intentional=releasingMouseForPanel;releasingMouseForPanel=false;if(!intentional&&running&&hasStarted)menu();}});
+  canvas.addEventListener('wheel',event=>{if(!running||layout!=='desktop'&&document.pointerLockElement!==canvas)return;event.preventDefault();cycleHotbar(event.deltaY);},{passive:false});
+  // A mouse click on an in-game HUD control must not leave that button focused,
+  // or the next Space would press it instead of jumping.
+  // Pointer presses on HUD controls are activated by installGameButtons, so
+  // watch the pointer release (capture phase) and refocus after the control's
+  // own handler, unless it opened a panel. Keyboard focus is left untouched.
+  document.addEventListener('pointerup',event=>{if(running&&event.target.closest?.('.hud')&&!event.target.closest('#overlay'))setTimeout(()=>{if(running&&!overlay.classList.contains('open'))canvas.focus({preventScroll:true});},0);},true);
+  // Gaining capture only ends a drag-look/mine in progress (held WASD keeps
+  // walking); losing it clears every held action.
+  document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement===canvas){input.look=null;endMine();mouseState='captured';updateMouseHint();canvas.focus({preventScroll:true});}else{clearInputs();if(mouseState==='captured')mouseState='free';updateMouseHint();const intentional=releasingMouseForPanel;releasingMouseForPanel=false;if(!intentional&&running&&hasStarted)menu();}});
+  document.addEventListener('pointerlockerror',()=>{mouseState='refused';updateMouseHint();});
   window.addEventListener('keydown', event => keyboard(event, true)); window.addEventListener('keyup', event => keyboard(event, false));
   $('importInput').addEventListener('change', event => { const file = event.target.files && event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { importSave(JSON.parse(String(reader.result))); } catch (_) { say('That file is not valid JSON. Your current journey is unchanged.'); } close(); }; reader.readAsText(file); event.target.value = ''; });
   window.addEventListener('resize', () => { clearInputs(); resize(); }); window.addEventListener('orientationchange', clearInputs); window.addEventListener('blur',()=>{clearInputs();if(running&&hasStarted){durableSave();menu();}});

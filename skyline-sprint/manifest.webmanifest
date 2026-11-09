@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Skyline Sprint",
+  "short_name": "Skyline Sprint",
+  "description": "Swipe across rooftop lanes in an original 3D runner: jump, slide and glide through five authored districts or a seeded endless city.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

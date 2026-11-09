@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const state = { registration: null, ready: false, failed: false, applying: false, checking: false, notifyInstalled: false };
+  const state = { registration: null, ready: false, failed: false, applying: false, checking: false, notifyInstalled: false, leaving: false };
   const selector = value => Array.from(document.querySelectorAll(value));
   const gameName = () => document.querySelector('meta[name="application-name"]')?.content || document.title.replace(/\s*[|—-].*$/, '').trim() || 'this game';
   const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -237,14 +237,27 @@
     }
   }
 
+  function scheduleWorkerRegistration() {
+    const begin = () => setTimeout(() => {
+      // WebKit can report an access-control page error when a same-origin
+      // worker startup is cancelled by an immediate document replacement.
+      // Wait until this document has loaded, then do nothing if it is already
+      // departing; the next stable page owns the ordinary registration.
+      if (!state.leaving) registerWorker();
+    }, 3000);
+    if (document.readyState === 'complete') begin();
+    else window.addEventListener('load', begin, { once: true });
+  }
+
   function initialise() {
     prepareControls();
+    window.addEventListener('pagehide', () => { state.leaving = true; }, { once: true });
     window.addEventListener('game-ready', prepareControls);
     navigator.serviceWorker?.addEventListener('controllerchange', () => { if (state.applying) location.reload(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdates(); });
     window.addEventListener('pageshow', () => checkForUpdates());
     window.addEventListener('online', () => checkForUpdates());
-    registerWorker();
+    scheduleWorkerRegistration();
   }
 
   // Game menus may be rendered after this small runtime initializes.  A game

@@ -37,3 +37,10 @@
 .actor-hp{justify-self:center;grid-column:1;padding:1px 3px;background:#102536bb;border-radius:3px;font-size:9px}
 .actor-power{grid-column:2;padding:1px 3px;font-size:9px}.actor-power[hidden]{display:none}
 @media(orientation:landscape) and (max-height:560px){.actor-name,.actor-hp,.actor-power{font-size:8px}}
+.threat-cue{position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;background:#2a0f1ccc;border:2px solid #ff8a9a99;box-shadow:0 2px 6px #0007;will-change:transform}
+.threat-cue[hidden]{display:none}
+.threat-cue i{position:absolute;left:50%;top:50%;width:0;height:0;border-left:10px solid #ffd0d6;border-top:7px solid transparent;border-bottom:7px solid transparent;transform:translate(-30%,-50%)}
+.threat-cue.hot{border-color:#ff5c74;background:#5a1024dd;animation:threat-pulse .8s ease-in-out infinite alternate}
+.threat-cue.hot i{border-left-color:#fff}
+@keyframes threat-pulse{to{box-shadow:0 0 0 5px #ff5c7433,0 2px 6px #0007}}
+@media(prefers-reduced-motion:reduce){.threat-cue.hot{animation:none}}

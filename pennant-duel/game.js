@@ -52,7 +52,7 @@
   const PREFS_KEY = SAVE_KEY + ':prefs';
   const SAVE_FORMAT = 'tower-duel-save';
   const SAVE_VERSION = 1;
-  const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','battle-score','pause-button','game-canvas','battle-overlay','canvas-shell','tutorial-tip','toast','energy-track','energy-number','next-card','next-card-art','hand','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
+  const els = Object.fromEntries(['home','collection','draft','battle','continue-button','collection-button','settings-button','arena-list','card-library','deck-count','draft-step','draft-bar','draft-choices','draft-deck','arena-name','mode-name','battle-clock','battle-score','pause-button','game-canvas','battle-overlay','canvas-shell','tutorial-tip','toast','energy-track','energy-number','next-card','next-card-art','hand','rally-button','modal','modal-kicker','modal-title','modal-body','modal-actions','import-file'].map((id) => [id, document.getElementById(id)]));
   if (!window.TowerDuelRenderer3D) throw new Error('Pennant Duel 3D renderer did not load');
   const renderer3d = new window.TowerDuelRenderer3D(els['game-canvas'], E);
   const overlayContext = els['battle-overlay'].getContext('2d');
@@ -60,7 +60,7 @@
   let storageLoadKnown = true;
   let storageConflict = false;
   let profile = loadProfile();
-  for(const id of ['bramblepost','stormpost'])if(!profile.unlockedCards.includes(id))profile.unlockedCards.push(id);
+  for(const id of ['bramblepost','stormpost','captain'])if(!profile.unlockedCards.includes(id))profile.unlockedCards.push(id);
   let prefs = loadPrefs();
   let match = profile.activeMatch ? safeRestore(profile.activeMatch) : null;
   let selectedCard = null;
@@ -85,7 +85,7 @@
       version: SAVE_VERSION,
       unlockedArena: 0,
       selectedArena: 0,
-      unlockedCards: E.starterDeck.concat(['ironroot','stormpost']),
+      unlockedCards: E.starterDeck.concat(['ironroot','stormpost','tailwind']),
       deck: E.starterDeck.slice(),
       wins: 0,
       losses: 0,
@@ -177,7 +177,7 @@
   function importSave(value) {
     if (!value || value.format !== SAVE_FORMAT || value.version !== SAVE_VERSION || !validateProfile(value.payload)) return false;
     const candidate = JSON.parse(JSON.stringify(value.payload));
-    for(const id of ['bramblepost','stormpost'])if(!candidate.unlockedCards.includes(id))candidate.unlockedCards.push(id);
+    for(const id of ['bramblepost','stormpost','captain'])if(!candidate.unlockedCards.includes(id))candidate.unlockedCards.push(id);
     const candidateMatch = candidate.activeMatch ? safeRestore(candidate.activeMatch) : null;
     if (candidate.activeMatch && !candidateMatch) return false;
     const oldProfile = profile, oldMatch = match, oldConflict = storageConflict;
@@ -191,7 +191,7 @@
     return {
       screen: currentScreen(), arena: profile.selectedArena, unlockedArena: profile.unlockedArena,
       deck: profile.deck.slice(), wins: profile.wins, losses: profile.losses,
-      activeMatch: match ? { mode: match.mode, phase: match.phase, result: match.result, time: Math.max(0,match.time), energy: match.energy.player, units: match.units.length, playerUnits: match.units.filter((unit)=>unit.side==='player').length, enemyUnits: match.units.filter((unit)=>unit.side==='enemy').length, hand: match.hands.player.slice(), battleDeck: match.decks.player.slice() } : null
+      activeMatch: match ? { mode: match.mode, phase: match.phase, result: match.result, time: Math.max(0,match.time), energy: match.energy.player, units: match.units.length, playerUnits: match.units.filter((unit)=>unit.side==='player').length, enemyUnits: match.units.filter((unit)=>unit.side==='enemy').length, hand: match.hands.player.slice(), battleDeck: match.decks.player.slice(), rulesVersion: match.rulesVersion, charge: match.charge ? Object.assign({}, match.charge.player) : null, rally: match.rulesVersion >= 5 ? E.abilityStatus(match,'player') : null } : null
     };
   }
 
@@ -208,6 +208,8 @@
   }
   function showCollection() { renderCollection(); showScreen('collection'); }
   function cardPortrait(card) {
+    // Original vector portrait for the rules-5 captain: helmeted officer holding a pennant.
+    if(card.portrait==='svg')return '<span class="card-art captain-portrait" aria-hidden="true"><svg viewBox="0 0 100 110"><rect width="100" height="110" fill="#2b3f63"/><path fill="#f2c14e" d="M62 8V64" stroke="#7a5a2a" stroke-width="4"/><path fill="#f2c14e" d="M64 9L94 19L64 30Z"/><path fill="#203152" d="M18 110C18 82 30 70 50 70S82 82 82 110Z"/><path fill="#f2c14e" d="M30 110C30 88 38 78 50 78S70 88 70 110Z"/><circle cx="50" cy="52" r="17" fill="#e2ad83"/><path fill="#c9a24a" d="M31 48C31 30 69 30 69 48L66 44H34Z"/><path fill="#8b6a2c" d="M33 47H67V51H33Z"/><circle cx="44" cy="54" r="2.4" fill="#253043"/><circle cx="56" cy="54" r="2.4" fill="#253043"/><path d="M44 62Q50 66 56 62" stroke="#7d4a35" stroke-width="2" fill="none"/><path fill="#fff1b8" d="M45 92L50 84L55 92L50 100Z"/></svg></span>';
     if(card.kind==='building')return '<span class="card-art defense-portrait" aria-hidden="true"><svg viewBox="0 0 100 110"><path fill="#213b50" d="M12 105V65L28 48H72L88 65V105Z"/><path fill="'+card.color+'" d="M20 100V66L35 55H65L80 66V100Z"/><path fill="#e2e2c8" d="M26 55V33H74V55L66 61H34Z"/><path fill="#293c50" d="M39 45L42 12H58L61 45Z"/><circle cx="50" cy="13" r="12" fill="'+card.color+'"/><path fill="#dcecad" d="M34 76H66V90H34Z"/></svg></span>';
     const index=E.cards.findIndex(item=>item.id===card.id),column=index%4,row=Math.floor(index/4);
     return '<span class="card-art painted-portrait" aria-hidden="true" style="--portrait-x:'+(column/3*100)+'%;--portrait-y:'+(row/3*100)+'%"></span>';
@@ -290,13 +292,46 @@
       node.classList.toggle('unaffordable',!affordable);
       node.setAttribute('aria-pressed',String(selectedCard===id));
       node.setAttribute('aria-disabled',String(!affordable));
+      paintCharge(node,id);
     });
     const nextId=match.queues.player[0];
     if (els['next-card'].dataset.card !== nextId) { els['next-card'].dataset.card=nextId; els['next-card-art'].innerHTML=cardPortrait(E.cardMap[nextId]); els['next-card'].setAttribute('aria-label','Next card: '+E.cardMap[nextId].name); }
+    els['next-card'].classList.toggle('charge-ready',!!E.chargeStatus(match,'player',nextId)?.ready);
+    updateRallyButton();
+  }
+  // Rules-5 charge meter: one pip per required play of the same card; a full
+  // meter means the next deployment of that card is its charged version.
+  function paintCharge(node,id){
+    const status=E.chargeStatus(match,'player',id),key=status?status.count+'/'+status.cycles:'';
+    node.classList.toggle('charge-ready',!!status?.ready);
+    if(node.dataset.charge===key)return;node.dataset.charge=key;
+    let meter=node.querySelector('.charge-meter');
+    if(!status){meter?.remove();return;}
+    if(!meter){meter=document.createElement('span');meter.className='charge-meter';meter.setAttribute('aria-hidden','true');node.append(meter);}
+    meter.innerHTML=status.ready?'<b>CHARGED</b>':Array.from({length:status.cycles},(_,i)=>'<i class="'+(i<status.count?'on':'')+'"></i>').join('');
+    const card=E.cardMap[id],base=node.getAttribute('aria-label').replace(/\. (Charged next|Charge \d+ of \d+)[^.]*$/,'');
+    node.setAttribute('aria-label',base+(status.ready?'. Charged next: '+card.chargedDesc.replace(/^Charged: /,''):'. Charge '+status.count+' of '+status.cycles));
   }
   function selectCard(id) { if (!match || paused || match.phase!=='playing' || !els.modal.classList.contains('hidden') || !match.hands.player.includes(id)) return; selectedCard = selectedCard === id ? null : id;
     if(selectedCard){const card=E.cardMap[selectedCard],lane=keyboardAim.x<500?280:720;keyboardAim=card.kind==='spell'?{x:500,y:760}:{x:lane,y:980};keyboardAiming=true;showTutorial(card.kind==='spell'?'Preview is live: move the target ring, then deploy when the area is useful.':'Preview is live: choose a lane and legal blue ground. Your troop keeps that lane through the bridge.');}
     else {keyboardAiming=false;hideTutorial();}renderHand(true);els['game-canvas'].focus({preventScroll:true}); }
+  // Captain Rally (rules 5): spends Spark only through the engine, never while
+  // paused, behind a dialog or outside a live battle.
+  function triggerRally(){
+    if(!match||paused||graphicsLost||match.phase!=='playing'||currentScreen()!=='battle'||!els.modal.classList.contains('hidden'))return false;
+    const result=E.useAbility(match,'player');
+    if(!result.ok){toast(result.reason==='Recharging'?'Rally is recharging':result.reason);chirp(150,.08,'square');return false;}
+    chirp(520,.12,'triangle');scheduleSave();updateRallyButton();return true;
+  }
+  function updateRallyButton(){
+    const button=els['rally-button'];if(!button)return;
+    // Like a champion control, Rally appears only while you have a captain on the field.
+    const show=!!match&&match.rulesVersion>=5&&match.phase==='playing'&&match.units.some(u=>u.alive&&u.side==='player'&&u.cardId==='captain');button.hidden=!show;if(!show)return;
+    const status=E.abilityStatus(match,'player'),ready=status.available;
+    const detail=ready?'Ready':status.reason==='Recharging'?Math.ceil(status.cooldown)+'s':status.reason==='Rally active'?'Active':status.reason==='Not enough spark'?'Need spark':status.reason==='Captain is deploying'?'Deploying':'No captain';
+    const signature=ready+'|'+detail;if(button.dataset.state!==signature){button.dataset.state=signature;button.querySelector('small').textContent=detail;button.setAttribute('aria-label','Rally, cost '+status.cost+' spark: '+detail+'. Shortcut R');}
+    button.classList.toggle('ready',ready);button.classList.toggle('active',status.reason==='Rally active');button.setAttribute('aria-disabled',String(!ready));
+  }
   function canvasPoint(clientX, clientY) { return renderer3d.screenToWorld(clientX,clientY); }
   function previewAt(clientX,clientY,id){const rect=els['game-canvas'].getBoundingClientRect(),inside=clientX>=rect.left&&clientX<=rect.right&&clientY>=rect.top&&clientY<=rect.bottom;dragPreview={id,inside,world:canvasPoint(clientX,clientY)};}
   function cancelDrag(pointerId){if(pointerDrag&&(pointerId==null||pointerDrag.pointerId===pointerId)){pointerDrag=null;dragPreview=null;renderHand(false);}}
@@ -459,6 +494,7 @@
   els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)cancelDrag(event.pointerId);});
   els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&!pointerDrag&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
   els['pause-button'].addEventListener('click',pauseBattle);
+  els['rally-button'].addEventListener('click',(event)=>{event.preventDefault();triggerRally();});
   els['game-canvas'].addEventListener('webglcontextlost',()=>{graphicsLost=true;cancelDrag();keyboardAiming=false;if(match?.phase==='playing'&&currentScreen()==='battle'){if(!paused)pauseBattle();saveNow();}for(const node of els['modal-actions'].children)if(node.textContent==='Resume')node.disabled=true;if(!els.modal.classList.contains('hidden')&&!document.getElementById('render-recovery'))els['modal-body'].insertAdjacentHTML('beforeend','<p id=render-recovery role=status>The 3D view is recovering. Play is paused; your progress is kept.</p>');toast('3D view interrupted. Play is paused while it recovers.');});
   els['game-canvas'].addEventListener('webglcontextrestored',()=>{graphicsLost=false;for(const node of els['modal-actions'].children)if(node.textContent==='Resume')node.disabled=false;if(document.getElementById('render-recovery'))document.getElementById('render-recovery').textContent='The 3D view is restored. Resume when ready.';toast('3D view restored. Resume when ready.');});
   els['import-file'].addEventListener('change',async()=>{const file=els['import-file'].files[0];if(!file)return;try{const value=JSON.parse(await file.text());if(!importSave(value))throw new Error('invalid');showModal('IMPORTED','Save restored','<p>Your validated Pennant Duel progress is ready.</p>',[{label:'Continue',primary:true,action:closeModal}]);}catch(_){showModal('IMPORT STOPPED','That save is not valid','<p>Nothing was changed. Choose an unedited Pennant Duel export file.</p>',[{label:'Okay',primary:true,action:closeModal}]);}finally{els['import-file'].value='';}});
@@ -468,6 +504,7 @@
     if(currentScreen()!=='battle'||!match||match.phase!=='playing')return;
     if((event.code==='Escape'||event.code==='KeyP')&&!event.repeat){event.preventDefault();if(event.code==='Escape'&&(selectedCard||pointerDrag)){cancelDrag();selectedCard=null;keyboardAiming=false;hideTutorial();renderHand(false);}else pauseBattle();return;}
     if(paused||nativeKeyActivation(event))return;
+    if(event.code==='KeyR'){event.preventDefault();if(!event.repeat)triggerRally();return;}
     if(/^[1-4]$/.test(event.key)&&!event.repeat){event.preventDefault();selectCard(match.hands.player[Number(event.key)-1]);keyboardAiming=!!selectedCard;return;}
     const delta={ArrowLeft:[-35,0],KeyA:[-35,0],ArrowRight:[35,0],KeyD:[35,0],ArrowUp:[0,-35],KeyW:[0,-35],ArrowDown:[0,35],KeyS:[0,35]}[event.code];
     if(delta&&selectedCard){event.preventDefault();keyboardAim={x:Math.max(35,Math.min(E.WIDTH-35,keyboardAim.x+delta[0])),y:Math.max(35,Math.min(E.HEIGHT-35,keyboardAim.y+delta[1]))};keyboardAiming=true;return;}

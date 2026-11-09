@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en" data-games-access-gate="v1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protected games</title>
+<style>
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:#101827;color:#f8fafc;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.gate{width:min(29rem,100%);padding:clamp(24px,6vw,42px);border:1px solid #ffffff24;border-radius:20px;background:#17263b;box-shadow:0 20px 60px #0008}h1{margin:0 0 10px;font-size:clamp(1.5rem,5vw,2.1rem);line-height:1.15}p{margin:0 0 22px;color:#d8e3f0}label{display:block;margin-bottom:8px;font-weight:700}input,button{width:100%;min-height:48px;border-radius:11px;font:inherit}input{border:1px solid #9db1c7;background:#0c1522;color:inherit;padding:11px 12px}button{margin-top:16px;border:0;background:#d8b85a;color:#17202c;font-weight:800;cursor:pointer}button:disabled{cursor:wait;opacity:.72}input:focus-visible,button:focus-visible{outline:3px solid #8ec5ff;outline-offset:3px}.status{min-height:1.5em;margin:14px 0 0;color:#d8e3f0}.status[data-error="true"]{color:#ffb4ab}.hint{font-size:.9rem;color:#b9c7d8}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="gate" aria-labelledby="gate-title">
+<h1 id="gate-title">Unlock games</h1>
+<p>Enter the shared password to open this page.</p>
+<form id="games-access-gate-form" novalidate>
+<label for="games-access-gate-password">Password</label>
+<input id="games-access-gate-password" name="password" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="games-access-gate-hint games-access-gate-status">
+<p class="hint" id="games-access-gate-hint">The password is not kept by this page.</p>
+<button type="submit">Unlock</button>
+<p class="status" id="games-access-gate-status" role="status" aria-live="polite"></p>
+</form>
+<noscript><p class="status" data-error="true">JavaScript is required to unlock this page.</p></noscript>
+</main>
+<script id="games-access-gate-payload" type="application/json">{"v":1,"i":310000,"s":"Ul1dlxlKGCjTOGkKk7pW0g==","k":"d9f76ff0655a547d716682e5","n":"Us3XLMb+RB10lHHC","c":"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"}</script>
+<script>
+(()=>{
+'use strict';
+const text=new TextEncoder();
+const decode=new TextDecoder();
+const payload=JSON.parse(document.getElementById('games-access-gate-payload').textContent);
+const form=document.getElementById('games-access-gate-form');
+const input=document.getElementById('games-access-gate-password');
+const button=form.querySelector('button');
+const status=document.getElementById('games-access-gate-status');
+const storageKey='games-access-gate:'+payload.v+':'+payload.k;
+const handoffKey=storageKey+':handoff';
+let unlockInFlight=false;
+const b64=value=>{
+  const raw=atob(value),out=new Uint8Array(raw.length);
+  for(let index=0;index<raw.length;index++)out[index]=raw.charCodeAt(index);
+  return out;
+};
+const toB64=value=>{
+  let raw='';
+  for(const byte of value)raw+=String.fromCharCode(byte);
+  return btoa(raw);
+};
+const message=(value,error=false)=>{
+  status.textContent=value;
+  status.dataset.error=error?'true':'';
+};
+const setBusy=value=>{
+  button.disabled=value;
+  form.setAttribute('aria-busy',value?'true':'false');
+};
+const importKey=bytes=>crypto.subtle.importKey('raw',bytes,{name:'AES-GCM'},false,['decrypt']);
+async function derive(password){
+  const material=await crypto.subtle.importKey('raw',text.encode(password),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64(payload.s),iterations:payload.i,hash:'SHA-256'},material,256);
+  const bytes=new Uint8Array(bits);
+  return {key:await importKey(bytes),session:toB64(bytes)};
+}
+async function replaceDocument(source){
+  const parsed=new DOMParser().parseFromString(source,'text/html');
+  document.replaceChild(document.importNode(parsed.documentElement,true),document.documentElement);
+  for(const script of [...document.querySelectorAll('script')]){
+    const type=(script.getAttribute('type')||'').trim().toLowerCase();
+    if(type&&!['text/javascript','application/javascript','module'].includes(type))continue;
+    const replacement=document.createElement('script');
+    for(const attribute of script.attributes)replacement.setAttribute(attribute.name,attribute.value);
+    if(script.src){
+      replacement.async=false;
+      const loaded=new Promise((resolve,reject)=>{
+        replacement.addEventListener('load',resolve,{once:true});
+        replacement.addEventListener('error',()=>reject(new Error('A protected page script could not load.')),{once:true});
+      });
+      script.replaceWith(replacement);
+      await loaded;
+    }else{
+      replacement.textContent=script.textContent;
+      script.replaceWith(replacement);
+    }
+  }
+}
+async function decrypt(key){
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(payload.n),additionalData:text.encode('games-access-gate:'+payload.v+':'+payload.k)},key,b64(payload.c));
+  return decode.decode(plain);
+}
+async function unlock(key){
+  await replaceDocument(await decrypt(key));
+  return true;
+}
+function stored(){
+  try{
+    const value=sessionStorage.getItem(storageKey);
+    return value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null;
+  }catch{return null}
+}
+function remember(value){
+  try{sessionStorage.setItem(storageKey,value);return sessionStorage.getItem(storageKey)===value}catch{return false}
+}
+function handoffReady(){try{return sessionStorage.getItem(handoffKey)==='ready'}catch{return false}}
+function armHandoff(){try{sessionStorage.setItem(handoffKey,'ready');return sessionStorage.getItem(handoffKey)==='ready'}catch{return false}}
+function consumeHandoff(){try{sessionStorage.removeItem(handoffKey)}catch{}}
+function isReloadNavigation(){
+  try{
+    const entry=performance.getEntriesByType('navigation')[0];
+    return entry?.type==='reload'||performance.navigation?.type===1;
+  }catch{return false}
+}
+function forget(){
+  try{sessionStorage.removeItem(storageKey);sessionStorage.removeItem(handoffKey)}catch{}
+}
+async function tryStored(){
+  if(!globalThis.crypto?.subtle)return;
+  const value=stored();
+  if(!value)return;
+  // Rehydrating a stored gate immediately after a library-to-game navigation
+  // can race the first scoped worker in WebKit. A marker lets this fresh
+  // document take one ordinary reload first; the following document consumes
+  // it and decrypts normally. The marker is session-only and has no secret.
+  if(!handoffReady()&&!isReloadNavigation()&&armHandoff()){
+    location.reload();
+    return;
+  }
+  consumeHandoff();
+  // This script runs while a freshly fetched gate is still parsing. Let that
+  // document finish first. The lock document deliberately never inspects or
+  // starts a scoped worker: doing so here would put WebKit's worker lifecycle
+  // back in the document-replacement window. The decrypted runtime owns its
+  // normal scoped registration after this replacement has completed.
+  if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
+  unlockInFlight=true;
+  setBusy(true);
+  message('Unlocking…');
+  try{
+    await unlock(await importKey(b64(value)));
+  }catch{
+    unlockInFlight=false;
+    forget();
+    setBusy(false);
+    message('Enter the password to continue.');
+    input.focus();
+  }
+}
+form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(unlockInFlight)return;
+  if(!globalThis.crypto?.subtle){
+    message('This browser cannot unlock this page.',true);
+    return;
+  }
+  const password=input.value;
+  if(!password){
+    message('Enter the password to continue.',true);
+    input.focus();
+    return;
+  }
+  unlockInFlight=true;
+  setBusy(true);
+  message('Unlocking…');
+  try{
+    const result=await derive(password);
+    const source=await decrypt(result.key);
+    input.value='';
+    // A real same-origin reload creates the first decrypted document in the
+    // browser's normal lifecycle. WebKit otherwise loses this session entry
+    // if a library page was rehydrated in place and a scoped game worker is
+    // activated during the next immediate reload. Storage-refusal contexts
+    // retain the direct, non-persistent unlock path below.
+    if(remember(result.session)&&armHandoff()){
+      location.reload();
+      return;
+    }
+    await replaceDocument(source);
+  }catch{
+    unlockInFlight=false;
+    input.value='';
+    forget();
+    message('The password did not unlock this page.',true);
+    input.focus();
+  }finally{
+    if(!unlockInFlight)setBusy(false);
+  }
+});
+input.focus();
+tryStored();
+})();
+</script>
+</body>
+</html>
