@@ -21,6 +21,8 @@
   const approvalCache = 'games-gate:approved-activation:' + encodeURIComponent(approvalScope);
   const approvalUrl = new URL('./__games-gate-approved-activation__', location.href).href;
   const workerUrl = worker => worker?.scriptURL || null;
+  let leaving = false;
+  addEventListener('pagehide', () => { leaving = true; }, { once: true });
   const isTransition = worker => workerUrl(worker) === transitionUrl;
   const isGated = worker => {
     const url = workerUrl(worker);
@@ -130,8 +132,8 @@
     return { approved: true, registration, state };
   }
 
-  async function stageMigration() {
-    let registration = await navigator.serviceWorker.getRegistration();
+  async function stageMigration(initialRegistration) {
+    let registration = initialRegistration || await navigator.serviceWorker.getRegistration();
     if (!registration) {
       registration = await navigator.serviceWorker.register('./sw-gated.js', { scope, updateViaCache: 'none' });
       return announce('gated-staged', registration);
@@ -163,6 +165,22 @@
     return announce(transition === 'waiting' ? 'transition-waiting' : 'transition-pending', registration);
   }
 
+  async function startMigration() {
+    const existing = await navigator.serviceWorker.getRegistration();
+    // Preserve the immediate guarded migration for an existing install. A
+    // genuinely fresh registration is deferred until a settled document so a
+    // user reload cannot cancel its worker startup in WebKit's replacement
+    // window and surface a false access-control error.
+    if (existing) return stageMigration(existing);
+    await new Promise(resolve => {
+      const begin = () => setTimeout(resolve, 3000);
+      if (document.readyState === 'complete') begin();
+      else addEventListener('load', begin, { once: true });
+    });
+    if (leaving) return { phase: 'unavailable' };
+    return stageMigration();
+  }
+
   // Current runtimes wait for this promise before registering sw-gated.js.
   // Cached pre-gate runtimes do not know about it and continue to expose their
   // established first-stage save/update control.
@@ -170,5 +188,5 @@
     needsApprovedFinalActivation,
     activateApprovedFinalWorker
   });
-  window.GamesGateMigrationReady = stageMigration().catch(() => ({ phase: 'unavailable' }));
+  window.GamesGateMigrationReady = startMigration().catch(() => ({ phase: 'unavailable' }));
 })();

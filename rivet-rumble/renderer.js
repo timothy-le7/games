@@ -291,7 +291,10 @@
       for(let i=0;i<6;i++){const a=i/6*TAU;d('box',e.x+Math.cos(a)*r*(1-q),.3+(1-q)*1.1,e.z+Math.sin(a)*r*(1-q),.07*q,.25*q,.07*q,e.color||'#fff',a,0,this.time,.6,false);}
     }
   };
-  Renderer.prototype.aim=function(state,aim,options){const p=state.entities.find(e=>e.id==='player');if(!p?.alive||!aim)return;const f=RivetRumbleEngine.fighterMap[p.fighter],a=Math.atan2(aim.z-p.z,aim.x-p.x),range=f.splash?clamp(Math.hypot(aim.x-p.x,aim.z-p.z),.8,f.range):f.range;
+  Renderer.prototype.aim=function(state,aim,options){const p=state.entities.find(e=>e.id==='player');if(!p?.alive||!aim)return;
+    // Keyboard aim assist marks the rival it is tracking with a pulsing bracket.
+    const lock=options?.lock&&state.entities.find(e=>e.id===options.lock&&e.alive);if(lock){const pulse=1+.08*Math.sin(this.time*9);this.part('torus',lock.x,.07,lock.z,1.5*pulse,1.5*pulse,.1,color('#ffe066',.85),0,-Math.PI/2,0,.45,false);}
+    const f=RivetRumbleEngine.fighterMap[p.fighter],a=Math.atan2(aim.z-p.z,aim.x-p.x),range=f.splash?clamp(Math.hypot(aim.x-p.x,aim.z-p.z),.8,f.range):f.range;
     if(options?.special){const spec=RivetRumbleEngine.specialAim(state,f),r=clamp(Math.hypot(aim.x-p.x,aim.z-p.z),.8,Math.max(.8,spec.range));let x=spec.type==='point'?clamp(p.x+Math.cos(a)*r,.5,31.5):p.x,z=spec.type==='point'?clamp(p.z+Math.sin(a)*r,.5,21.5):p.z;
       if(['leap','turret','vortex'].includes(f.specialKind)){const spot=RivetRumbleEngine.landingPoint(state,x,z,f.specialKind==='leap'?p.radius:f.specialKind==='turret'?.55:.2);if(spot){x=spot.x;z=spot.z;}}
       if(f.specialKind==='thorns'){x=clamp(x,1,31);z=clamp(z,1,21);}
@@ -304,9 +307,14 @@
   };
   Renderer.prototype.render=function(state,aim,now,options){
     if(!this.ready||this.lost)return;
-    const raw=state.entities.find(e=>e.id==='player'),alpha=clamp(state.accumulator/RivetRumbleEngine.STEP,0,1),player=raw?{...raw,x:(raw.prevX??raw.x)+(raw.x-(raw.prevX??raw.x))*alpha,z:(raw.prevZ??raw.z)+(raw.z-(raw.prevZ??raw.z))*alpha}:null,portrait=this.canvas.clientWidth/this.canvas.clientHeight<.8,focus=player?clamp(player.x,portrait?5:10,portrait?27:22):16,focusZ=player?clamp(player.z-1,5.5,16):11,dt=clamp((now-(this.previousTime??now))/1000,0,.1),fresh=this.previousState!==state;
+    const raw=state.entities.find(e=>e.id==='player'),alpha=clamp(state.accumulator/RivetRumbleEngine.STEP,0,1),player=raw?{...raw,x:(raw.prevX??raw.x)+(raw.x-(raw.prevX??raw.x))*alpha,z:(raw.prevZ??raw.z)+(raw.z-(raw.prevZ??raw.z))*alpha}:null,portrait=this.canvas.clientWidth/this.canvas.clientHeight<.8,edge=portrait?clamp((this.viewHalf||6)-1.5,5,16):10,focus=player?clamp(player.x,edge,32-edge):16,focusZ=player?clamp(player.z-1,5.5,16):11,dt=clamp((now-(this.previousTime??now))/1000,0,.1),fresh=this.previousState!==state;
     const overview=this.view==='overview',desiredX=overview?16:focus,desiredZ=overview?11:focusZ,follow=1-Math.exp(-dt*(overview?6:9));this.focusX=fresh?desiredX:(this.focusX??desiredX)+(desiredX-(this.focusX??desiredX))*follow;this.focusZ=fresh?desiredZ:(this.focusZ??desiredZ)+(desiredZ-(this.focusZ??desiredZ))*follow;
     this.previousState=state;this.previousTime=now;this.eye=[this.focusX,overview?(portrait?33:30):(portrait?28:25),this.focusZ+(overview?(portrait?13:12):(portrait?10:9))];this.target=[this.focusX,0,this.focusZ];this.fov=overview?.88:.70;
+    // A narrow portrait screen used to show only about ±5 units sideways while
+    // rivals engage from 9–10 units. Widen the vertical field just enough that
+    // the horizontal half-view covers most of the fighter's own attack reach
+    // (and the whole arena width in overview); landscape framing is unchanged.
+    if(portrait){const aspect=Math.max(.3,this.canvas.clientWidth/Math.max(1,this.canvas.clientHeight)),reach=raw?RivetRumbleEngine.fighterMap[raw.fighter]?.range||9:9,half=overview?15:clamp(reach*.7+1,6.8,9),distance=Math.hypot(this.eye[1],this.eye[2]-this.focusZ);this.fov=clamp(Math.max(this.fov,2*Math.atan(half/(distance*aspect))),this.fov,overview?1.5:1.18);if(!overview)this.viewHalf=Math.tan(this.fov/2)*distance*aspect;}
     this.resize();this.time=this.options.reducedMotion?.()?0:now*.001;const p=PALETTES[state.arena]||PALETTES[0],lightVP=HD.multiply(HD.ortho(-25,25,-23,23,1,90),HD.lookAt([-6,36,30],[16,0,11],[0,1,0]));
     this.scene.begin(multiply(this.camera.p,this.camera.v),this.eye,this.time,{lightVP,clear:color(p.back).slice(0,3),fog:color(p.back).slice(0,3)});this.floor(state,p);this.scenery(state,p);this.launchPads(state);for(const e of state.entities)this.robot(state,{...e,x:(e.prevX??e.x)+(e.x-(e.prevX??e.x))*alpha,z:(e.prevZ??e.z)+(e.z-(e.prevZ??e.z))*alpha,airY:(e.prevAirY||0)+((e.airY||0)-(e.prevAirY||0))*alpha});this.action(state);this.smoke(state);this.aim(state,aim,options);this.scene.flush();
   };

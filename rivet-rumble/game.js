@@ -2,7 +2,13 @@
   'use strict';
   const E=window.RivetRumbleEngine, $=id=>document.getElementById(id), KEY='games:rivet-rumble:v1', BACKUP=KEY+':backup', PREFS=KEY+':prefs';
   const ui={canvas:$('arena'),menu:$('menu'),hud:$('hud'),controls:$('controls'),pause:$('pausePanel'),settings:$('settingsPanel'),result:$('resultPanel'),notice:$('menuNotice'),settingsNotice:$('settingsNotice'),roster:$('roster'),modes:$('modeRow'),arenas:$('arenaRow'),start:$('startButton'),note:$('fighterNote'),arenaName:$('arenaName'),blue:$('blueScore'),red:$('redScore'),clock:$('matchClock'),health:$('healthFill'),ammo:$('ammoReadout'),special:$('specialReadout')};
-  let profile, state=null, selected={mode:'foundry',fighter:'spark',arena:0,difficulty:'standard'}, renderer, running=true, paused=false, aim={x:16,z:11}, last=performance.now(), dirtyTimer=0,lastAutosave=0, resultHandled=false, keys=new Set(), touchMove={x:0,z:0}, movePointer=null, aimPointer=null, specialPointer=null, moveGesture=null, aimGesture=null, specialGesture=null, aimVector=null, keyboardAim={x:1,z:0}, pointerPosition=null, cameraMode='follow', suppressSpecialUntil=0, audio=null,lastEventId=0,lastHud=0,lastShotCount=0;
+  let profile, state=null, selected={mode:'foundry',fighter:'spark',arena:0,difficulty:'standard'}, renderer, running=true, paused=false, aim={x:16,z:11}, last=performance.now(), dirtyTimer=0,lastAutosave=0, resultHandled=false, keys=new Set(), touchMove={x:0,z:0}, movePointer=null, aimPointer=null, specialPointer=null, moveGesture=null, aimGesture=null, specialGesture=null, aimVector=null, keyboardAim={x:1,z:0}, pointerPosition=null, cameraMode='follow', suppressSpecialUntil=0, audio=null,lastEventId=0,lastHud=0,lastShotCount=0,arrowGesture=null,aimLock=null,fireBuffer=0,fireBufferCount=0;
+  const ARROWS=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  // A discrete fire input (aim-pad/arrow release, Enter tap, click) used to be
+  // lost if it landed between two frames or inside the 0.23s post-shot
+  // cooldown. Keep requesting it for a short window until one shot is taken.
+  const playerShots=()=>state?state.stats.shots-state.stats.cpuShots:0;
+  function bufferFire(){if(!canPlay())return;fireBuffer=performance.now()+180;fireBufferCount=playerShots();E.requestFire(state);}
   // Browser/IME shortcuts and native form/button activation keep their own keys.
   function gameKeyBlocked(event) {
     const form=event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
@@ -100,11 +106,68 @@
   function begin(fresh){if(fresh||!profile.active){state=E.createMatch({mode:selected.mode,fighter:selected.fighter,arena:selected.arena,difficulty:selected.difficulty,seed:((Date.now()>>>0)^Math.floor(Math.random()*0xffffffff))>>>0});}else{try{state=E.restore(profile.active);selected={mode:state.mode,fighter:state.entities.find(e=>e.id==='player').fighter,arena:state.arena,difficulty:state.difficulty};}catch{profile.active=null;state=E.createMatch({mode:selected.mode,fighter:selected.fighter,arena:selected.arena,difficulty:selected.difficulty});}}paused=false;resultHandled=false;ui.menu.classList.add('hidden');ui.result.classList.add('hidden');ui.hud.classList.remove('hidden');ui.controls.classList.remove('hidden');aim={x:16,z:11};lastEventId=state.nextId-1;lastShotCount=state.stats.shots-state.stats.cpuShots;ui.canvas.focus({preventScroll:true});hud();markDirty();tone(220,.04,'sine');if(renderer?.lost)pause('The 3D view is recovering. Resume when it returns.');}
   function pause(reason){if(!state||state.phase!=='playing')return;paused=true;releaseInputs();ui.pause.classList.remove('hidden');$('resumeButton').disabled=!!renderer?.lost;$('resumeButton').focus({preventScroll:true});$('pauseDetail').textContent=reason||'No simulation runs while paused.';save();}
   function resume(){if(renderer?.lost)return;releaseInputs();paused=false;ui.pause.classList.add('hidden');last=performance.now();ui.canvas.focus({preventScroll:true});}
-  function releaseInputs(){movePointer=null;aimPointer=null;specialPointer=null;moveGesture=null;aimGesture=null;specialGesture=null;aimVector=null;pointerPosition=null;keys.clear();firePointers.clear();$('specialButton').classList.remove('aiming');resetStick($('moveStick'));resetStick($('aimPad'));touchMove={x:0,z:0};if(state)E.setIntent(state,{x:0,z:0,fire:false,special:false,gadget:false});}
+  function releaseInputs(){movePointer=null;aimPointer=null;specialPointer=null;moveGesture=null;aimGesture=null;specialGesture=null;aimVector=null;pointerPosition=null;keys.clear();arrowGesture=null;aimLock=null;fireBuffer=0;firePointers.clear();$('specialButton').classList.remove('aiming');resetStick($('moveStick'));resetStick($('aimPad'));touchMove={x:0,z:0};if(state)E.setIntent(state,{x:0,z:0,fire:false,special:false,gadget:false});}
+  // Eight keys cannot express every angle, so arrow aim bends toward the most
+  // aligned rival within 24° that the player could legitimately shoot: alive,
+  // visible under the same concealment rules, in reach and not behind cover
+  // (arcing weapons excepted). It leads like a Standard CPU, never through walls.
+  function assistTarget(owner,fighter,dir){
+    const base=Math.atan2(dir.z,dir.x),reach=fighter.range*1.12;let best=null,score=Infinity;
+    for(const q of state.entities){
+      if(q===owner||!q.alive||q.jump||q.team===owner.team||!E.visibleTo(state,owner,q))continue;
+      const dx=q.x-owner.x,dz=q.z-owner.z,d=Math.hypot(dx,dz);if(d>reach||d<.2)continue;
+      const off=Math.abs(Math.atan2(Math.sin(Math.atan2(dz,dx)-base),Math.cos(Math.atan2(dz,dx)-base)));if(off>.42)continue;
+      if(!fighter.splash&&!E.clearLine(state,owner,q))continue;
+      const s=off+d/fighter.range*.15;if(s<score){score=s;best=q;}
+    }
+    if(!best)return null;const lead=fighter.attackKind==='melee'?0:Math.hypot(best.x-owner.x,best.z-owner.z)/fighter.projectile*.35;
+    return{id:best.id,x:best.x+(best.vx||0)*lead,z:best.z+(best.vz||0)*lead};
+  }
+  // Rivals that can see/engage the player but are outside the current view get
+  // an edge chevron pointing at them. Concealed rivals never get a cue: the
+  // same visibility rule as models, labels and the minimap applies.
+  const cueNodes=new Map();
+  function threatCues(){
+    const player=state.entities.find(e=>e.id==='player'),live=new Set();
+    if(canPlay()&&player?.alive&&renderer?.ready){
+      const W=innerWidth,H=innerHeight,m=24,top=Math.min(104,H*.15),bottom=Math.min(120,H*.16),inside=(x,y)=>x>m&&x<W-m&&y>top&&y<H-bottom;
+      const raw=renderer.worldToScreen(player.x,.8,player.z),ox=Math.max(m,Math.min(W-m,raw.x)),oy=Math.max(top,Math.min(H-bottom,raw.y));
+      for(const q of state.entities){
+        if(!q.alive||q.team===player.team||!E.visibleTo(state,player,q))continue;
+        const d=Math.hypot(q.x-player.x,q.z-player.z),reach=E.fighterMap[q.fighter]?.range||9;if(d>reach+3)continue;
+        const s=renderer.worldToScreen(q.x,.8,q.z);if(s.visible&&inside(s.x,s.y))continue;
+        const dx=s.visible?s.x-ox:q.x-player.x,dy=s.visible?s.y-oy:q.z-player.z;let t=Infinity;
+        if(dx>0)t=Math.min(t,(W-m-ox)/dx);if(dx<0)t=Math.min(t,(m-ox)/dx);if(dy>0)t=Math.min(t,(H-bottom-oy)/dy);if(dy<0)t=Math.min(t,(top-oy)/dy);if(!Number.isFinite(t))continue;
+        let node=cueNodes.get(q.id);if(!node){node=document.createElement('div');node.className='threat-cue';node.setAttribute('aria-hidden','true');node.innerHTML='<i></i>';cueNodes.set(q.id,node);$('worldLabels').append(node);}
+        live.add(q.id);node.hidden=false;node.classList.toggle('hot',d<=reach);
+        node.style.transform='translate('+(ox+dx*t).toFixed(1)+'px,'+(oy+dy*t).toFixed(1)+'px) translate(-50%,-50%) rotate('+Math.atan2(dy,dx).toFixed(3)+'rad)';
+      }
+    }
+    for(const [id,node]of cueNodes)if(!live.has(id))node.hidden=true;
+  }
   function gameInput(){if(!canPlay())return;const owner=state.entities.find(e=>e.id==='player'),fighter=E.fighterMap[owner.fighter];const ax=(keys.has('ArrowRight')?1:0)-(keys.has('ArrowLeft')?1:0),az=(keys.has('ArrowDown')?1:0)-(keys.has('ArrowUp')?1:0);
-    if((ax||az)&&aimPointer===null&&specialPointer===null){const length=Math.hypot(ax,az);keyboardAim={x:ax/length,z:az/length};aimVector={x:keyboardAim.x*fighter.range,z:keyboardAim.z*fighter.range};pointerPosition=null;}
+    // Arrow aiming mirrors the touch aim pad: hold to aim (with a visible
+    // assist that tracks a visible rival inside a narrow cone), release to fire.
+    // Enter still fires immediately; Special or Shift during the hold uses the
+    // aim without spending a basic shot on release.
+    let releaseFire=false;
+    if(arrowGesture&&aimPointer===null&&specialPointer===null){
+      const held=ARROWS.filter(k=>keys.has(k)).length,now=performance.now();
+      if(ax||az){const length=Math.hypot(ax,az),dir={x:ax/length,z:az/length};
+        // Releasing a diagonal is never perfectly simultaneous: keep the
+        // two-key direction for a short grace, but follow a deliberate roll.
+        if(held>=arrowGesture.peak||!arrowGesture.dir){arrowGesture.peak=held;arrowGesture.dir=dir;arrowGesture.dropAt=0;}
+        else if(!arrowGesture.dropAt)arrowGesture.dropAt=now;
+        else if(now-arrowGesture.dropAt>90){arrowGesture.peak=held;arrowGesture.dir=dir;arrowGesture.dropAt=0;}
+      }
+      const dir=arrowGesture.dir;
+      if(dir){keyboardAim={...dir};const assist=assistTarget(owner,fighter,dir);aimLock=assist?.id||null;aimVector=assist?{x:assist.x-owner.x,z:assist.z-owner.z}:{x:dir.x*fighter.range,z:dir.z*fighter.range};pointerPosition=null;}
+      if(!held){releaseFire=!!dir&&!arrowGesture.enter&&!arrowGesture.special&&!arrowGesture.cancel;arrowGesture=null;aimLock=null;}
+    }
     if(aimVector)aim={x:owner.x+aimVector.x,z:owner.z+aimVector.z};else if(pointerPosition)aim=renderer.screenToWorld(pointerPosition.x,pointerPosition.y);
     if(keys.has('KeyF')){const target=E.quickFire(state);if(target){aimVector=null;pointerPosition=null;aim=target;}}
+    if(releaseFire)bufferFire();
+    if(fireBuffer){if(playerShots()>fireBufferCount||performance.now()>fireBuffer)fireBuffer=0;else E.requestFire(state);}
     if(firePointers.size||keys.has('Enter')||keys.has('NumpadEnter'))E.requestFire(state);
     let x=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0)+touchMove.x,z=(keys.has('KeyS')?1:0)-(keys.has('KeyW')?1:0)+touchMove.z,p=owner,heading=Math.atan2(aim.z-p.z,aim.x-p.x);E.setIntent(state,{x:Math.max(-1,Math.min(1,x)),z:Math.max(-1,Math.min(1,z)),heading,range:Math.hypot(aim.x-p.x,aim.z-p.z),specialRange:Math.hypot(aim.x-p.x,aim.z-p.z)});}
   function hud(){
@@ -143,7 +206,7 @@
   }
   function finish(){if(!state||resultHandled||state.phase!=='ended')return;resultHandled=true;profile.active=null;profile.records.matches++;if(state.result==='win')profile.records.wins++;else if(state.result==='loss')profile.records.losses++;if(state.mode==='foundry')profile.records.foundryBest=Math.max(profile.records.foundryBest,state.score.blue);else if(state.mode==='rush')profile.records.rushBest=Math.max(profile.records.rushBest||0,state.score.blue);else profile.records.lastBest=Math.max(profile.records.lastBest,state.entities.filter(e=>!e.alive).length);if(profile.records.wins>=3&&!profile.unlocked.includes('polished'))profile.unlocked.push('polished');save();ui.hud.classList.add('hidden');ui.controls.classList.add('hidden');ui.result.classList.remove('hidden');$('againButton').focus({preventScroll:true});$('resultKicker').textContent=state.result==='draw'?'EVEN MATCH':state.result==='win'?'CREW VICTORY':'RUN ENDED';$('resultTitle').textContent=state.result==='draw'?'Honours shared.':state.result==='win'?'Rivets secured.':'Back to the bench.';let detail=state.mode!=='last'?'Score '+state.score.blue+' — '+state.score.red+'.':state.endReason==='last rivet'?'The final robot decided the ring.':state.endReason==='eliminated'?'You placed '+(state.entities.filter(e=>e.alive).length+1)+' of '+state.entities.length+'.':'The ring decided the result.';$('resultDetail').textContent=detail+' Result: '+state.result+'.';tone(state.result==='win'?440:130,.18,state.result==='win'?'triangle':'sawtooth');}
   function tone(freq,duration,type){if(!settings||!settings.sound)return;try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();let o=audio.createOscillator(),g=audio.createGain();o.type=type||'sine';o.frequency.value=freq;g.gain.setValueAtTime(.035,audio.currentTime);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+duration);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+duration);}catch{}}
-  function loop(now){let dt=Math.min(.15,Math.max(0,(now-last)/1000));last=now;if(state&&!paused&&!renderer?.lost&&state.phase==='playing'){gameInput();E.tick(state,dt);if(now-lastAutosave>6500){lastAutosave=now;markDirty();}if(state.phase==='ended')finish();}if(renderer&&!state)renderer.resize();if(renderer&&state)renderer.render(state,aim,now,{special:specialPointer!==null});if(state&&now-lastHud>90){lastHud=now;hud();}if(state&&!canPlay()){for(const label of actorLabels.values())label.hidden=true;for(const label of damageLabels.values())label.hidden=true;}else if(canPlay())for(const label of damageLabels.values())label.hidden=false;requestAnimationFrame(loop);}
+  function loop(now){let dt=Math.min(.15,Math.max(0,(now-last)/1000));last=now;if(state&&!paused&&!renderer?.lost&&state.phase==='playing'){gameInput();E.tick(state,dt);if(now-lastAutosave>6500){lastAutosave=now;markDirty();}if(state.phase==='ended')finish();}if(renderer&&!state)renderer.resize();if(renderer&&state)renderer.render(state,aim,now,{special:specialPointer!==null,lock:aimLock});if(state)threatCues();if(state&&now-lastHud>90){lastHud=now;hud();}if(state&&!canPlay()){for(const label of actorLabels.values())label.hidden=true;for(const label of damageLabels.values())label.hidden=true;}else if(canPlay())for(const label of damageLabels.values())label.hidden=false;requestAnimationFrame(loop);}
   function touchVector(element,event,kind){
     const r=element.getBoundingClientRect(),max=r.width*.39;
     if(kind==='move'){const origin=moveGesture||{x:r.left+r.width/2,y:r.top+r.height/2};let x=event.clientX-origin.x,y=event.clientY-origin.y,d=Math.hypot(x,y),dead=Math.max(9,r.width*.10);const shown=Math.min(max,d),scale=d?shown/d:0,amount=d<=dead?0:Math.min(1,(d-dead)/(max-dead));x*=scale;y*=scale;element.querySelector('i').style.transform='translate(calc(-50% + '+x+'px),calc(-50% + '+y+'px))';touchMove={x:(d?x/d:0)*amount,z:(d?y/d:0)*amount};element.dataset.x=touchMove.x;element.dataset.z=touchMove.z;return;}
@@ -164,7 +227,7 @@
     const capture=(node,id)=>{try{node.setPointerCapture(id)}catch{}};
     ui.canvas.addEventListener('contextmenu',e=>{if(canPlay())e.preventDefault();});
     ui.canvas.addEventListener('pointermove',pointerAim);
-    ui.canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||!canPlay()||![0,2].includes(e.button))return;e.preventDefault();ui.canvas.focus({preventScroll:true});pointerAim(e);if(e.button===2){E.requestSpecial(state);tone(420,.06,'square');return;}firePointers.add(e.pointerId);capture(ui.canvas,e.pointerId);E.requestFire(state);tone(260,.025);});
+    ui.canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||!canPlay()||![0,2].includes(e.button))return;e.preventDefault();ui.canvas.focus({preventScroll:true});pointerAim(e);if(e.button===2){E.requestSpecial(state);tone(420,.06,'square');return;}firePointers.add(e.pointerId);capture(ui.canvas,e.pointerId);bufferFire();tone(260,.025);});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])ui.canvas.addEventListener(type,e=>firePointers.delete(e.pointerId));
     const stick=$('moveStick'),pad=$('aimPad');
     stick.addEventListener('pointerdown',e=>{if(!canPlay()||movePointer!==null||e.button!==0)return;e.preventDefault();movePointer=e.pointerId;moveGesture=setMoveAnchor(stick,e);capture(stick,e.pointerId);touchVector(stick,e,'move');});
@@ -174,7 +237,7 @@
     pad.addEventListener('pointermove',e=>{if(e.pointerId===aimPointer){e.preventDefault();touchVector(pad,e,'aim');}});
     for(const type of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(type,e=>{if(e.pointerId===aimPointer){if(type==='pointerup'&&canPlay()){
       if(!aimGesture.dragged){const target=E.quickFire(state);if(target){aimVector=null;pointerPosition=null;aim=target;}}
-      else if(aimGesture.strength>.16)E.requestFire(state);
+      else if(aimGesture.strength>.16)bufferFire();
     }aimPointer=null;aimGesture=null;resetStick(pad);}});
     const special=$('specialButton');
     special.addEventListener('pointerdown',e=>{if(!canPlay()||special.disabled||specialPointer!==null||e.button!==0)return;e.preventDefault();specialPointer=e.pointerId;specialGesture={x:e.clientX,y:e.clientY,dragged:false,strength:0};special.classList.add('aiming');capture(special,e.pointerId);});
@@ -194,14 +257,18 @@
       if((e.code==='Escape'||e.code==='KeyP')&&!e.repeat){e.preventDefault();paused?resume():pause();return;}
       if(!canPlay()||nativeKeyActivation(e))return;
       if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyF','Enter','NumpadEnter'].includes(e.code)){e.preventDefault();keys.add(e.code);}
+      if(ARROWS.includes(e.code)&&!arrowGesture&&aimPointer===null&&specialPointer===null)arrowGesture={dir:null,peak:0,dropAt:0,enter:false,special:false,cancel:false};
+      if(arrowGesture&&(e.code==='Enter'||e.code==='NumpadEnter'))arrowGesture.enter=true;
+      if((e.code==='Enter'||e.code==='NumpadEnter')&&!e.repeat)bufferFire();
+      if(arrowGesture&&(e.code==='ShiftLeft'||e.code==='ShiftRight'))arrowGesture.cancel=true;
       if(['KeyE','KeyG'].includes(e.code)){e.preventDefault();if(!e.repeat)E.requestGadget(state);}
       if(e.code==='KeyC'&&!e.repeat){e.preventDefault();toggleCamera();}
-      if(['Space','KeyQ'].includes(e.code)){e.preventDefault();if(!e.repeat)E.requestSpecial(state);}
+      if(['Space','KeyQ'].includes(e.code)){e.preventDefault();if(!e.repeat){if(arrowGesture){arrowGesture.special=true;gameInput();}E.requestSpecial(state);}}
     });
     window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>pause('Paused because the window lost focus.'));window.addEventListener('orientationchange',releaseInputs);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause('Paused while this app was in the background.');});
   }
   function downloadBackup(){let b=new Blob([JSON.stringify(exported(),null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='rivet-rumble-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);if(paused)$('pauseDetail').textContent='Backup downloaded. Keep it somewhere safe.';else flash('Backup downloaded. Keep it somewhere safe.',true);}
   function bindUi(){$('chooseFighter').onclick=openCrewPicker;$('closeCrewPicker').onclick=closeCrewPicker;$('crewPicker').addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();closeCrewPicker();}else if(e.key==='Tab')trapGameTab(e,$('crewPicker'));e.stopPropagation();});$('fighterSearch').addEventListener('input',e=>{rosterQuery=e.target.value;ui.roster.scrollTop=0;renderRoster();});$('fighterSearch').addEventListener('keydown',e=>{if(e.code==='Escape'&&rosterQuery){e.preventDefault();e.stopPropagation();e.target.value='';rosterQuery='';renderRoster();}});ui.start.onclick=()=>begin(false);$('newMatchButton').onclick=()=>begin(true);$('pauseButton').onclick=()=>pause();$('resumeButton').onclick=resume;$('quitButton').onclick=()=>{if(!save()){$('pauseDetail').textContent='This browser rejected the save. Resume to keep playing, or export a backup before leaving.';return;}state=null;showMenu();};$('settingsButton').onclick=()=>{releaseInputs();ui.settings.classList.remove('hidden');$('closeSettings').focus({preventScroll:true});$('soundToggle').checked=settings.sound;$('motionToggle').checked=settings.reduced;};$('closeSettings').onclick=()=>{ui.settings.classList.add('hidden');$('settingsButton').focus({preventScroll:true});};$('soundToggle').onchange=e=>{settings.sound=e.target.checked;writePrefs();};$('motionToggle').onchange=e=>{settings.reduced=e.target.checked;writePrefs();document.body.classList.toggle('reduced',settings.reduced);};$('saveButton').onclick=()=>flash(save()?'Progress saved on this device.':'Save failed. Export a backup before leaving.',true);$('exportButton').onclick=downloadBackup;$('pauseExportButton').onclick=downloadBackup;$('importButton').onclick=()=>$('importFile').click();$('importFile').onchange=e=>{let f=e.target.files[0];e.target.value='';if(!f||f.size>180000){flash('That file is not a safe Rivet Rumble backup.',true);return;}let r=new FileReader();r.onload=()=>flash(importSave(safeParse(r.result))?'Backup imported.':'Import refused; your current profile is unchanged.',true);r.onerror=()=>flash('The backup could not be read.',true);r.readAsText(f);};$('againButton').onclick=()=>begin(true);$('hangarButton').onclick=()=>{state=null;showMenu();};}
-  function initialise(){loadProfile();settings=prefs();document.body.classList.toggle('reduced',settings.reduced);renderer=new RivetRumbleRenderer.Renderer(ui.canvas,{reducedMotion:()=>settings.reduced,onContextLost:()=>pause('WebGL paused while the renderer recovers.'),onContextRestored:()=>{$('resumeButton').disabled=false;if(paused)$('pauseDetail').textContent='The 3D view is restored. Resume when ready.';}});if(!renderer.ready)flash('This browser could not start WebGL. Gameplay controls remain available, but 3D visuals require WebGL.');renderChoices();bindInput();bindUi();window.GameApp={save,exportSave:exported,importSave,getSummary:()=>{const p=state&&state.entities.find(e=>e.id==='player');return{game:'rivet-rumble',difficulty:state?.difficulty||selected.difficulty,arena:state?.arena??selected.arena,mode:state&&state.mode||selected.mode,phase:state&&state.phase||'hangar',result:state&&state.result||null,score:state&&Object.assign({},state.score),cameraMode,player:p&&{fighter:p.fighter,chill:p.chill||0,venom:p.venom||0,x:p.x,z:p.z,airY:p.airY,jumping:!!p.jump,hp:p.hp,maxHp:p.maxHp,ammo:p.ammo,special:p.special,gadget:p.gadget,power:p.power,cores:p.cores,shield:p.shield,haste:p.haste,alive:p.alive},stats:state&&Object.assign({},state.stats),profile:{matches:profile.records.matches,wins:profile.records.wins},renderer:!!renderer?.ready,namespace:KEY};}};window.RivetRumbleDiagnostics={renderer:()=>renderer.debug(),aim:()=>({target:{...aim},pointer:pointerPosition?{...pointerPosition}:null}),input:()=>({move:{...touchMove},cameraMode,keyboardAim:{...keyboardAim}})};window.dispatchEvent(new Event('game-ready'));window.GamesPWARefreshControls&&window.GamesPWARefreshControls();requestAnimationFrame(loop);}
+  function initialise(){loadProfile();settings=prefs();document.body.classList.toggle('reduced',settings.reduced);renderer=new RivetRumbleRenderer.Renderer(ui.canvas,{reducedMotion:()=>settings.reduced,onContextLost:()=>pause('WebGL paused while the renderer recovers.'),onContextRestored:()=>{$('resumeButton').disabled=false;if(paused)$('pauseDetail').textContent='The 3D view is restored. Resume when ready.';}});if(!renderer.ready)flash('This browser could not start WebGL. Gameplay controls remain available, but 3D visuals require WebGL.');renderChoices();bindInput();bindUi();window.GameApp={save,exportSave:exported,importSave,getSummary:()=>{const p=state&&state.entities.find(e=>e.id==='player');return{game:'rivet-rumble',difficulty:state?.difficulty||selected.difficulty,arena:state?.arena??selected.arena,mode:state&&state.mode||selected.mode,phase:state&&state.phase||'hangar',result:state&&state.result||null,score:state&&Object.assign({},state.score),cameraMode,player:p&&{fighter:p.fighter,chill:p.chill||0,venom:p.venom||0,x:p.x,z:p.z,airY:p.airY,jumping:!!p.jump,hp:p.hp,maxHp:p.maxHp,ammo:p.ammo,special:p.special,gadget:p.gadget,power:p.power,cores:p.cores,shield:p.shield,haste:p.haste,alive:p.alive},stats:state&&Object.assign({},state.stats),profile:{matches:profile.records.matches,wins:profile.records.wins},renderer:!!renderer?.ready,namespace:KEY};}};window.RivetRumbleDiagnostics={renderer:()=>renderer.debug(),aim:()=>({target:{...aim},pointer:pointerPosition?{...pointerPosition}:null}),input:()=>({move:{...touchMove},cameraMode,keyboardAim:{...keyboardAim},lock:aimLock,arrowAiming:!!arrowGesture})};window.dispatchEvent(new Event('game-ready'));window.GamesPWARefreshControls&&window.GamesPWARefreshControls();requestAnimationFrame(loop);}
   initialise();
 })();

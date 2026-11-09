@@ -15,9 +15,9 @@
   const LANES = [280, 720];
 
   const cards = [
-    { id: 'dashling', name: 'Dashling', cost: 2, kind: 'unit', role: 'melee', hp: 190, damage: 48, speed: 104, range: 42, cooldown: .72, target: 'ground', size: 25, color: '#ffcc66', desc: 'Quick ground duelist' },
-    { id: 'mossguard', name: 'Mossguard', cost: 4, kind: 'unit', role: 'tank', hp: 760, damage: 44, speed: 45, range: 46, cooldown: 1.1, target: 'ground', size: 39, color: '#62c789', desc: 'Tough tower-seeking tank', buildingsOnly: true },
-    { id: 'sunshot', name: 'Sunshot', cost: 3, kind: 'unit', role: 'ranged', hp: 245, damage: 58, speed: 65, range: 215, cooldown: 1.05, target: 'both', projectile: 500, size: 25, color: '#ff8d5c', desc: 'Long range, hits air' },
+    { id: 'dashling', name: 'Dashling', cost: 2, kind: 'unit', role: 'melee', hp: 190, damage: 48, speed: 104, range: 42, cooldown: .72, target: 'ground', size: 25, color: '#ffcc66', desc: 'Quick ground duelist', chargeCycles: 2, chargedDesc: 'Charged: sprints in; first strike hits 2.5× and stuns' },
+    { id: 'mossguard', name: 'Mossguard', cost: 4, kind: 'unit', role: 'tank', hp: 760, damage: 44, speed: 45, range: 46, cooldown: 1.1, target: 'ground', size: 39, color: '#62c789', desc: 'Tough tower-seeking tank', buildingsOnly: true, chargeCycles: 1, chargedDesc: 'Charged: bark shell absorbs 320 damage first' },
+    { id: 'sunshot', name: 'Sunshot', cost: 3, kind: 'unit', role: 'ranged', hp: 245, damage: 58, speed: 65, range: 215, cooldown: 1.05, target: 'both', projectile: 500, size: 25, color: '#ff8d5c', desc: 'Long range, hits air', chargeCycles: 2, chargedDesc: 'Charged: each hit arcs to two nearby foes' },
     { id: 'nibblers', name: 'Nibblers', cost: 3, kind: 'unit', role: 'swarm', hp: 90, damage: 25, speed: 93, range: 36, cooldown: .58, target: 'ground', size: 16, count: 4, color: '#bde65e', desc: 'Four fast little fighters' },
     { id: 'kitewing', name: 'Kitewing', cost: 3, kind: 'unit', role: 'flying', hp: 250, damage: 55, speed: 78, range: 125, cooldown: .92, target: 'both', projectile: 440, flying: true, size: 27, color: '#73ddf2', desc: 'Flying lane skirmisher' },
     { id: 'boltfinch', name: 'Bolt Finch', cost: 2, kind: 'unit', role: 'anti-air', hp: 180, damage: 74, speed: 62, range: 185, cooldown: 1.15, target: 'air', projectile: 620, size: 22, color: '#b99cff', desc: 'Cheap specialist vs air' },
@@ -32,7 +32,11 @@
     { id: 'ramblebee', name: 'Ramblebee', cost: 4, kind: 'unit', role: 'flying-tank', hp: 510, damage: 65, speed: 57, range: 46, cooldown: .9, target: 'ground', flying: true, buildingsOnly: true, size: 34, color: '#efb84f', desc: 'Airborne tower chaser' },
     { id: 'twinbow', name: 'Twinbow', cost: 5, kind: 'unit', role: 'marksman', hp: 305, damage: 93, speed: 55, range: 245, cooldown: 1.15, target: 'both', projectile: 650, size: 27, color: '#f49acf', desc: 'Precise two-target volley', multi: 2 },
     { id: 'bramblepost', name: 'Bramble Post', cost: 3, kind: 'building', role: 'defense', hp: 620, damage: 70, speed: 0, range: 240, cooldown: .95, target: 'ground', projectile: 560, size: 42, lifetime: 30, color: '#77bd8a', desc: 'Ground defense; draws tower seekers' },
-    { id: 'stormpost', name: 'Storm Post', cost: 4, kind: 'building', role: 'anti-air', hp: 540, damage: 62, speed: 0, range: 260, cooldown: .8, target: 'both', projectile: 620, size: 38, lifetime: 30, color: '#8eb7ec', desc: 'Defensive bolts hit ground and air' }
+    { id: 'stormpost', name: 'Storm Post', cost: 4, kind: 'building', role: 'anti-air', hp: 540, damage: 62, speed: 0, range: 260, cooldown: .8, target: 'both', projectile: 620, size: 38, lifetime: 30, color: '#8eb7ec', desc: 'Defensive bolts hit ground and air' },
+    // Rules-5 captain (appended so existing portrait-atlas indices stay put):
+    // an ordinary deck card whose deployed copy exposes a paid, cooling-down
+    // Rally. Name, look and effect are project-original.
+    { id: 'captain', name: 'Pennant Captain', cost: 4, kind: 'unit', role: 'captain', hp: 700, damage: 70, speed: 60, range: 50, cooldown: 1.0, target: 'ground', size: 33, color: '#f2c14e', desc: 'Leader with a paid Rally', captain: true, rules: 5, portrait: 'svg', ability: { name: 'Rally', cost: 2, cooldown: 12, duration: 4, radius: 175, boost: 1.35, guard: .5 } }
   ];
   const cardMap = Object.fromEntries(cards.map((card) => [card.id, card]));
 
@@ -47,7 +51,12 @@
     { name: 'The Sky Foundry', ai: 'champion', deck: ['emberox','twinbow','lantern','ramblebee','ripplefox','cloudrays','comet','gluebloom'], unlock: 'gluebloom', blurb: 'The champion reads both lanes.' }
   ];
 
-  const starterDeck = ['dashling','mossguard','sunshot','nibblers','kitewing','comet','tailwind','bramblepost'];
+  // Rules-5 CPU decks add the captain to three opponents; older matches keep
+  // the original arena decks above.
+  const captainDecks = { 2: ['boltfinch','captain'], 4: ['gluebloom','captain'], 7: ['cloudrays','captain'] };
+  function arenaDeck(arena, rulesVersion) { const deck = arenas[arena].deck.slice(), swap = rulesVersion >= 5 && captainDecks[arena]; if (swap) deck[deck.indexOf(swap[0])] = swap[1]; return deck; }
+  const RULES = 5;
+  const starterDeck = ['dashling','mossguard','sunshot','nibblers','kitewing','comet','captain','bramblepost'];
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
   function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
@@ -86,7 +95,7 @@
     const mode = ['classic','frenzy','draft'].includes(options.mode) ? options.mode : 'classic';
     const arena = clamp(Number.isInteger(options.arena) ? options.arena : 0, 0, arenas.length - 1);
     const state = {
-      version: VERSION, rulesVersion: 4, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
+      version: VERSION, rulesVersion: RULES, mode, arena, phase: 'playing', result: null, time: 180, overtime: false, overtimeCrowns: null,
       rng: (options.seed >>> 0) || 19870621, nextId: 1, accumulator: 0, energy: { player: 5, enemy: 5 },
       units: [], projectiles: [], effects: [], casts: [], towers: makeTowers(),
       decks: { player: [], enemy: [] }, hands: { player: [], enemy: [] }, queues: { player: [], enemy: [] },
@@ -94,7 +103,11 @@
     };
     const playerDeck = Array.isArray(options.deck) && options.deck.length === 8 && options.deck.every((id) => cardMap[id]) ? options.deck : starterDeck;
     state.decks.player = playerDeck.slice();
-    state.decks.enemy = arenas[arena].deck.slice();
+    state.decks.enemy = arenaDeck(arena, RULES);
+    // Same-card charge cycle: plays of a chargeable card fill its meter; the
+    // next play after a full meter is the charged version, then it resets.
+    state.charge = { player: {}, enemy: {} };
+    for (const side of ['player','enemy']) for (const id of state.decks[side]) if (cardMap[id].chargeCycles) state.charge[side][id] = 0;
     ['player','enemy'].forEach((side) => {
       state.queues[side] = shuffledDeck(state, state.decks[side]);
       state.hands[side] = state.queues[side].splice(0, 4);
@@ -119,6 +132,7 @@
     if (!card || state.phase !== 'playing') return { ok: false, reason: 'Match is not active' };
     if (!Number.isFinite(x) || !Number.isFinite(y)) return { ok: false, reason: 'Choose a spot on the arena' };
     if (!state.hands[side].includes(card.id)) return { ok: false, reason: 'Card is not in hand' };
+    if ((card.rules || 0) > (state.rulesVersion || 1)) return { ok: false, reason: 'This card needs a new match' };
     if (state.energy[side] + 1e-6 < card.cost) return { ok: false, reason: 'Not enough spark' };
     if (x < 45 || x > WIDTH - 45 || y < 45 || y > HEIGHT - 45) return { ok: false, reason: 'Too close to the edge' };
     if (card.kind !== 'spell') {
@@ -136,9 +150,10 @@
     return { ok: true, reason: '' };
   }
 
-  function spawnUnit(state, side, card, x, y, offset) {
+  function spawnUnit(state, side, card, x, y, offset, charged) {
     const ox = offset ? offset.x : 0, oy = offset ? offset.y : 0;
-    state.units.push({
+    const v5 = state.rulesVersion >= 5 ? { charged: !!charged, stun: 0, shield: charged && card.id === 'mossguard' ? 320 : 0, dashing: !!(charged && card.id === 'dashling'), abilityCooldown: 0, rally: 0, seq: state.nextId } : {};
+    state.units.push({ ...v5,
       id: 'u' + state.nextId++, side, cardId: card.id, name: card.name, role: card.role,
       x: clamp(x + ox, 35, WIDTH - 35), y: clamp(y + oy, 35, HEIGHT - 35), lane: laneFor(x),
       hp: card.hp, maxHp: card.hp,
@@ -157,6 +172,11 @@
     state.energy[side] = clamp(state.energy[side] - card.cost, 0, MAX_ENERGY);
     rotateHand(state, side, cardId);
     state.stats[side + 'Played']++;
+    let charged = false;
+    if (state.rulesVersion >= 5 && card.chargeCycles && state.charge && Object.hasOwn(state.charge[side], cardId)) {
+      if (state.charge[side][cardId] >= card.chargeCycles) { charged = true; state.charge[side][cardId] = 0; pushEvent(state, 'charged', { side, cardId }); }
+      else state.charge[side][cardId]++;
+    }
     if (card.kind === 'spell') {
       if(state.rulesVersion>=3 && card.id==='comet')state.casts.push({id:'c'+state.nextId++,side,cardId:card.id,x,y,left:.65,duration:.65});
       else applySpell(state, side, card, x, y);
@@ -166,16 +186,56 @@
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i / count) + random(state) * .25;
         const spread = count > 1 ? 34 : 0;
-        spawnUnit(state, side, card, x, y, { x: Math.cos(angle) * spread, y: Math.sin(angle) * spread });
+        spawnUnit(state, side, card, x, y, { x: Math.cos(angle) * spread, y: Math.sin(angle) * spread }, charged);
       }
     }
-    pushEvent(state, 'played', { side, cardId, x, y });
-    return { ok: true, reason: '' };
+    pushEvent(state, 'played', { side, cardId, x, y, charged });
+    return { ok: true, reason: '', charged };
+  }
+
+  function chargeStatus(state, side, cardId) {
+    const card = cardMap[cardId];
+    if (!card || !card.chargeCycles || state.rulesVersion < 5 || !state.charge || !Object.hasOwn(state.charge[side] || {}, cardId)) return null;
+    const count = state.charge[side][cardId];
+    return { cycles: card.chargeCycles, count, ready: count >= card.chargeCycles };
+  }
+
+  // Captain Rally: the most recently deployed, fully deployed living captain on
+  // a side is the eligible copy. Spark is spent only when the Rally starts.
+  function eligibleCaptain(state, side) {
+    if (state.rulesVersion < 5) return null;
+    return state.units.filter((u) => u.alive && u.side === side && u.cardId === 'captain' && !(u.deploy > 0)).sort((a, b) => (b.seq || 0) - (a.seq || 0))[0] || null;
+  }
+  function abilityStatus(state, side) {
+    const ability = cardMap.captain.ability;
+    if (state.rulesVersion < 5) return { available: false, reason: 'Not in this match', cost: ability.cost };
+    const deploying = state.units.some((u) => u.alive && u.side === side && u.cardId === 'captain' && u.deploy > 0);
+    const unit = eligibleCaptain(state, side);
+    if (!unit) return { available: false, reason: deploying ? 'Captain is deploying' : 'No captain on the field', cost: ability.cost, unitId: null };
+    if (unit.rally > 0) return { available: false, reason: 'Rally active', cost: ability.cost, unitId: unit.id, cooldown: unit.abilityCooldown, rally: unit.rally };
+    if (unit.abilityCooldown > 0) return { available: false, reason: 'Recharging', cost: ability.cost, unitId: unit.id, cooldown: unit.abilityCooldown };
+    if (state.energy[side] + 1e-6 < ability.cost) return { available: false, reason: 'Not enough spark', cost: ability.cost, unitId: unit.id, cooldown: 0 };
+    return { available: state.phase === 'playing', reason: state.phase === 'playing' ? '' : 'Match is not active', cost: ability.cost, unitId: unit.id, cooldown: 0 };
+  }
+  function useAbility(state, side) {
+    const status = abilityStatus(state, side);
+    if (!status.available) return { ok: false, reason: status.reason };
+    const unit = eligibleCaptain(state, side), ability = cardMap.captain.ability;
+    state.energy[side] = clamp(state.energy[side] - ability.cost, 0, MAX_ENERGY);
+    unit.rally = ability.duration; unit.abilityCooldown = ability.cooldown;
+    for (const ally of state.units) if (ally.alive && ally.side === side && !ally.building && distance(ally, unit) <= ability.radius) ally.haste = Math.max(ally.haste, ability.duration);
+    state.effects.push({ id: 'e' + state.nextId++, kind: 'rally', x: unit.x, y: unit.y, radius: ability.radius, color: side === 'player' ? '#ffe27a' : '#ffb27a', life: .9, maxLife: .9 });
+    pushEvent(state, 'ability', { side, unitId: unit.id });
+    return { ok: true, reason: '', unitId: unit.id };
   }
 
   function applyDamage(state, target, amount, sourceSide) {
     if (!target.alive || amount <= 0) return;
     if (target.type === 'base') target.active = true;
+    if (!target.type && state.rulesVersion >= 5) {
+      if (target.rally > 0 && target.cardId === 'captain') amount *= cardMap.captain.ability.guard;
+      if (target.shield > 0) { const absorbed = Math.min(target.shield, amount); target.shield -= absorbed; amount -= absorbed; target.hit = .18; state.stats[sourceSide + 'Damage'] += absorbed; if (amount <= 0) return; }
+    }
     target.hp -= amount; target.hit = .18;
     state.stats[sourceSide + 'Damage'] += amount;
     if (target.hp <= 0) {
@@ -241,13 +301,19 @@
   }
 
   function launchProjectile(state, attacker, target, damage, splash) {
-    state.projectiles.push({ id: 'p' + state.nextId++, side: attacker.side, x: attacker.x, y: attacker.y, targetId: target.id, speed: attacker.projectile || 500, damage, splash: splash || 0, life: 2.5, color: cardMap[attacker.cardId] ? cardMap[attacker.cardId].color : '#fff',visual:{kind:attacker.cardId||'tower',height:attacker.type?(attacker.type==='base'?1.74:1.45):attacker.flying?1.7:attacker.building?.86:.95,distance:distance(attacker,target),travel:0} });
+    state.projectiles.push({ ...(attacker.charged && attacker.cardId === 'sunshot' ? { arc: 2 } : {}), id: 'p' + state.nextId++, side: attacker.side, x: attacker.x, y: attacker.y, targetId: target.id, speed: attacker.projectile || 500, damage, splash: splash || 0, life: 2.5, color: cardMap[attacker.cardId] ? cardMap[attacker.cardId].color : '#fff',visual:{kind:attacker.cardId||'tower',height:attacker.type?(attacker.type==='base'?1.74:1.45):attacker.flying?1.7:attacker.building?.86:.95,distance:distance(attacker,target),travel:0} });
   }
 
   function attack(state, unit, target) {
     unit.attackAnim = state.rulesVersion>=3?.16:.24;
     let boost = 1;
     for (const ally of state.units) if (ally.alive && ally.side === unit.side && ally.aura && distance(ally, unit) < 145) boost = Math.max(boost, ally.aura);
+    if (state.rulesVersion >= 5) {
+      const rally = cardMap.captain.ability;
+      for (const leader of state.units) if (leader.alive && leader.side === unit.side && leader.rally > 0 && distance(leader, unit) <= rally.radius) boost = Math.max(boost, rally.boost);
+      // Charged Dashling: its first landed strike after deployment is a heavy, stunning blow.
+      if (unit.dashing) { unit.dashing = false; boost *= 2.5; if (!target.type) { target.stun = Math.max(target.stun || 0, .8); target.windup = target.windup ? null : target.windup; } state.effects.push({ id: 'e' + state.nextId++, kind: 'impact', x: target.x, y: target.y, radius: 46, color: '#ffe27a', life: .4, maxLife: .4 }); }
+    }
     if (unit.projectile) {
       const targets = [target];
       if (unit.multi > 1) {
@@ -272,11 +338,12 @@
     return { x: bridgeX, y: target.y };
   }
 
-  // Fresh rules make ranged crews earn their range: they step back from a
-  // close threat, then use the same pathing and collision rules as every
-  // other troop. Released matches retain their direct rules-3 engagement.
+  // Rules 4 made every ranged troop step backward from a close threat before
+  // firing. Reference battles show ordinary ranged troops acquiring a target,
+  // stopping at range and firing, so rules 5 removes that universal retreat.
+  // Only restored rules-4 matches keep it, unchanged.
   function standoffGoal(state, unit, target) {
-    if (state.rulesVersion < 4 || unit.building || !unit.projectile || unit.range < 115) return null;
+    if (state.rulesVersion !== 4 || unit.building || !unit.projectile || unit.range < 115) return null;
     const gap = distance(unit, target) - (target.radius || 20) - unit.radius;
     const desired = unit.flying ? unit.range * .52 : unit.range * .58;
     if (gap >= desired * .55) return null;
@@ -321,6 +388,10 @@
       unit.walk = Number(unit.walk) || 0; unit.attackAnim = Math.max(0, (Number(unit.attackAnim) || 0) - dt); unit.hit = Math.max(0, (Number(unit.hit) || 0) - dt);
       if(state.rulesVersion>=3&&unit.building){unit.life=Math.max(0,unit.life-dt);unit.hp=Math.max(0,unit.hp-unit.maxHp/30*dt);if(unit.life===0||unit.hp===0){unit.alive=false;continue;}}
       if (unit.deploy > 0) { unit.deploy = Math.max(0, unit.deploy - dt); continue; }
+      if (state.rulesVersion >= 5) {
+        unit.abilityCooldown = Math.max(0, (unit.abilityCooldown || 0) - dt); unit.rally = Math.max(0, (unit.rally || 0) - dt);
+        if (unit.stun > 0) { unit.stun = Math.max(0, unit.stun - dt); unit.windup = null; continue; }
+      }
       unit.attackTimer = Math.max(0, unit.attackTimer - dt);
       unit.slow = Math.max(0, unit.slow - dt); unit.haste = Math.max(0, unit.haste - dt);
       if(state.rulesVersion>=3&&unit.windup){const w=unit.windup;w.left=Math.max(0,w.left-dt);if(w.left===0){const q=findTargetById(state,w.targetId);if(q&&canTarget(unit,q)&&!(q.deploy>0)&&distance(unit,q)-q.radius-unit.radius<=unit.range+12){unit.heading=Math.atan2(q.y-unit.y,q.x-unit.x);attack(state,unit,q);unit.attackTimer=unit.cooldown;}else unit.attackTimer=.12;unit.windup=null;}continue;}
@@ -336,7 +407,7 @@
         if (unit.attackTimer <= 0) { if(state.rulesVersion>=3){const duration=unit.projectile?.22:.2;unit.windup={targetId:target.id,left:duration,duration};unit.heading=Math.atan2(target.y-unit.y,target.x-unit.x);unit.attackAnim=.24;}else{attack(state, unit, target); unit.attackTimer = unit.cooldown;} }
       } else if(!unit.building) {
         const goal = movementGoal(unit, target);
-        if(state.rulesVersion>=3){moveWithStructures(state,unit,goal,target,dt,(unit.slow>0?.53:1)*(unit.haste>0?1.34:1));unit.lane=laneFor(unit.x);continue;}
+        if(state.rulesVersion>=3){moveWithStructures(state,unit,goal,target,dt,(unit.slow>0?.53:1)*(unit.haste>0?1.34:1)*(unit.dashing?1.9:1));unit.lane=laneFor(unit.x);continue;}
         const dx = goal.x - unit.x, dy = goal.y - unit.y, length = Math.max(.001, Math.hypot(dx,dy));
         const modifier = (unit.slow > 0 ? .53 : 1) * (unit.haste > 0 ? 1.34 : 1);
         const stride = Math.min(length, unit.speed * modifier * dt);
@@ -360,6 +431,8 @@
       if (d <= stride + (target.radius || 15)) {
         applyDamage(state, target, shot.damage, shot.side);
         if (shot.splash) state.units.filter((u) => u.alive && u.side !== shot.side && u.id !== target.id && distance(u, target) <= shot.splash).forEach((u) => applyDamage(state, u, shot.damage * .6, shot.side));
+        // Charged Sunshot: the bolt arcs to up to two other nearby foes for half damage.
+        if (shot.arc > 0) state.units.filter((u) => u.alive && u.side !== shot.side && u.id !== target.id && !u.building && distance(u, target) <= 110).sort((a,b) => distance(a,target)-distance(b,target)).slice(0, shot.arc).forEach((u) => { applyDamage(state, u, shot.damage * .5, shot.side); state.effects.push({ id: 'e' + state.nextId++, kind: 'arc', x: u.x, y: u.y, fromX: target.x, fromY: target.y, radius: 20, color: '#ffd36b', life: .3, maxLife: .3 }); });
         shot.life = 0;
       } else { shot.x += (target.x - shot.x) / d * stride; shot.y += (target.y - shot.y) / d * stride;if(shot.visual)shot.visual.travel+=stride; }
     }
@@ -388,6 +461,8 @@
     const side='enemy',energy=state.energy.enemy,profile=arenas[state.arena].ai,allies=state.units.filter(u=>u.alive&&u.side===side&&!u.building),foes=state.units.filter(u=>u.alive&&u.side==='player');
     const threats=foes.filter(u=>u.y<840),urgent=threats.some(u=>u.y<610),anchor=threats.slice().sort((a,b)=>a.y-b.y)[0];
     const fronts=allies.filter(u=>u.y>280).sort((a,b)=>b.maxHp-a.maxHp),front=fronts[0];
+    // Same Rally rules as the player: only an eligible, engaged captain, paid from the CPU's Spark.
+    if(state.rulesVersion>=5&&abilityStatus(state,side).available){const cap=eligibleCaptain(state,side),near=foes.filter(u=>distance(u,cap)<230).length,atTower=state.towers.some(t=>t.alive&&t.side==='player'&&distance(t,cap)-t.radius-cap.radius<=cap.range+20);if((near>=2||atTower||near&&cap.hp<cap.maxHp*.7)&&useAbility(state,side).ok)return true;}
     const options=[];
     for(const id of state.hands.enemy){const card=cardMap[id];if(card.cost>energy)continue;
       if(card.kind==='spell'){
@@ -527,7 +602,14 @@
 
   function validateSnapshot(value) {
     if (!value || typeof value !== 'object' || value.version !== VERSION) return false;
-    if (value.rulesVersion != null && ![1,2,3,4].includes(value.rulesVersion)) return false;
+    if (value.rulesVersion != null && ![1,2,3,4,5].includes(value.rulesVersion)) return false;
+    if (Array.isArray(value.units) && value.units.some((u) => u && (cardMap[u.cardId]?.rules || 0) > (value.rulesVersion || 1))) return false;
+    if (value.rulesVersion >= 5) {
+      if (!value.charge || !['player','enemy'].every((side) => { const meter = value.charge[side]; if (!meter || typeof meter !== 'object' || Array.isArray(meter) || !Array.isArray(value.decks?.[side])) return false; const expected = value.decks[side].filter((id) => cardMap[id]?.chargeCycles); return Object.keys(meter).length === expected.length && expected.every((id) => Number.isInteger(meter[id]) && meter[id] >= 0 && meter[id] <= cardMap[id].chargeCycles); })) return false;
+      const timer = (n, max) => Number.isFinite(n) && n >= 0 && n <= max;
+      if (!Array.isArray(value.units) || !value.units.every((u) => u && typeof u.charged === 'boolean' && timer(u.stun, 1) && timer(u.shield, 320) && typeof u.dashing === 'boolean' && timer(u.abilityCooldown, 12) && timer(u.rally, 4) && Number.isInteger(u.seq) && u.seq > 0 && (u.cardId === 'captain' || u.rally === 0 && u.abilityCooldown === 0) && (!u.charged || !!cardMap[u.cardId].chargeCycles))) return false;
+      if (Array.isArray(value.projectiles) && !value.projectiles.every((p) => p.arc === undefined || p.arc === 2)) return false;
+    }
     if(value.rulesVersion>=3){const ref=id=>id===null||typeof id==='string'&&id.length<40;
       if(!Array.isArray(value.casts)||value.casts.length>32||!value.casts.every(c=>c&&c.cardId==='comet'&&['player','enemy'].includes(c.side)&&[c.x,c.y,c.left,c.duration].every(Number.isFinite)&&c.x>=45&&c.x<=955&&c.y>=45&&c.y<=1355&&c.duration===.65&&c.left>0&&c.left<=c.duration))return false;
       if(!Array.isArray(value.units)||!value.units.every(u=>u&&ref(u.targetId)&&typeof u.building==='boolean'&&u.building===(cardMap[u.cardId]?.kind==='building')&&Number.isFinite(u.life)&&u.life>=0&&u.life<=30&&(u.windup===null||u.windup&&typeof u.windup.targetId==='string'&&u.windup.targetId.length<40&&[u.windup.left,u.windup.duration].every(Number.isFinite)&&u.windup.duration>0&&u.windup.duration<=.3&&u.windup.left>=0&&u.windup.left<=u.windup.duration)))return false;
@@ -573,5 +655,5 @@
     return state;
   }
 
-  return { VERSION, WIDTH, HEIGHT, RIVER_TOP, RIVER_BOTTOM, STEP, MAX_ENERGY, LANES, cards, cardMap, arenas, starterDeck, createMatch, playCard, legalPlacement, tick, energyMultiplier, aiStep, scoreSide, snapshot, restore, validateSnapshot };
+  return { VERSION, RULES, WIDTH, HEIGHT, RIVER_TOP, RIVER_BOTTOM, STEP, MAX_ENERGY, LANES, cards, cardMap, arenas, arenaDeck, starterDeck, createMatch, playCard, legalPlacement, chargeStatus, abilityStatus, useAbility, eligibleCaptain, tick, energyMultiplier, aiStep, scoreSide, snapshot, restore, validateSnapshot };
 });
