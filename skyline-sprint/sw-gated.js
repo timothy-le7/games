@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:skyline-sprint:";
-const RELEASE = "d2f0bb36c3fc34965e85";
+const RELEASE = "e3992541a69ed80f8667";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./gate-migration.js","./hd-scene.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./renderer.js","./style.css"];
 // A legacy compatible migration may leave this scoped marker only after the
