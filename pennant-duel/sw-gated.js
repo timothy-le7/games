@@ -2,7 +2,7 @@
 'use strict';
 
 const CACHE_PREFIX = "games-pwa:tower-duel:";
-const RELEASE = "2d3b78a097558bb8965e";
+const RELEASE = "b720b0eae584cb61ea4c";
 const CACHE_NAME = CACHE_PREFIX + RELEASE;
 const ASSETS = ["./","./apple-touch-icon.png","./assets/crew-portraits-v1.png","./assets/icon.svg","./engine.js","./game-pwa.js","./game.js","./gate-migration.js","./icon-192.png","./icon-512.png","./index.html","./manifest.webmanifest","./privacy.html","./style.css","./tower-renderer.js"];
 // A legacy compatible migration may leave this scoped marker only after the
