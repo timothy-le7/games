@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en" data-games-access-gate="v1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protected games</title>
+<style>
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:#101827;color:#f8fafc;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.gate{width:min(29rem,100%);padding:clamp(24px,6vw,42px);border:1px solid #ffffff24;border-radius:20px;background:#17263b;box-shadow:0 20px 60px #0008}h1{margin:0 0 10px;font-size:clamp(1.5rem,5vw,2.1rem);line-height:1.15}p{margin:0 0 22px;color:#d8e3f0}label{display:block;margin-bottom:8px;font-weight:700}input,button{width:100%;min-height:48px;border-radius:11px;font:inherit}input{border:1px solid #9db1c7;background:#0c1522;color:inherit;padding:11px 12px}button{margin-top:16px;border:0;background:#d8b85a;color:#17202c;font-weight:800;cursor:pointer}button:disabled{cursor:wait;opacity:.72}input:focus-visible,button:focus-visible{outline:3px solid #8ec5ff;outline-offset:3px}.status{min-height:1.5em;margin:14px 0 0;color:#d8e3f0}.status[data-error="true"]{color:#ffb4ab}.hint{font-size:.9rem;color:#b9c7d8}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="gate" aria-labelledby="gate-title">
+<h1 id="gate-title">Unlock games</h1>
+<p>Enter the shared password to open this page.</p>
+<form id="games-access-gate-form" novalidate>
+<label for="games-access-gate-password">Password</label>
+<input id="games-access-gate-password" name="password" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="games-access-gate-hint games-access-gate-status">
+<p class="hint" id="games-access-gate-hint">The password is not kept by this page.</p>
+<button type="submit">Unlock</button>
+<p class="status" id="games-access-gate-status" role="status" aria-live="polite"></p>
+</form>
+<noscript><p class="status" data-error="true">JavaScript is required to unlock this page.</p></noscript>
+</main>
+<script id="games-access-gate-payload" type="application/json">{"v":1,"i":310000,"s":"/Ck8fx2rLzC9uZp047O3QQ==","k":"a543d646e83a379709335f6b","n":"p5Scb/KM6NDFnwRq","c":"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"}</script>
+<script>
+(()=>{
+'use strict';
+const text=new TextEncoder();
+const decode=new TextDecoder();
+const payload=JSON.parse(document.getElementById('games-access-gate-payload').textContent);
+const form=document.getElementById('games-access-gate-form');
+const input=document.getElementById('games-access-gate-password');
+const button=form.querySelector('button');
+const status=document.getElementById('games-access-gate-status');
+const storageKey='games-access-gate:'+payload.v+':'+payload.k;
+const handoffKey=storageKey+':handoff';
+let unlockInFlight=false;
+// This is only an in-memory copy of the already authenticated session value.
+// Some WebKit navigations clear sessionStorage after beforeunload but before
+// pagehide on a document that was rehydrated in place. The pagehide handler
+// below can put the same value back into the existing origin-scoped storage
+// area before the next protected wrapper starts. It deliberately introduces
+// no second persistence channel: no cookie, URL, history, cache, worker, or
+// cross-tab state receives unlock material.
+let retainedSession=null;
+const b64=value=>{
+  const raw=atob(value),out=new Uint8Array(raw.length);
+  for(let index=0;index<raw.length;index++)out[index]=raw.charCodeAt(index);
+  return out;
+};
+const toB64=value=>{
+  let raw='';
+  for(const byte of value)raw+=String.fromCharCode(byte);
+  return btoa(raw);
+};
+const message=(value,error=false)=>{
+  status.textContent=value;
+  status.dataset.error=error?'true':'';
+};
+const setBusy=value=>{
+  button.disabled=value;
+  form.setAttribute('aria-busy',value?'true':'false');
+};
+const importKey=bytes=>crypto.subtle.importKey('raw',bytes,{name:'AES-GCM'},false,['decrypt']);
+async function derive(password){
+  const material=await crypto.subtle.importKey('raw',text.encode(password),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64(payload.s),iterations:payload.i,hash:'SHA-256'},material,256);
+  const bytes=new Uint8Array(bits);
+  return {key:await importKey(bytes),session:toB64(bytes)};
+}
+async function replaceDocument(source){
+  const parsed=new DOMParser().parseFromString(source,'text/html');
+  document.replaceChild(document.importNode(parsed.documentElement,true),document.documentElement);
+  for(const script of [...document.querySelectorAll('script')]){
+    const type=(script.getAttribute('type')||'').trim().toLowerCase();
+    if(type&&!['text/javascript','application/javascript','module'].includes(type))continue;
+    const replacement=document.createElement('script');
+    for(const attribute of script.attributes)replacement.setAttribute(attribute.name,attribute.value);
+    if(script.src){
+      replacement.async=false;
+      const loaded=new Promise((resolve,reject)=>{
+        replacement.addEventListener('load',resolve,{once:true});
+        replacement.addEventListener('error',()=>reject(new Error('A protected page script could not load.')),{once:true});
+      });
+      script.replaceWith(replacement);
+      await loaded;
+    }else{
+      replacement.textContent=script.textContent;
+      script.replaceWith(replacement);
+    }
+  }
+}
+async function decrypt(key){
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(payload.n),additionalData:text.encode('games-access-gate:'+payload.v+':'+payload.k)},key,b64(payload.c));
+  return decode.decode(plain);
+}
+async function unlock(key,session){
+  const source=await decrypt(key);
+  retain(session);
+  await replaceDocument(source);
+  return true;
+}
+function stored(){
+  try{
+    const value=sessionStorage.getItem(storageKey);
+    return value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null;
+  }catch{return null}
+}
+function remember(value){
+  try{sessionStorage.setItem(storageKey,value);return sessionStorage.getItem(storageKey)===value}catch{return false}
+}
+function retain(value){
+  retainedSession=value&&/^[A-Za-z0-9+/]{43}=$/.test(value)?value:null;
+}
+function repairSessionOnPagehide(){
+  if(!retainedSession)return;
+  try{
+    if(sessionStorage.getItem(storageKey)!==retainedSession)sessionStorage.setItem(storageKey,retainedSession);
+  }catch{}
+}
+function armHandoff(){try{sessionStorage.setItem(handoffKey,'ready');return sessionStorage.getItem(handoffKey)==='ready'}catch{return false}}
+function consumeHandoff(){try{sessionStorage.removeItem(handoffKey)}catch{}}
+function forget(){
+  retainedSession=null;
+  try{sessionStorage.removeItem(storageKey);sessionStorage.removeItem(handoffKey)}catch{}
+}
+addEventListener('pagehide',repairSessionOnPagehide,{capture:true});
+async function tryStored(){
+  if(!globalThis.crypto?.subtle)return;
+  const value=stored();
+  if(!value)return;
+  // A navigation can clear sessionStorage after this gate starts its one-time
+  // handoff reload but before pagehide. Authenticate the existing value before
+  // retaining it, so that lifecycle repair covers that gate-document boundary
+  // too. Invalid injected storage never becomes retained state.
+  let key;
+  try{
+    key=await importKey(b64(value));
+    await decrypt(key);
+    retain(value);
+  }catch{
+    forget();
+    return;
+  }
+  // The marker belongs only to a successful password-form submission. A
+  // library-to-game navigation is already a fresh gate document, so adding a
+  // second reload here creates an avoidable WebKit lifecycle boundary between
+  // the authenticated session and the newly decoded runtime. Consume a prior
+  // manual-unlock marker, if any, then rehydrate this route in this document.
+  consumeHandoff();
+  // This script runs while a freshly fetched gate is still parsing. Let that
+  // document finish first. The lock document deliberately never inspects or
+  // starts a scoped worker: doing so here would put WebKit's worker lifecycle
+  // back in the document-replacement window. The decrypted runtime owns its
+  // normal scoped registration after this replacement has completed.
+  if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
+  unlockInFlight=true;
+  setBusy(true);
+  message('Unlocking…');
+  try{
+    await unlock(key,value);
+  }catch{
+    unlockInFlight=false;
+    // A player can navigate as soon as the protected runtime becomes ready.
+    // That can cancel a trailing ordinary runtime script while this old gate
+    // document is still awaiting it. Its session was authenticated before
+    // this try block, so do not turn that navigation cancellation into an
+    // apparent bad password or discard the current tab's valid session.
+  }
+}
+form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(unlockInFlight)return;
+  if(!globalThis.crypto?.subtle){
+    message('This browser cannot unlock this page.',true);
+    return;
+  }
+  const password=input.value;
+  if(!password){
+    message('Enter the password to continue.',true);
+    input.focus();
+    return;
+  }
+  unlockInFlight=true;
+  setBusy(true);
+  message('Unlocking…');
+  let authenticated=false;
+  try{
+    const result=await derive(password);
+    const source=await decrypt(result.key);
+    authenticated=true;
+    input.value='';
+    // A real same-origin reload creates the first decrypted document in the
+    // browser's normal lifecycle. The session-only pagehide repair covers
+    // WebKit's later beforeunload-to-pagehide loss on a decoded document;
+    // storage-refusal contexts retain the direct, non-persistent path below.
+    if(remember(result.session)){
+      retain(result.session);
+      if(armHandoff()){
+        location.reload();
+        return;
+      }
+    }
+    await replaceDocument(source);
+  }catch{
+    unlockInFlight=false;
+    input.value='';
+    // A failed decrypt is an authentication failure. Once the protected
+    // source has decrypted, a later document-script cancellation must retain
+    // the tab-scoped session so an immediate normal reload can rehydrate it.
+    if(!authenticated){
+      forget();
+      message('The password did not unlock this page.',true);
+      input.focus();
+    }
+  }finally{
+    if(!unlockInFlight)setBusy(false);
+  }
+});
+input.focus();
+tryStored();
+})();
+</script>
+</body>
+</html>

@@ -33,6 +33,25 @@
     }return m;
   }
   function sphere(s=24,r=12){const m=mesh();for(let y=0;y<=r;y++)for(let x=0;x<=s;x++){const ph=y/r*Math.PI,th=x/s*TAU,n=[Math.sin(ph)*Math.cos(th),Math.cos(ph),Math.sin(ph)*Math.sin(th)];vertex(m,n.map(v=>v*.5),n);}for(let y=0;y<r;y++)for(let x=0;x<s;x++){const a=y*(s+1)+x,b=a+s+1;if(y>0)triangle(m,a,a+1,b+1);if(y<r-1)triangle(m,a,b+1,b);}return m;}
+  // Closed sculpted volumes with rounded rectangular sections. Profiles use
+  // [height, full width, full depth, optional fore/aft offset], bottom to top.
+  // Area-weighted seam normals keep broad armor faces and curved edges smooth.
+  function loft(profile,s=32,roundness=3){
+    const m=mesh(),power=2/roundness;
+    for(const [y,w,d,z=0]of profile)for(let k=0;k<=s;k++){
+      const a=k/s*TAU,c=Math.cos(a),q=Math.sin(a);
+      vertex(m,[Math.sign(c)*Math.abs(c)**power*w/2,y,Math.sign(q)*Math.abs(q)**power*d/2+z],[0,0,0]);
+    }
+    for(let j=0;j<profile.length-1;j++)for(let k=0;k<s;k++){
+      const a=j*(s+1)+k,b=a+s+1;
+      if(profile[j][1]>0)triangle(m,a,b,a+1);
+      if(profile[j+1][1]>0)triangle(m,a+1,b,b+1);
+    }
+    const sums=new Map(),key=i=>m.p.slice(i*3,i*3+3).map(n=>Math.round(n*1e7)).join(',');
+    for(let j=0;j<m.i.length;j+=3){const ids=m.i.slice(j,j+3),[a,b,c]=ids.map(i=>m.p.slice(i*3,i*3+3)),n=cross(b.map((v,i)=>v-a[i]),c.map((v,i)=>v-a[i]));for(const i of ids){const k=key(i),v=sums.get(k)||[0,0,0];sums.set(k,v.map((x,j)=>x+n[j]));}}
+    for(let i=0;i<m.p.length/3;i++)m.n.splice(i*3,3,...normalize(sums.get(key(i))||[0,1,0]));
+    return m;
+  }
   function lathe(profile,s=24){
     const m=mesh();for(let y=0;y<profile.length;y++)for(let x=0;x<=s;x++){
       const [h,r]=profile[y],lo=profile[Math.max(0,y-1)],hi=profile[Math.min(profile.length-1,y+1)],a=x/s*TAU;
@@ -75,6 +94,7 @@
     'if(kind>6.5&&kind<7.5){float grain=sin(vWorld.y*14.+noise(vWorld*1.7)*5.);surface*=.84+.12*grain+.12*noise(vWorld*5.);rough=.75;}',
     'if(kind>7.5&&kind<8.5){surface*=.96+.035*sin(vLocal.y*110.)*sin(vLocal.x*110.);rough=.96;metal=0.;}',
     'if(kind>8.5&&kind<9.5){surface*=.97+.04*noise(vLocal*8.);rough=.72;metal=0.;}',
+    'if(kind>9.5&&kind<10.5){float coat=noise(vLocal*29.),wear=noise(vLocal*76.);surface*=.94+.08*coat;float edge=smoothstep(.36,.5,max(abs(vLocal.x),abs(vLocal.z)))*smoothstep(.68,.85,wear);base=mix(base,vec3(.19,.23,.24),edge*.22);rough=max(rough,.59);}',
     'vec3 ambient=mix(vec3(.28,.35,.46),vec3(.60,.71,.80),clamp(N.y*.5+.5,0.,1.));',
     'vec3 lit=base*surface*(ambient*.78+vec3(1.,.88,.69)*max(dot(N,L),0.)*1.16*(1.-occ*.72));',
     'float spec=pow(max(dot(N,H),0.),mix(100.,9.,rough))*mix(.18,.85,metal)*(1.-occ*.78);vec3 specColor=mix(vec3(1.,.96,.87),sqrt(base),metal*.7);lit+=specColor*spec;',
@@ -103,7 +123,7 @@
       this.postPosition=gl.getAttribLocation(this.post,'aPosition');this.postUniforms={};for(const n of ['uScene','uBloom','uStep','uPixel','uMode','uExtract','uStrength'])this.postUniforms[n]=gl.getUniformLocation(this.post,n);
       this.quadBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.quadBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
       this.instanceBuffer=gl.createBuffer();this.instanceData=new Float32Array(24*2048);this.meshes={};
-      for(const [name,data]of Object.entries(meshes(options.meshScale||1))){const interleaved=[];for(let i=0;i<data.p.length;i+=3)interleaved.push(...data.p.slice(i,i+3),...data.n.slice(i,i+3));const b=gl.createBuffer(),ix=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(interleaved),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ix);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data.i),gl.STATIC_DRAW);this.meshes[name]={buffer:b,index:ix,count:data.i.length};}
+      for(const [name,data]of Object.entries({...meshes(options.meshScale||1),...options.meshes})){const interleaved=[];for(let i=0;i<data.p.length;i+=3)interleaved.push(...data.p.slice(i,i+3),...data.n.slice(i,i+3));const b=gl.createBuffer(),ix=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(interleaved),gl.STATIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ix);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data.i),gl.STATIC_DRAW);this.meshes[name]={buffer:b,index:ix,count:data.i.length};}
       const size=Math.min(options.shadowSize||1024,gl.getParameter(gl.MAX_TEXTURE_SIZE));this.shadow=target(gl,size,size,true);if(this.shadow){gl.bindTexture(gl.TEXTURE_2D,this.shadow.texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);}this.targets=null;this.commands=[];this.stats={drawCalls:0,triangles:0,instances:0,instanced:!!this.ext,softShadows:!!this.shadow,bloom:true,materials:true};
     }
     resize(width,height,dpr,budget=6000000){const max=this.maxTextureSize,ratio=Math.min(dpr||1,Math.sqrt(budget/Math.max(1,width*height)),max/Math.max(width,height));const w=Math.max(1,Math.round(width*ratio)),h=Math.max(1,Math.round(height*ratio));if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}if(!this.targets||this.targets.main.w!==w||this.targets.main.h!==h){this.disposeTargets();const main=target(this.gl,w,h,true),a=target(this.gl,Math.max(1,w>>2),Math.max(1,h>>2),false),b=target(this.gl,Math.max(1,w>>2),Math.max(1,h>>2),false);this.targets=main&&a&&b?{main,a,b}:null;if(!this.targets)for(const t of [main,a,b])if(t)this.disposeTarget(t);}this.stats.dpr=ratio;this.stats.width=w;this.stats.height=h;this.stats.bloom=!!this.targets;return ratio;}
@@ -132,5 +152,5 @@
     debug(){return {...this.stats};}
     destroy(){this.disposeTargets();const gl=this.gl;if(this.shadow)this.disposeTarget(this.shadow);for(const m of Object.values(this.meshes)){gl.deleteBuffer(m.buffer);gl.deleteBuffer(m.index);}gl.deleteBuffer(this.quadBuffer);gl.deleteBuffer(this.instanceBuffer);gl.deleteProgram(this.program);gl.deleteProgram(this.post);}
   }
-  return {Scene,meshes,box,cylinder,sphere,lathe,torus,ring,disc,wedge,gear,quad,matrix,multiply,identity,ortho,lookAt,rgba,normalize};
+  return {Scene,meshes,box,cylinder,sphere,lathe,loft,torus,ring,disc,wedge,gear,quad,matrix,multiply,identity,ortho,lookAt,rgba,normalize};
 });

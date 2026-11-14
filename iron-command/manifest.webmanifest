@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Iron Command",
+  "short_name": "Iron Command",
+  "description": "Build a base, gather supplies and command an armored army in an original 3D real-time strategy operation.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

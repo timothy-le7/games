@@ -335,6 +335,7 @@
   function canvasPoint(clientX, clientY) { return renderer3d.screenToWorld(clientX,clientY); }
   function previewAt(clientX,clientY,id){const rect=els['game-canvas'].getBoundingClientRect(),inside=clientX>=rect.left&&clientX<=rect.right&&clientY>=rect.top&&clientY<=rect.bottom;dragPreview={id,inside,world:canvasPoint(clientX,clientY)};}
   function cancelDrag(pointerId){if(pointerDrag&&(pointerId==null||pointerDrag.pointerId===pointerId)){pointerDrag=null;dragPreview=null;renderHand(false);}}
+  function cancelTarget(){const drag=pointerDrag;cancelDrag();if(drag){suppressHandClickUntil=performance.now()+160;try{if(drag.node.hasPointerCapture?.(drag.pointerId))drag.node.releasePointerCapture(drag.pointerId);}catch(_){/* Interrupted contacts may already have released capture. */}}selectedCard=null;keyboardAiming=false;hideTutorial();renderHand(false);}
   function deployAt(point) {
     if(!match||match.phase!=='playing'||!els.modal.classList.contains('hidden'))return;
     if (!selectedCard || !match || paused) { if (!selectedCard) toast('Choose a card first'); return; }
@@ -493,6 +494,7 @@
   els.hand.addEventListener('lostpointercapture',(event)=>{if(pointerDrag&&pointerDrag.pointerId===event.pointerId&&event.buttons===0)cancelDrag(event.pointerId);});
   els.hand.addEventListener('pointerleave',(event)=>{if(pointerDrag&&event.buttons===0)cancelDrag(event.pointerId);});
   els['game-canvas'].addEventListener('pointerdown',(event)=>{if(event.button===0&&!pointerDrag&&performance.now()>=suppressCanvasPointerUntil)deployAt(canvasPoint(event.clientX,event.clientY));});
+  document.addEventListener('contextmenu',event=>{if(currentScreen()==='battle'&&match?.phase==='playing'&&!paused&&els.modal.classList.contains('hidden')&&(pointerDrag||selectedCard&&event.target===els['game-canvas'])){event.preventDefault();cancelTarget();}});
   els['pause-button'].addEventListener('click',pauseBattle);
   els['rally-button'].addEventListener('click',(event)=>{event.preventDefault();triggerRally();});
   els['game-canvas'].addEventListener('webglcontextlost',()=>{graphicsLost=true;cancelDrag();keyboardAiming=false;if(match?.phase==='playing'&&currentScreen()==='battle'){if(!paused)pauseBattle();saveNow();}for(const node of els['modal-actions'].children)if(node.textContent==='Resume')node.disabled=true;if(!els.modal.classList.contains('hidden')&&!document.getElementById('render-recovery'))els['modal-body'].insertAdjacentHTML('beforeend','<p id=render-recovery role=status>The 3D view is recovering. Play is paused; your progress is kept.</p>');toast('3D view interrupted. Play is paused while it recovers.');});
@@ -502,7 +504,7 @@
     if(trapGameTab(event,!els.modal.classList.contains('hidden')?els.modal:null)||gameKeyBlocked(event))return;
     if(!els.modal.classList.contains('hidden')){if(!event.repeat&&(event.code==='Escape'||event.code==='KeyP'&&els['modal-kicker'].textContent==='PAUSED')){event.preventDefault();modalBack?.();}return;}
     if(currentScreen()!=='battle'||!match||match.phase!=='playing')return;
-    if((event.code==='Escape'||event.code==='KeyP')&&!event.repeat){event.preventDefault();if(event.code==='Escape'&&(selectedCard||pointerDrag)){cancelDrag();selectedCard=null;keyboardAiming=false;hideTutorial();renderHand(false);}else pauseBattle();return;}
+    if((event.code==='Escape'||event.code==='KeyP')&&!event.repeat){event.preventDefault();if(event.code==='Escape'&&(selectedCard||pointerDrag)){cancelTarget();}else pauseBattle();return;}
     if(paused||nativeKeyActivation(event))return;
     if(event.code==='KeyR'){event.preventDefault();if(!event.repeat)triggerRally();return;}
     if(/^[1-4]$/.test(event.key)&&!event.repeat){event.preventDefault();selectCard(match.hands.player[Number(event.key)-1]);keyboardAiming=!!selectedCard;return;}
