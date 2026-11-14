@@ -13,3 +13,5 @@
 .pulse span{font-size:15px;letter-spacing:.07em}.pulse small{font-size:9px}
 @media (orientation:portrait) and (max-width:340px){.pulse{min-height:52px;gap:6px}.pulse span{font-size:13px}}
 @media (orientation:landscape) and (max-height:600px){.pulse{grid-column:2;grid-row:2;min-height:0;display:flex;flex-direction:column;border-top:0;border-left:1px solid #47677e;padding:12px calc(12px + env(safe-area-inset-right,0px)) 12px 12px}.pulse span{font-size:15px}}
+
+.ready-count{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);padding:14px 24px;border:1px solid #8de8e8;border-radius:8px;background:#102b3be8;color:#b8ffff;font-size:clamp(24px,5vw,48px);font-weight:900;letter-spacing:.15em;pointer-events:none;text-shadow:0 2px 5px #071a25}.ready-count.hidden{display:none}
